@@ -525,6 +525,30 @@ def _tool_free_permission_config() -> dict[str, Any]:
     }
 
 
+def _nearest_concrete_parent_permission(
+    filesystem: dict[str, str],
+    path: str,
+) -> str | None:
+    """Return the longest matching concrete parent permission for ``path``."""
+
+    nearest_permission: str | None = None
+    nearest_depth = -1
+    for boundary, permission in filesystem.items():
+        if not os.path.isabs(boundary) or boundary == path:
+            continue
+        try:
+            if os.path.commonpath((path, boundary)) != boundary:
+                continue
+        except ValueError:
+            # Different drives are never ancestors of one another.
+            continue
+        depth = len(Path(boundary).parts)
+        if depth > nearest_depth:
+            nearest_permission = permission
+            nearest_depth = depth
+    return nearest_permission
+
+
 def _task_ssh_permission_config(
     *,
     cwd: str,
@@ -596,7 +620,6 @@ def _task_ssh_permission_config(
             Path(path).is_relative_to(read_path)
             for read_path in read_override_paths
         )
-        if covered_by_parent and not exposed_by_read_override:
             continue
         filesystem[path] = "deny"
     for value in allowed_read_paths:
