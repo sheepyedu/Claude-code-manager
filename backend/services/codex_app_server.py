@@ -931,6 +931,7 @@ def _task_ssh_permission_config(
             Path(path).is_relative_to(read_path)
             for read_path in read_override_paths
         )
+        if covered_by_parent and not exposed_by_read_override:
             continue
         filesystem[path] = "deny"
     for value in allowed_read_paths:
