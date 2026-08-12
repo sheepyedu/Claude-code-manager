@@ -11124,6 +11124,7 @@ class InstanceManager:
             return True
 
         from backend.services.terminal_arbitration import (
+            exact_turn_has_terminal_output,
             source_alias_original_log_id,
             source_shape_is_canonical,
         )

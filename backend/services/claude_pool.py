@@ -270,6 +270,11 @@ _CODEX_AUTH_FAIL_RE = re.compile(
     re.IGNORECASE,
 )
 
+_CODEX_MODEL_CAPACITY_RE = re.compile(
+    r"selected model is at capacity",
+    re.IGNORECASE,
+)
+
 _CODEX_TRANSIENT_RE = re.compile(
     r"stream disconnected before completion"      # CodexErr::Stream
     r"|request timed out"                         # RequestTimeout
@@ -294,6 +299,14 @@ def is_codex_auth_failure(text: str) -> bool:
     if not text:
         return False
     return bool(_CODEX_AUTH_FAIL_RE.search(text))
+
+
+def is_codex_model_capacity(text: str) -> bool:
+    """Return whether Codex rejected the selected model for capacity."""
+
+    if not text:
+        return False
+    return bool(_CODEX_MODEL_CAPACITY_RE.search(text))
 
 
 def is_codex_transient(text: str) -> bool:
