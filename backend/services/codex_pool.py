@@ -467,6 +467,7 @@ class CodexPool:
                 else {"accounts": []}
             )
             accounts = [CodexPoolAccount(a) for a in data.get("accounts", [])]
+            configured_preferred = data.get("preferred")
             if self._cloudrouter_store is not None:
                 known_ids = {account.id for account in accounts}
                 known_homes = {account.codex_home for account in accounts}
@@ -497,6 +498,17 @@ class CodexPool:
                     "Each Codex pool account must use a distinct CODEX_HOME"
                 )
             self._accounts = accounts
+            self._preferred_account_id = (
+                configured_preferred
+                if isinstance(configured_preferred, str)
+                and any(
+                    account.id == configured_preferred
+                    and account.enabled
+                    and not account.retired
+                    for account in accounts
+                )
+                else None
+            )
             logger.info("Codex pool loaded %d accounts from %s", len(self._accounts), self._config_path)
         except Exception:
             logger.exception("Failed to load codex pool config")
@@ -798,13 +810,42 @@ class CodexPool:
 
     def set_preferred(self, account_id: str | None) -> bool:
         if account_id is None:
-            self._preferred_account_id = None
-            return True
-        if not any(
-            a.id == account_id and not a.retired for a in self._accounts
+            candidate = None
+        elif not any(
+            a.id == account_id and a.enabled and not a.retired
+            for a in self._accounts
         ):
             return False
-        self._preferred_account_id = account_id
+        else:
+            candidate = account_id
+        if self._include_native:
+            try:
+                data = json.loads(self._config_path.read_text(encoding="utf-8"))
+                if candidate is None:
+                    data.pop("preferred", None)
+                else:
+                    data["preferred"] = candidate
+                temporary = self._config_path.with_name(
+                    f".{self._config_path.name}.{os.getpid()}.{time.time_ns()}.tmp"
+                )
+                try:
+                    descriptor = os.open(
+                        temporary,
+                        os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                        0o600,
+                    )
+                    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                        json.dump(data, handle, indent=2, ensure_ascii=False)
+                        handle.write("\n")
+                        handle.flush()
+                        os.fsync(handle.fileno())
+                    os.replace(temporary, self._config_path)
+                finally:
+                    temporary.unlink(missing_ok=True)
+            except (OSError, ValueError, TypeError):
+                logger.exception("Failed to persist Codex preferred account")
+                return False
+        self._preferred_account_id = candidate
         return True
 
     def select(
