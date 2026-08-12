@@ -914,14 +914,6 @@ def _task_ssh_permission_config(
         for value in (*allowed_read_paths, *git_read_paths)
     }
     for path in sorted(deny_paths):
-        reopened_external_parent = any(
-            read_path != path
-            and Path(read_path).is_relative_to(path)
-            and not Path(path).is_relative_to(workspace)
-            for read_path in read_override_paths
-        )
-        if reopened_external_parent:
-            continue
         covered_by_parent = any(
             denied != path
             and Path(path).is_relative_to(denied)
@@ -5139,6 +5131,7 @@ class CodexAppServer:
             try:
                 await self.require_thread_routing_quiescence(
                     str(resume_session_id),
+                    allow_terminal=False,
                 )
             except CodexThreadTerminalStateError as exc:
                 if exc.state == "notLoaded":
@@ -6676,6 +6669,8 @@ class CodexAppServer:
     async def require_thread_routing_quiescence(
         self,
         thread_id: str,
+        *,
+        allow_terminal: bool = True,
     ) -> dict[str, Any]:
         """Prove a persisted thread cannot autonomously use its old route.
 
@@ -6708,11 +6703,18 @@ class CodexAppServer:
             raise CodexAppServerError(
                 f"thread/read returned an invalid thread for {thread_id}"
             )
-        _require_routing_quiescent_thread_status(
-            thread,
-            thread_id=thread_id,
-            operation="routing configuration change",
-        )
+        if allow_terminal:
+            _require_routing_quiescent_thread_status(
+                thread,
+                thread_id=thread_id,
+                operation="routing configuration change",
+            )
+        else:
+            _require_idle_thread_status(
+                thread,
+                thread_id=thread_id,
+                operation="isolated runtime recovery",
+            )
         return {
             "thread": thread,
             "goal": goal,
