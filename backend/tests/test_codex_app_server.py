@@ -10495,6 +10495,33 @@ async def test_thread_routing_quiescence_rejects_active_thread_after_goal_check(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("status_type", ["systemError", "notLoaded"])
+async def test_thread_routing_quiescence_accepts_terminal_runtime(
+    status_type,
+):
+    """Terminal runtimes cannot execute an old route and may be reloaded later."""
+
+    server = CodexAppServer("codex")
+    server._process = SimpleNamespace(pid=4321, returncode=None)
+    server.ensure_started = AsyncMock()
+    server._request = AsyncMock(side_effect=[
+        {"goal": {"status": "complete"}},
+        {
+            "thread": {
+                "id": "thread-routing-terminal",
+                "status": {"type": status_type},
+            },
+        },
+    ])
+
+    snapshot = await server.require_thread_routing_quiescence(
+        "thread-routing-terminal",
+    )
+
+    assert snapshot["thread"]["status"] == {"type": status_type}
+
+
+@pytest.mark.asyncio
 async def test_registry_routing_guard_blocks_resume_through_caller_commit(
     tmp_path,
 ):

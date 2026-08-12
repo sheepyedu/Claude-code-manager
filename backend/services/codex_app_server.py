@@ -458,6 +458,34 @@ def _require_idle_thread_status(
         )
 
 
+def _require_routing_quiescent_thread_status(
+    thread: Any,
+    *,
+    thread_id: str,
+    operation: str,
+) -> None:
+    """Prove that a thread cannot execute an old route during a config commit.
+
+    A terminal ``systemError``/``notLoaded`` runtime is not eligible for a
+    new turn, but it also cannot autonomously execute one.  Treating these
+    states as a routing barrier failure made completed Tasks impossible to
+    edit after a transient app-server/runtime error.  Keep the stricter idle
+    proof for turn admission; routing changes only need the no-execution
+    proof, and the next turn's normal terminal recovery remains responsible
+    for reloading the runtime.
+    """
+
+    status = thread.get("status") if isinstance(thread, dict) else None
+    status_type = status.get("type") if isinstance(status, dict) else None
+    if status_type in {"systemError", "notLoaded"}:
+        return
+    _require_idle_thread_status(
+        thread,
+        thread_id=thread_id,
+        operation=operation,
+    )
+
+
 def _audit_tool_free_thread_response(
     response: Any,
     *,
@@ -6064,7 +6092,7 @@ class CodexAppServer:
             raise CodexAppServerError(
                 f"thread/read returned an invalid thread for {thread_id}"
             )
-        _require_idle_thread_status(
+        _require_routing_quiescent_thread_status(
             thread,
             thread_id=thread_id,
             operation="routing configuration change",

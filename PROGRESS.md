@@ -4,6 +4,11 @@
 
 ## 已完成功能
 
+### 本地分支路由修复（2026-08-12）
+- 在本地分支 `local-ccm-fixes-20260812` 保存此前未提交的调试/功能修改，commit `216e10e`。
+- 修复 Codex Task 已完成但原生线程 runtime 残留 `systemError`/`notLoaded` 时无法修改 Model/Speed 的问题：路由提交只需证明线程不会继续执行旧路由；下一次对话仍按严格终态恢复流程处理。
+- 新增 Codex 路由 quiescence 终态回归测试；针对 `backend/tests/test_api_tasks.py` 的路由相关测试和 Codex app-server 路由测试均通过。
+
 ### 阶段 1：基础设施
 - [x] 项目初始化 (pyproject.toml, .gitignore, .env)
 - [x] SQLAlchemy async + SQLite 数据库
