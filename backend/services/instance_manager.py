@@ -11223,7 +11223,10 @@ class InstanceManager:
                 return False
 
             attempt = self._transient_attempts.get(instance_id, 0) + 1
-            if attempt > _settings.transient_retry_max:
+            if (
+                _settings.transient_retry_max is not None
+                and attempt > _settings.transient_retry_max
+            ):
                 logger.warning(
                     "Chat task %d transient retries exhausted (%d) — failing turn",
                     task_id, _settings.transient_retry_max,
@@ -11250,8 +11253,13 @@ class InstanceManager:
             self._transient_attempts[instance_id] = attempt
 
             logger.info(
-                "Chat task %d transient 429/overload — waiting %.0fs before retry #%d/%d",
-                task_id, delay, attempt, _settings.transient_retry_max,
+                "Chat task %d transient 429/overload — waiting %.0fs before retry #%d/%s",
+                task_id,
+                delay,
+                attempt,
+                _settings.transient_retry_max
+                if _settings.transient_retry_max is not None
+                else "∞",
             )
             await self.broadcaster.broadcast(f"task:{task_id}", {
                 "event_type": "transient_retry",

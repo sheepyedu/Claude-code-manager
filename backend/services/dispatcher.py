@@ -10652,8 +10652,9 @@ class GlobalDispatcher:
         Anthropic infra throttling/overload ("Server is temporarily limiting
         requests (not your usage limit)" / overloaded) is NOT an account usage
         limit — rotating accounts wouldn't help — so we back off and --resume
-        the same session, up to settings.transient_retry_max times. Once the
-        failure is no longer transient (or the budget is exhausted) we hand off
+        the same session, indefinitely by default (or up to
+        settings.transient_retry_max when explicitly configured). Once the
+        failure is no longer transient (or the configured budget is exhausted) we hand off
         to account rotation, then to the normal retry/fail path.
         """
         combined = await self._collect_failure_output(instance_id, task.id)
@@ -10676,11 +10677,13 @@ class GlobalDispatcher:
             settings.transient_retry_max_delay,
         )
         logger.info(
-            "Task %d transient 429/overload — waiting %.0fs before retry #%d/%d",
+            "Task %d transient 429/overload — waiting %.0fs before retry #%d/%s",
             task.id,
             delay,
             attempt,
-            settings.transient_retry_max,
+            settings.transient_retry_max
+            if settings.transient_retry_max is not None
+            else "∞",
         )
         await self.broadcaster.broadcast(
             f"task:{task.id}",
@@ -10747,7 +10750,10 @@ class GlobalDispatcher:
         combined = await self._collect_failure_output(instance_id, task.id)
         if (
             settings.transient_retry_enabled
-            and attempt < settings.transient_retry_max
+            and (
+                settings.transient_retry_max is None
+                or attempt < settings.transient_retry_max
+            )
             and (
                 still_transient
                 or is_transient_for(task.provider, combined)

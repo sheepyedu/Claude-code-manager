@@ -184,7 +184,8 @@ class Settings(BaseSettings):
     # requests (not your usage limit)" / overloaded）——退避后用同一账号
     # --resume 重试，区别于「额度用尽」的换号轮换（见 claude_pool）。
     transient_retry_enabled: bool = True
-    transient_retry_max: int = 5            # 最多自动重试次数
+    # None means retry indefinitely; backoff is still bounded below.
+    transient_retry_max: int | None = None
     transient_retry_base_delay: float = 10.0  # 首次退避秒数（指数递增）
     transient_retry_max_delay: float = 120.0  # 退避上限秒数
 

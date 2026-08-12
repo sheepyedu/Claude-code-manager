@@ -2605,9 +2605,13 @@ class PlanAgentRunner:
         attempts = (
             max(0, settings.transient_retry_max)
             if settings.transient_retry_enabled
+            and settings.transient_retry_max is not None
+            else None
+            if settings.transient_retry_enabled
             else 0
         )
-        for attempt in range(attempts + 1):
+        attempt = 0
+        while True:
             try:
                 return await self._run_process(**kwargs)
             except PlanAgentResponseError:
@@ -2617,7 +2621,7 @@ class PlanAgentRunner:
                 raise
             except PlanAgentError as exc:
                 if (
-                    attempt >= attempts
+                    (attempts is not None and attempt >= attempts)
                     or isinstance(exc, PlanAgentTimeout)
                     or not is_transient_for(
                         kwargs["provider"],
@@ -2636,10 +2640,11 @@ class PlanAgentRunner:
                     kwargs["task_id"],
                     kwargs["provider"],
                     attempt + 1,
-                    attempts,
+                    attempts if attempts is not None else "∞",
                     delay,
                 )
                 await asyncio.sleep(delay)
+                attempt += 1
         raise AssertionError("unreachable")
 
     async def _run_route(

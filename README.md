@@ -49,7 +49,7 @@ Web 端调度和管理多个 Claude Code 实例并行工作。灵感来自胡渊
 - **API 账号安全删除** — CloudRouter/ApexRouter 账号先停用新任务，再等待活跃任务和会话释放后删除 Key 与运行配置；忙碌时保留“待清理”状态供重试，不会强杀任务，并保留 Claude projects 与 Codex sessions
 - **Codex 日志库自维护** — app-server 启动前自动隔离超过 1 GiB 的本地诊断日志库，只有新运行时初始化成功后才回收旧库；账号配置、认证和 session/rollout 始终保留
 - **无缝账号轮换** — Claude 递归硬链接 session JSONL 及 sidecar，Codex 独立复制 rollout 并原子完成 app-server rebind + Task binding；撞限、认证失败或主动额度阈值换号时保留原对话上下文，不支持的模型不会静默降级
-- **瞬时 429/过载自动重试** — 基础设施侧的临时限流/过载（非账号额度用尽），指数退避+jitter 用同一账号自动 `--resume` 重试，最多 5 次；检测按 provider 分流（Claude / Codex 各自的 CLI 错误文案）
+- **瞬时 429/过载自动重试** — 基础设施侧的临时限流/过载（非账号额度用尽），指数退避+jitter 用同一账号自动 `--resume` 重试；默认不设次数上限（可通过 `transient_retry_max` 显式设置），检测按 provider 分流（Claude / Codex 各自的 CLI 错误文案）
 - **`/tmp` 空间保护** — 服务启动时及后台每 3 小时检查容量和 inode；任一达到 80% 时，清理全部超过 6 小时的 CCM 白名单临时产物
 - **进程超时保护** — 单任务最长执行时间可配置，超时后自动 kill
 
