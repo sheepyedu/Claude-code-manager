@@ -13,6 +13,7 @@ from dataclasses import dataclass
 import json
 from typing import Any, Literal, TypeAlias
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.log_entry import LogEntry
@@ -885,6 +886,41 @@ def select_terminal_output(
     if not messages:
         return None
     return TerminalOutputSelection(messages[-1], terminal, terminal_native_id)
+
+
+async def exact_turn_has_terminal_output(
+    db: AsyncSession,
+    task: Task,
+    source: LogEntry,
+    source_original: LogEntry | None = None,
+) -> bool:
+    """Return whether this exact turn already has a canonical terminal output."""
+
+    candidates = list(
+        (
+            await db.execute(
+                select(LogEntry)
+                .where(
+                    LogEntry.task_id == task.id,
+                    LogEntry.task_retry_count == task.retry_count,
+                    LogEntry.task_turn_generation == task.turn_generation,
+                )
+                .order_by(LogEntry.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return (
+        select_terminal_output(
+            task.provider or "claude",
+            source,
+            candidates,
+            source.actual_transport,
+            source_original=source_original,
+        )
+        is not None
+    )
 
 
 def select_terminal_tail(

@@ -12989,6 +12989,49 @@ async def test_chat_requeue_fails_closed_without_live_preflight_evidence(
 
 
 @pytest.mark.asyncio
+async def test_chat_relaunch_allows_codex_capacity_retry_before_terminal_output(db_factory):
+    async with db_factory() as db:
+        task = Task(
+            title="codex capacity retry",
+            status="executing",
+            provider="codex",
+            retry_count=2,
+            turn_generation=7,
+        )
+        db.add(task)
+        await db.flush()
+        source = LogEntry(
+            task_id=task.id,
+            task_retry_count=task.retry_count,
+            task_turn_generation=task.turn_generation,
+            turn_scope="source",
+            event_type="user_message",
+            role="user",
+            content="continue",
+            is_error=False,
+            actual_transport="codex_app_server",
+        )
+        db.add(source)
+        await db.flush()
+        task.turn_source_log_id = source.id
+        await db.commit()
+        task_id = task.id
+        source_id = source.id
+
+    manager = InstanceManager(db_factory, MagicMock(broadcast=AsyncMock()))
+
+    assert await manager._chat_automatic_relaunch_is_blocked(
+        task_id,
+        {
+            "task_turn_generation": 7,
+            "source_log_id": source_id,
+            "provider": "codex",
+        },
+        failure_text="Selected model is at capacity. Please try a different model.",
+    ) is False
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("malformed_scope", [None, "foreground"])
 async def test_chat_relaunch_blocks_user_source_without_source_scope(
     db_factory,

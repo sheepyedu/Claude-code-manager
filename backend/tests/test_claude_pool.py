@@ -23,6 +23,7 @@ from backend.services.claude_pool import (
     quota_cooldown_seconds,
     quota_usage_at_or_above,
     rate_limit_event_is_actionable,
+    is_codex_model_capacity,
 )
 
 
@@ -100,6 +101,13 @@ class TestPoolRotatable:
 
     def test_normal_error(self):
         assert not is_pool_rotatable("SyntaxError: unexpected token")
+
+
+class TestCodexCapacityDetection:
+    def test_selected_model_is_at_capacity(self):
+        assert is_codex_model_capacity(
+            "Selected model is at capacity. Please try a different model."
+        )
 
 
 class TestTransientOverloadDetection:

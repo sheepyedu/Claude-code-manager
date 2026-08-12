@@ -307,6 +307,8 @@ def is_codex_transient(text: str) -> bool:
         return False
     if is_codex_usage_limited(text) or is_codex_auth_failure(text):
         return False
+    if is_codex_model_capacity(text):
+        return True
     return bool(_CODEX_TRANSIENT_RE.search(text))
 
 

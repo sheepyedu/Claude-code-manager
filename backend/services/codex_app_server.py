@@ -520,6 +520,11 @@ def _task_ssh_permission_config(
         ":root": "deny",
         ":minimal": "read",
     }
+    codex_runtime_root = os.path.abspath(os.path.expanduser(
+        "~/.npm-global/lib/node_modules/@openai/codex"
+    ))
+    if os.path.isdir(codex_runtime_root):
+        filesystem[codex_runtime_root] = "read"
     workspace = os.path.abspath(cwd)
     if sandbox_mode == "workspace-write":
         filesystem[workspace] = "write"
@@ -531,11 +536,40 @@ def _task_ssh_permission_config(
     # this writable directory. Linked worktrees use a regular pointer file;
     # either way default-deny the entry and re-open only the discovery-proven
     # read paths below.
-    filesystem[os.path.join(workspace, ".git")] = "deny"
+    workspace_git = os.path.join(workspace, ".git")
+    deny_paths = {workspace_git}
     for value in protected_paths:
         path = os.path.abspath(os.path.expanduser(str(value)))
         if path == "/":
             raise ValueError("Task SSH protected path cannot be filesystem root")
+        deny_paths.add(path)
+    # Codex 0.147 realizes exact rules as bwrap mount points and may reorder
+    # them parent-first. A redundant child mount then fails below its read-only
+    # parent. Omit that child only when no read override can expose it.
+    read_override_paths = {
+        os.path.abspath(os.path.expanduser(str(value)))
+        for value in (*allowed_read_paths, *git_read_paths)
+    }
+    for path in sorted(deny_paths):
+        reopened_external_parent = any(
+            read_path != path
+            and Path(read_path).is_relative_to(path)
+            and not Path(path).is_relative_to(workspace)
+            for read_path in read_override_paths
+        )
+        if reopened_external_parent:
+            continue
+        covered_by_parent = any(
+            denied != path
+            and Path(path).is_relative_to(denied)
+            for denied in deny_paths
+        )
+        exposed_by_read_override = any(
+            Path(path).is_relative_to(read_path)
+            for read_path in read_override_paths
+        )
+        if covered_by_parent and not exposed_by_read_override:
+            continue
         filesystem[path] = "deny"
     for value in allowed_read_paths:
         path = os.path.abspath(os.path.expanduser(str(value)))
@@ -4533,9 +4567,18 @@ class CodexAppServer:
                 current_config_fingerprint
                 != isolated_ambient_config_fingerprint
             )
-            skills_changed = (
-                current_skills_fingerprint
-                != isolated_skills_inventory_fingerprint
+            # Codex 0.147 may hide any request-locally disabled skill from a
+            # later skills/list response. Accept only a narrowing of the
+            # preflight inventory; any newly discovered path still fails
+            # closed. All returned paths remain disabled by the exact config.
+            isolated_skill_paths = {
+                item["path"] for item in disabled_skills
+            }
+            current_skill_paths = {
+                item["path"] for item in current_disabled_skills
+            }
+            skills_changed = not current_skill_paths.issubset(
+                isolated_skill_paths
             )
             revision_changed = (
                 self._skills_revision != tool_free_skills_revision
@@ -4633,6 +4676,24 @@ class CodexAppServer:
                         raise ValueError(
                             "Codex skills changed after stable reconciliation"
                         )
+                # Codex 0.147 can expose already-installed plugin-cache skills
+                # only after its first inventory snapshot. Disable every skill
+                # path already present in this account home before thread/start;
+                # the post-admission audit still rejects any later unknown path.
+                disabled_by_path = {
+                    item["path"]: item for item in disabled_skills
+                }
+                codex_home_path = _canonical_path(self.codex_home)
+                for skill_path in codex_home_path.rglob("SKILL.md"):
+                    canonical_skill = str(_canonical_path(skill_path))
+                    Path(canonical_skill).relative_to(codex_home_path)
+                    disabled_by_path.setdefault(
+                        canonical_skill,
+                        {"path": canonical_skill, "enabled": False},
+                    )
+                disabled_skills = sorted(
+                    disabled_by_path.values(), key=lambda item: item["path"]
+                )
                 thread_config["skills"]["config"] = disabled_skills
             except Exception as exc:
                 if task_ssh_protected_paths:
@@ -7059,10 +7120,24 @@ class CodexAppServer:
                     if isinstance((value := mcp_item.get(key)), str)
                     and value
                 }
+                # Codex 0.147 reports its own sandboxed built-in coding
+                # tools as an mcpToolCall from the fixed ``codex`` server.
+                # That is not an ambient MCP server: the exact Task
+                # permission profile still constrains every invocation. Keep
+                # it available only to ordinary Task isolation; MCP-only and
+                # tool-free profiles must remain unable to invoke it.
+                builtin_codex_server = (
+                    reported_servers == {"codex"}
+                    and not context.tools_disabled
+                    and not context.mcp_only
+                )
                 if (
-                    len(reported_servers) != 1
-                    or not reported_servers.issubset(
-                        context.allowed_mcp_servers
+                    not builtin_codex_server
+                    and (
+                        len(reported_servers) != 1
+                        or not reported_servers.issubset(
+                            context.allowed_mcp_servers
+                        )
                     )
                 ):
                     self._schedule_tool_free_violation(

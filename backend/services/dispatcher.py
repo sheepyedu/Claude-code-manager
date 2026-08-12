@@ -8890,6 +8890,7 @@ class GlobalDispatcher:
     async def _automatic_relaunch_is_blocked_by_turn_source(
         self,
         generation: _TaskLifecycleGeneration,
+        failure_text: str | None = None,
     ) -> bool:
         """Whether this exact modern turn lacks proof that replay is harmless.
 
@@ -8909,7 +8910,16 @@ class GlobalDispatcher:
             source = await self._canonical_exact_turn_source(db, task)
             if source is None:
                 return True
-            return source.actual_transport is not None
+            if source.actual_transport is None:
+                return False
+            if failure_text is not None and (task.provider or "claude").lower() == "codex":
+                from backend.services.claude_pool import is_codex_model_capacity
+                from backend.services.terminal_arbitration import exact_turn_has_terminal_output
+
+                if is_codex_model_capacity(failure_text):
+                    if not await exact_turn_has_terminal_output(db, task, source):
+                        return False
+            return True
 
     async def _structured_context_preflight_rejection(
         self,
@@ -10619,7 +10629,11 @@ class GlobalDispatcher:
         failure is no longer transient (or the budget is exhausted) we hand off
         to account rotation, then to the normal retry/fail path.
         """
-        if await self._automatic_relaunch_is_blocked_by_turn_source(generation):
+        combined = await self._collect_failure_output(instance_id, task.id)
+        if await self._automatic_relaunch_is_blocked_by_turn_source(
+            generation,
+            failure_text=combined,
+        ):
             await self._retry_or_fail_mode_task(
                 generation,
                 "Transient provider failure occurred after the exact turn "
@@ -11198,7 +11212,8 @@ class GlobalDispatcher:
                 # transient, rate-limited, or context-related.
                 if (
                     await self._automatic_relaunch_is_blocked_by_turn_source(
-                        lifecycle_generation
+                        lifecycle_generation,
+                        failure_text=combined,
                     )
                     and context_preflight_permit is None
                 ):
@@ -12263,7 +12278,11 @@ class GlobalDispatcher:
             session_id,
         )
 
-        if await self._automatic_relaunch_is_blocked_by_turn_source(generation):
+        combined = await self._collect_failure_output(instance_id, task.id)
+        if await self._automatic_relaunch_is_blocked_by_turn_source(
+            generation,
+            failure_text=combined,
+        ):
             await self._retry_or_fail_mode_task(
                 generation,
                 "Account rotation was requested after the exact turn crossed "

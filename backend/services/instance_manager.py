@@ -2777,6 +2777,25 @@ class InstanceManager:
                         if task_ssh_broker_only or browser_review_task
                         else explicit_git_credential_paths(git_env)
                     )
+                    ambient_ssh_config_paths: tuple[str, ...] = ()
+                    if (
+                        provider == "codex"
+                        and not task_ssh_broker_only
+                        and not browser_review_task
+                        and not delivery_task
+                    ):
+                        ssh_config = Path.home() / ".ssh" / "config"
+                        try:
+                            ssh_config_info = ssh_config.lstat()
+                        except OSError:
+                            pass
+                        else:
+                            if (
+                                ssh_config.is_file()
+                                and not ssh_config.is_symlink()
+                                and ssh_config_info.st_uid == os.geteuid()
+                            ):
+                                ambient_ssh_config_paths = (str(ssh_config),)
                     # Every local Task must be unable to inspect Manager SSH,
                     # provider-account, and scoped runtime credentials. A Task
                     # with grants additionally loses direct network access and
@@ -2787,7 +2806,10 @@ class InstanceManager:
                             task=task,
                             working_directory=cwd,
                             include_direct_git_credentials=True,
-                            allowed_credential_paths=explicit_git_paths,
+                            allowed_credential_paths=(
+                                *explicit_git_paths,
+                                *ambient_ssh_config_paths,
+                            ),
                         )
                     )
                     if not task_ssh_broker_only:
@@ -2805,6 +2827,10 @@ class InstanceManager:
                                 ),
                             )
                         )
+                        task_git_credential_read_path_values = tuple(sorted({
+                            *task_git_credential_read_path_values,
+                            *ambient_ssh_config_paths,
+                        }))
                 if browser_review_task:
                     if task_ssh_broker_only or task_ssh_capabilities:
                         raise LaunchSupersededError(
@@ -3126,6 +3152,7 @@ class InstanceManager:
             and not pr_review_task
             and not delivery_task
             and task_ssh_protected_path_values
+            and task_ssh_broker_only
         )
         codex_mcp_required = (
             codex_main_mcp_required
@@ -10790,6 +10817,7 @@ class InstanceManager:
             return None
 
         from backend.services.terminal_arbitration import (
+            exact_turn_has_terminal_output,
             source_alias_original_log_id,
             source_shape_is_canonical,
         )
@@ -10966,6 +10994,7 @@ class InstanceManager:
         self,
         task_id: int,
         params: dict,
+        failure_text: str | None = None,
     ) -> bool:
         """Reject a second chat launch once its exact provider call began.
 
@@ -11003,6 +11032,7 @@ class InstanceManager:
                 or task.turn_source_log_id <= 0
             ):
                 return True
+            provider = (params.get("provider") or task.provider or "claude").lower()
             source = await db.get(LogEntry, task.turn_source_log_id)
             alias_original_id = (
                 source_alias_original_log_id(source)
@@ -11025,7 +11055,15 @@ class InstanceManager:
                 not in {source.id, alias_original_id}
             ):
                 return True
-            return source.actual_transport is not None
+            if source.actual_transport is None:
+                return False
+            if provider == "codex" and failure_text is not None:
+                from backend.services.claude_pool import is_codex_model_capacity
+
+                if is_codex_model_capacity(failure_text):
+                    if not await exact_turn_has_terminal_output(db, task, source):
+                        return False
+            return True
 
     async def _try_chat_transient_retry(
         self, instance_id: int, task_id: int, exit_code: int, stderr_text: str,
@@ -11052,7 +11090,13 @@ class InstanceManager:
 
             params = self._launch_params.get(instance_id) or {}
             provider = (params.get("provider") or "claude").lower()
-            if await self._chat_automatic_relaunch_is_blocked(task_id, params):
+            log_contents = await self.get_recent_log_contents(task_id, limit=10)
+            combined = collect_process_output_for_detection(stderr_text, log_contents)
+            if await self._chat_automatic_relaunch_is_blocked(
+                task_id,
+                params,
+                failure_text=combined,
+            ):
                 logger.error(
                     "Chat task %d crossed its provider boundary; transient "
                     "relaunch was blocked",
@@ -11060,8 +11104,6 @@ class InstanceManager:
                 )
                 self._transient_attempts.pop(instance_id, None)
                 return False
-            log_contents = await self.get_recent_log_contents(task_id, limit=10)
-            combined = collect_process_output_for_detection(stderr_text, log_contents)
             if not (
                 is_transient_for(provider, combined)
                 or self.is_cloudrouter_transient(

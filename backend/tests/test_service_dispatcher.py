@@ -7287,6 +7287,43 @@ async def test_mode_proof_keeps_null_iteration_fatal_tail_as_veto(db_factory):
 
 
 @pytest.mark.asyncio
+async def test_codex_capacity_retry_is_allowed_before_terminal_output(db_factory):
+    d = _make_dispatcher(db_factory)
+    async with db_factory() as db:
+        task = Task(
+            title="codex capacity retry",
+            status="executing",
+            provider="codex",
+            retry_count=2,
+            turn_generation=7,
+            session_id="sess-1",
+        )
+        db.add(task)
+        await db.flush()
+        source = LogEntry(
+            task_id=task.id,
+            task_retry_count=task.retry_count,
+            task_turn_generation=task.turn_generation,
+            turn_scope="source",
+            event_type="user_message",
+            role="user",
+            content="continue",
+            is_error=False,
+            actual_transport="codex_app_server",
+        )
+        db.add(source)
+        await db.flush()
+        task.turn_source_log_id = source.id
+        await db.commit()
+        generation = d._task_lifecycle_generation(task)
+
+    assert await d._automatic_relaunch_is_blocked_by_turn_source(
+        generation,
+        failure_text="Selected model is at capacity. Please try a different model.",
+    ) is False
+
+
+@pytest.mark.asyncio
 async def test_mode_turn_retries_same_native_session_after_codex_rotation(db_factory):
     """Plan/loop/goal bypass normal Step 5, so their turn helper must rotate."""
     d = _make_dispatcher(db_factory)
