@@ -8940,10 +8940,10 @@ class GlobalDispatcher:
             if source.actual_transport is None:
                 return False
             if failure_text is not None and (task.provider or "claude").lower() == "codex":
-                from backend.services.claude_pool import is_codex_model_capacity
+                from backend.services.claude_pool import is_codex_capacity_retryable
                 from backend.services.terminal_arbitration import exact_turn_has_terminal_output
 
-                if is_codex_model_capacity(failure_text):
+                if is_codex_capacity_retryable(failure_text):
                     if not await exact_turn_has_terminal_output(db, task, source):
                         return False
             return True

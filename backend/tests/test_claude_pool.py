@@ -1302,6 +1302,7 @@ class TestQuotaAwareSelection:
 
 from backend.services.claude_pool import (
     is_codex_transient,
+    is_codex_capacity_retryable,
     is_codex_usage_limited,
     is_codex_auth_failure,
     is_transient_for,
@@ -1343,10 +1344,16 @@ class TestCodexTransientDetection:
             "no eligible logged-in account is ready",
         ],
     )
-    def test_unexpected_status_409_is_not_generic_transient(self, detail):
-        assert not is_codex_transient(
-            f"unexpected status 409 Conflict: {detail}"
+    def test_unexpected_status_409_requires_gateway_classification(self, detail):
+        value = f"unexpected status 409 Conflict: {detail}"
+        assert not is_codex_transient(value)
+
+    def test_apex_no_eligible_account_is_retryable(self):
+        error = (
+            'unexpected status 409 Conflict: '
+            '{"detail":"no eligible account is ready"}'
         )
+        assert is_codex_capacity_retryable(error)
 
     def test_unexpected_status_401_not_transient(self):
         # 401 是认证失败，不能退避重试

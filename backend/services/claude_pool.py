@@ -274,6 +274,15 @@ _CODEX_MODEL_CAPACITY_RE = re.compile(
     r"selected model is at capacity",
     re.IGNORECASE,
 )
+_CODEX_APEX_CAPACITY_RE = re.compile(
+    r"(?:unexpected status\s+409|HTTP(?:/\d(?:\.\d)?)?\s+409|"
+    r"409\s+Conflict)[^\n]{0,700}"
+    r"no eligible(?: logged-in)? account is ready"
+    r"|no eligible(?: logged-in)? account is ready[^\n]{0,700}"
+    r"(?:unexpected status\s+409|HTTP(?:/\d(?:\.\d)?)?\s+409|"
+    r"409\s+Conflict)",
+    re.IGNORECASE,
+)
 
 _CODEX_TRANSIENT_RE = re.compile(
     r"stream disconnected before completion"      # CodexErr::Stream
@@ -307,6 +316,14 @@ def is_codex_model_capacity(text: str) -> bool:
     if not text:
         return False
     return bool(_CODEX_MODEL_CAPACITY_RE.search(text))
+
+
+def is_codex_capacity_retryable(text: str) -> bool:
+    """Return true for model or ApexRouter temporary capacity responses."""
+
+    return is_codex_model_capacity(text) or bool(
+        _CODEX_APEX_CAPACITY_RE.search(text or "")
+    )
 
 
 def is_codex_transient(text: str) -> bool:

@@ -1109,6 +1109,13 @@ ocean/forest/rose 归入 Legacy 组。Header 顶栏导航重构为 AppShell（�
 - **解决**：仅对代理中已由 CCM 精确登记为 priority 的 root/child lineage，将缺失/default 的出站字段重写为当前请求拼写 `fast`（`priority` 保留为兼容别名）；Standard lineage 不升级，显式冲突/未知值仍在任何上游请求前拒绝。代理继续缓存首个 SSE，只有 GPT-5.6 上游 `response.created.response.service_tier=priority` 才发布并生成 actual-tier proof，因此不是放宽校验。
 - **验证**：代理与 app-server 完整测试 `328 passed, 3 skipped`；覆盖缺失/default 两种兼容输入、Standard 防升级、未知 tier 拒绝和上游 proof。
 
+## 2026-08-12 — ApexRouter 409 容量无限重试
+
+- **问题**：ApexRouter 在共享上游账号暂时没有可用槽位时返回 HTTP 409 `no eligible account is ready`。旧逻辑把 409 排除在 Codex transient 之外，Task 因此直接失败。
+- **修复**：新增精确 Apex 容量错误识别，并接入现有无限 transient retry（`transient_retry_max=None`）和指数退避；只对已证明属于 Apex managed home 的运行时做 gateway 分类。若 exact turn 已产生终端输出，仍 fail closed，禁止重放副作用。
+- **验证**：Apex 409 分类、同账号重试、chat/dispatcher 安全门定向测试 `10 passed`。
+- **提交**：待本次修复提交后补录 commit ID。
+
 ## 2026-08-12 — Codex 路由固定到 ApexRouter
 
 - **问题**：原生 `codex-2` 已耗尽额度；仅设置 preferred 仍会在 Apex 不可用时回退到其他 native Codex Home，造成任务再次绑定错误账号的风险。
