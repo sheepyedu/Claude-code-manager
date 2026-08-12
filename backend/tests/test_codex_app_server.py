@@ -668,6 +668,68 @@ def test_codex_runtime_read_paths_projects_allow_listed_release_files(tmp_path):
     ) == ()
 
 
+def test_codex_runtime_read_paths_resolves_official_npm_launcher(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setattr("platform.system", lambda: "Linux")
+    monkeypatch.setattr("platform.machine", lambda: "x86_64")
+    package_root = tmp_path / "node_modules" / "@openai" / "codex"
+    launcher = package_root / "bin" / "codex.js"
+    launcher.parent.mkdir(parents=True)
+    launcher.write_text("#!/usr/bin/env node\n", encoding="utf-8")
+    launcher.chmod(0o755)
+    (package_root / "package.json").write_text(
+        json.dumps({
+            "name": "@openai/codex",
+            "bin": {"codex": "bin/codex.js"},
+            "optionalDependencies": {
+                "@openai/codex-linux-x64": "npm:@openai/codex@test-linux-x64",
+            },
+        }),
+        encoding="utf-8",
+    )
+    native_dir = (
+        package_root
+        / "node_modules"
+        / "@openai"
+        / "codex-linux-x64"
+        / "vendor"
+        / "x86_64-unknown-linux-musl"
+        / "bin"
+    )
+    native_dir.mkdir(parents=True)
+    native = native_dir / "codex"
+    native.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    native.chmod(0o755)
+    code_mode_host = native_dir / "codex-code-mode-host"
+    code_mode_host.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    code_mode_host.chmod(0o755)
+
+    runtime_paths = _codex_runtime_read_paths(
+        str(launcher),
+        projection_root=tmp_path / "projection",
+    )
+
+    assert len(runtime_paths) == 2
+    projected_native, projected_host = map(Path, runtime_paths)
+    assert projected_native.samefile(native)
+    assert projected_host.samefile(code_mode_host)
+    assert not projected_native.samefile(launcher)
+
+
+def test_codex_runtime_read_paths_rejects_unknown_node_launcher(tmp_path):
+    launcher = tmp_path / "bin" / "codex.js"
+    launcher.parent.mkdir(parents=True)
+    launcher.write_text("#!/usr/bin/env node\n", encoding="utf-8")
+    launcher.chmod(0o755)
+
+    assert _codex_runtime_read_paths(
+        str(launcher),
+        projection_root=tmp_path / "projection",
+    ) == ()
+
+
 def test_codex_runtime_read_paths_supports_release_without_code_mode_host(
     tmp_path,
 ):

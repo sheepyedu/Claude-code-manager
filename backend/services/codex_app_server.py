@@ -15,6 +15,7 @@ import hashlib
 import json
 import logging
 import os
+import platform
 import re
 import secrets
 import shutil
@@ -69,6 +70,19 @@ _NO_ACTIVE_GOAL_RE = re.compile(
     r"\b(?:no active goal|goal is not active|goal not found)\b",
     re.IGNORECASE,
 )
+
+_CODEX_NPM_TARGETS = {
+    ("linux", "x86_64"): ("codex-linux-x64", "x86_64-unknown-linux-musl"),
+    ("linux", "amd64"): ("codex-linux-x64", "x86_64-unknown-linux-musl"),
+    ("linux", "aarch64"): ("codex-linux-arm64", "aarch64-unknown-linux-musl"),
+    ("linux", "arm64"): ("codex-linux-arm64", "aarch64-unknown-linux-musl"),
+    ("darwin", "x86_64"): ("codex-darwin-x64", "x86_64-apple-darwin"),
+    ("darwin", "amd64"): ("codex-darwin-x64", "x86_64-apple-darwin"),
+    ("darwin", "arm64"): ("codex-darwin-arm64", "aarch64-apple-darwin"),
+    ("windows", "amd64"): ("codex-win32-x64", "x86_64-pc-windows-msvc"),
+    ("windows", "x86_64"): ("codex-win32-x64", "x86_64-pc-windows-msvc"),
+    ("windows", "arm64"): ("codex-win32-arm64", "aarch64-pc-windows-msvc"),
+}
 
 
 def _fsync_directory(path: Path) -> None:
@@ -723,6 +737,90 @@ def _nearest_concrete_parent_permission(
     return nearest_permission
 
 
+def _resolve_codex_npm_native_binary(
+    resolved: Path,
+    source_info: os.stat_result,
+) -> tuple[Path, os.stat_result] | None:
+    """Resolve the native executable behind the official npm launcher.
+
+    Projecting ``bin/codex.js`` by itself breaks Node's package-relative
+    optional dependency lookup.  Resolve only an authenticated official npm
+    package layout, then project the standalone binary that the launcher would
+    spawn.  Unknown scripts fail closed instead of widening the sandbox to an
+    entire ``node_modules`` tree.
+    """
+
+    if resolved.name.lower() != "codex.js":
+        return resolved, source_info
+
+    package_root = resolved.parent.parent
+    manifest = package_root / "package.json"
+    try:
+        manifest_info = manifest.lstat()
+        if (
+            stat.S_ISLNK(manifest_info.st_mode)
+            or not stat.S_ISREG(manifest_info.st_mode)
+            or manifest_info.st_uid != source_info.st_uid
+            or manifest_info.st_size > 1024 * 1024
+            or not resolved.samefile(package_root / "bin" / "codex.js")
+        ):
+            return None
+        package_metadata = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, RuntimeError, UnicodeError, json.JSONDecodeError):
+        return None
+    if (
+        not isinstance(package_metadata, dict)
+        or package_metadata.get("name") != "@openai/codex"
+        or package_metadata.get("bin") != {"codex": "bin/codex.js"}
+    ):
+        return None
+
+    target = _CODEX_NPM_TARGETS.get(
+        (platform.system().lower(), platform.machine().lower())
+    )
+    if target is None:
+        return None
+    package_name, target_triple = target
+    optional_dependencies = package_metadata.get("optionalDependencies")
+    if (
+        not isinstance(optional_dependencies, dict)
+        or f"@openai/{package_name}" not in optional_dependencies
+    ):
+        return None
+
+    executable_name = "codex.exe" if os.name == "nt" else "codex"
+    dependency_roots = [
+        package_root / "node_modules" / "@openai" / package_name,
+    ]
+    dependency_roots.extend(
+        parent / "@openai" / package_name
+        for parent in package_root.parents
+        if parent.name == "node_modules"
+    )
+    dependency_roots.append(package_root)
+    candidates = tuple(
+        dependency_root
+        / "vendor"
+        / target_triple
+        / "bin"
+        / executable_name
+        for dependency_root in dict.fromkeys(dependency_roots)
+    )
+    for candidate in candidates:
+        try:
+            native = candidate.resolve(strict=True)
+            native_info = native.stat()
+        except (OSError, RuntimeError):
+            continue
+        if (
+            stat.S_ISREG(native_info.st_mode)
+            and native_info.st_uid == source_info.st_uid
+            and os.access(native, os.X_OK)
+        ):
+            return native, native_info
+    return None
+
+
 def _codex_runtime_read_paths(
     binary: str,
     *,
@@ -748,6 +846,10 @@ def _codex_runtime_read_paths(
         or not os.access(resolved, os.X_OK)
     ):
         return ()
+    native = _resolve_codex_npm_native_binary(resolved, source_info)
+    if native is None:
+        return ()
+    resolved, source_info = native
     effective_uid = (
         os.geteuid()
         if hasattr(os, "geteuid")

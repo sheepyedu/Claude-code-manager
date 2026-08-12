@@ -35,6 +35,8 @@ cd frontend && npx tsc --noEmit
 |------|---------|
 | `test_protected_paths_cover_all_git_credential_sources` | 已存在的 repo `.git/credentials` 继续进入 deny 列表；不存在的叶子路径不生成 Bubblewrap 挂载，父 `.git` deny 保持不变 |
 | `test_codex_app_server.py::test_task_ssh_profile_collapses_only_redundant_nested_denies` | 父目录已 deny 时折叠冗余子 deny，避免 Bubblewrap 在只读父挂载中创建子挂载点；若中间 workspace 已重新开放则保留子 deny，精确只读例外仍可覆盖父 deny |
+| `test_codex_runtime_read_paths_resolves_official_npm_launcher` | 官方 npm `codex.js` 经 manifest、平台依赖和 owner 校验后只投影原生 `codex` 与 `codex-code-mode-host`，app-server 不再因 package-relative optional dependency 丢失而退出 |
+| `test_codex_runtime_read_paths_rejects_unknown_node_launcher` | 未经证明的同名 Node launcher 不会扩大为 `node_modules` 目录读取权限，而是 fail closed |
 
 #### `test_tmp_space_manager.py` — `/tmp` 压力保护
 
