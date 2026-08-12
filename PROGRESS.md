@@ -1079,3 +1079,32 @@ ocean/forest/rose 归入 Legacy 组。Header 顶栏导航重构为 AppShell（�
 - **Browser 锁序与回队列**：queue claim/defer/retry 统一按 parent owner Task → binding → child Task 写入，Browser child CAS miss 会回滚整个 binding 变更；Dispatcher 的 active→pending 路径在同一事务释放 `running → ready` claim，runtime reap 使用 binding → child → Instance，避免与 stop/delete 形成跨数据库死锁或留下 `pending/running` 悬挂状态。
 - **重放安全**：安全回队列的只读分类在 writer 内重复验证。若 provider transport 在分类后抢先提交，typed unsafe 结果转入普通 terminal fence，最终持久化 Task `failed`、binding `completed`、Instance `idle`；Browser 的冻结 launch profile 只允许 fresh launch，structured context preflight 不再压缩、换 prompt 或重启。
 - **验证**：最终只读审查未发现剩余 P0/P1/P2。后端全量 `6323 passed, 4 skipped`（0 failed）；Browser 竞态专项 `4 passed`，TaskQueue/child/stale cleanup 独立矩阵 `219 passed`。Alembic 往返/历史矩阵 `204 passed`，唯一 head `6f3b9d2a7c10`；前端 `62 files / 756 tests passed`，TypeScript 与 production build（4761 modules）通过；`compileall`、`git diff --check` 通过。四项 skip 与 bundle size/弃用 warning 均为既有非阻塞项。
+
+### 2026-08-11 — 按发起角色执行 Task，并修复 Member 沙箱兼容（commit a876207）
+
+- **阶段一：角色运行边界**：每个聊天回合把实际发起账号、角色和 `sandbox/unrestricted` 模式写入 source log 与 durable queue；后台启动前复验账号仍 active 且角色未变化。管理员/超级管理员普通回合不套 Task provider 沙箱，Member 及无可信用户主体的内部回合继续 fail closed；Manager→Worker handoff 同步冻结原始 principal，重试不借 system 身份提权。
+- **阶段二：Task 300/315 故障链**：Codex Member 隔离只准入经 inventory 验证的内置 `codex` code-mode MCP，继续拒绝 ambient MCP；Claude canary 兼容 2.1.168 在缺失 bwrap 时的新零模型错误协议；聊天附件启动前复验为 uploads 根下的非 symlink 普通文件，并只投影 exact 文件读取权限。管理员回合仍保留 task-scoped `ccm_ssh`，Task SSH Profile/grant 的管理员配置边界不变。
+- **验证**：Chat/Worker principal 链路 `385 passed`；隔离与运行服务矩阵首次执行到 `1141 passed, 3 skipped` 后仅遇到测试并发覆盖固定 settings 文件，隔离文件单独复跑 `41 passed`；新增相关定向测试全部通过。Python `compileall`、TypeScript `tsc --noEmit`、`git diff --check` 通过。后端全量被 main 同样可复现的既有 SQLite migration downgrade trigger 错误阻断（`trg_task_ssh_effect_project_share_insert` 在 batch rename 时引用暂时不存在的 `tasks`），未混入无关 migration 修复。尚未重启生产服务；Task 300/315 的旧 turn 必须在重启后由用户明确重发，避免自动重复副作用。
+## 2026-08-12 — 沙盒 Task 的 CloudRouter Claude API 认证投影
+
+- **问题**：生产 task 320 正确选中 `cloudrouter-3` 且 Key 存在，但 Task wrapper 使用 `--setting-sources ""` 后不会读取账号 `settings.json` 的 `apiKeyHelper`；旧 CloudRouter wrapper 又清除了主进程认证变量，Claude 因此返回 `Not logged in · Please run /login`。该普通 assistant error 还因 CLI exit 0 被误标为 Task completed。
+- **解决**：在 direct 与 PTY 两条启动路径都先清除 ambient auth，再用所选受管账号向 Claude 主进程投影 `ANTHROPIC_API_KEY`/`ANTHROPIC_BASE_URL`；继续保留 `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1`，使 Bash/hooks/MCP 子进程拿不到 Key。删除互相冲突的旧 wrapper，并把普通登录错误纳入 fatal provider error 判定。
+- **避免复发**：隔离测试必须同时证明“模型主进程拥有所选账号认证”和“工具子进程清洗开关存在”，不能把两层权限混为同一环境；`--setting-sources ""` 路径不得依赖账号 settings 中的 helper。
+- **提交**：`67e7c6e`
+## 2026-08-12 — Codex 超大日志库阻塞 app-server 初始化
+
+- **问题**：生产 task 321 正确选中 `apex-1` 和 Fast/priority route，但该 home 的 `logs_2.sqlite` 膨胀到约 3.8 GiB；同版本 Codex 使用干净 home 可立即 initialize，实际 home 超过 30 秒仍无响应，CCM 因无法取得 exact runtime/Fast proof 而 fail closed。
+- **解决**：app-server 在独占启动边界检查 1 GiB 阈值，只将同 owner、单硬链接的 `logs_2.sqlite{,-wal,-shm}` 原子移入私有 quarantine；新 app-server initialize/version proof 成功后才删除旧库。启动失败保留证据，下一次成功启动会收敛合法的 crash 遗留 quarantine，config/auth/sessions/rollout/state 不进入清理范围。
+- **避免复发**：Codex home 的 diagnostics DB 与 session/rollout 必须分层维护；不能靠放宽 Fast proof 或无限增加初始化超时掩盖本地状态膨胀。任何自动回收都必须精确文件 allowlist、先完整 lstat 校验再移动、成功启动后才清除。
+- **提交**：`2c7e007`
+## 2026-08-12 — Apex Fast thread/start 省略 serviceTier
+
+- **问题**：日志库恢复后 task 321 的 Apex `thread/start` 成功，但 Codex 0.147 custom-provider 响应省略 `serviceTier`；旧门禁在真正的 actual-tier proxy proof 之前把缺字段误判为降级。
+- **解决**：只有请求为 priority、exact actual-tier proxy 存在且强制 proof 时，允许缺失的 thread 响应 tier 临时通过；turn 仍须由代理观察首个上游 `response.created.response.service_tier=priority` 才发布成功。没有 proxy proof 的相同响应继续在 turn/start 前 fail closed。
+- **提交**：`5fa758c`
+
+## 2026-08-12 — Codex 0.147 custom-provider Fast 请求字段修复
+
+- **问题**：Task 321 在 thread 准入兼容后仍被 actual-tier proxy 拒绝；精确证据显示 Codex 0.147 虽收到 `thread/start.serviceTier=priority`，实际发往 custom provider 的 Responses JSON 却缺失或重置为 `service_tier=default`。
+- **解决**：仅对代理中已由 CCM 精确登记为 priority 的 root/child lineage，将缺失/default 的出站字段重写为 `priority`；Standard lineage 不升级，显式冲突/未知值仍在任何上游请求前拒绝。代理继续缓存首个 SSE，只有上游 `response.created.response.service_tier=priority` 才发布并生成 actual-tier proof，因此不是放宽校验。
+- **验证**：代理与 app-server 完整测试 `328 passed, 3 skipped`；覆盖缺失/default 两种兼容输入、Standard 防升级、未知 tier 拒绝和上游 proof。
