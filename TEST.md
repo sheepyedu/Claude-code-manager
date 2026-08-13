@@ -624,6 +624,8 @@ Codex Fast 人工 smoke 使用隔离账号且会消耗额度：同一支持模�
 | 测试 | 验证内容 |
 |------|---------|
 | `test_claude_pool.py::TestCodexTransientDetection` | codex transient 检测：stream disconnected / request timed out / high demand / at capacity / 429/5xx 命中；401、usage limit、quota **不**命中（互斥） |
+| `test_service_instance_manager.py::test_codex_capacity_permit_*` | capacity 重试 permit 只允许 exact Codex turn 单次越过既有 provider boundary；终态输出、stop、上下文漂移和复用均拒绝 |
+| `test_service_instance_manager.py::test_codex_model_capacity_ignores_configured_retry_limit` | Codex model-capacity 即使全局 transient budget 为有限值仍持续指数退避重试，并保持相同账号/session |
 | `test_claude_pool.py::TestCodexUsageAndAuthDetection` | codex 限额/认证失败文案检测 |
 | `test_claude_pool.py::TestProviderAwareTransientRouting` | `is_transient_for` 按 provider 分流；**危险重叠回归锚点**：codex 限额文案会命中 claude `_RATE_LIMIT_RE` |
 | `test_claude_pool.py::TestChatPoolRotationCodexGate` | codex 任务绝不进 claude 号池轮换（不 gate 会用 claude --resume 重启 codex session） |

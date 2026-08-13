@@ -700,6 +700,20 @@ class _SequentialTurnContinuation:
 
 
 @dataclass(frozen=True)
+class _CodexCapacityRetryPermit:
+    """Single-use authority for replaying a failed Codex capacity turn."""
+
+    token: object
+    instance_id: int
+    task_id: int
+    task_retry_count: int
+    task_turn_generation: int
+    source_log_id: int
+    actual_transport: str
+    expires_at_monotonic: float
+
+
+@dataclass(frozen=True)
 class _ConsumerRecoveryEvidence:
     """Fail-closed evidence for one terminal consumer awaiting DB recovery."""
 
@@ -848,6 +862,7 @@ class InstanceManager:
             object,
             _SequentialTurnContinuation,
         ] = {}
+        self._codex_capacity_retry_permits: dict[object, _CodexCapacityRetryPermit] = {}
         # instance_id -> provider credential home used for the current/recent
         # launch (CLAUDE_CONFIG_DIR for Claude, CODEX_HOME for Codex).  Retry
         # paths read this map to stay on the same account.
@@ -1275,6 +1290,9 @@ class InstanceManager:
         """Publish one owned stop-intent token for a reusable slot."""
 
         self._revoke_sequential_turn_continuations_for_instance(instance_id)
+        for token, permit in list(self._codex_capacity_retry_permits.items()):
+            if permit.instance_id == instance_id:
+                self._codex_capacity_retry_permits.pop(token, None)
         self._stopping[instance_id] = self._stopping.get(instance_id, 0) + 1
 
     def _end_stopping(self, instance_id: int) -> None:
@@ -1409,6 +1427,7 @@ class InstanceManager:
         codex_service_tier: str = "default",
         on_launch_admitted: Callable[[], Awaitable[None]] | None = None,
         sequential_turn_token: object | None = None,
+        codex_capacity_retry_token: object | None = None,
         initiating_user_id: int | None = None,
         initiating_user_role: str = "member",
         execution_mode: str = "sandbox",
@@ -1450,6 +1469,7 @@ class InstanceManager:
                 codex_service_tier=codex_service_tier,
                 on_launch_admitted=on_launch_admitted,
                 sequential_turn_token=sequential_turn_token,
+                codex_capacity_retry_token=codex_capacity_retry_token,
                 initiating_user_id=initiating_user_id,
                 initiating_user_role=initiating_user_role,
                 execution_mode=execution_mode,
@@ -1458,6 +1478,9 @@ class InstanceManager:
         finally:
             self.revoke_sequential_turn_continuation(
                 sequential_turn_token
+            )
+            self.revoke_codex_capacity_retry_permit(
+                codex_capacity_retry_token
             )
 
     async def _launch_impl(
@@ -1489,10 +1512,15 @@ class InstanceManager:
         codex_service_tier: str = "default",
         on_launch_admitted: Callable[[], Awaitable[None]] | None = None,
         sequential_turn_token: object | None = None,
+        codex_capacity_retry_token: object | None = None,
     ) -> int:
         """Atomically admit one turn into a reusable instance slot."""
 
         provider = (provider or "claude").lower()
+        if codex_capacity_retry_token is not None and provider != "codex":
+            raise LaunchSupersededError(
+                "Codex capacity retry authority cannot launch another provider"
+            )
         if (
             provider == "codex"
             and str(codex_service_tier or "default").strip().lower()
@@ -1588,6 +1616,7 @@ class InstanceManager:
                                 codex_service_tier=codex_service_tier,
                                 on_launch_admitted=settled_on_launch_admitted,
                                 sequential_turn_token=sequential_turn_token,
+                                codex_capacity_retry_token=codex_capacity_retry_token,
                                 initiating_user_id=initiating_user_id,
                                 initiating_user_role=initiating_user_role,
                                 execution_mode=execution_mode,
@@ -1897,6 +1926,65 @@ class InstanceManager:
                 )
             return token
 
+    async def mint_codex_capacity_retry_permit(
+        self, *, instance_id: int, task_id: int, task_turn_generation: int,
+        source_log_id: int, actual_transport: str,
+    ) -> object:
+        """Authorize exactly one replay after a structured Codex capacity error."""
+        if actual_transport not in _ACTUAL_TURN_TRANSPORTS:
+            raise LaunchSupersededError("Unsupported capacity retry transport")
+        async with self.db_factory() as db:
+            task = await db.get(Task, task_id)
+            source = await db.get(LogEntry, source_log_id)
+            if (
+                task is None
+                or source is None
+                or (task.provider or "claude").lower() != "codex"
+                or task.instance_id != instance_id
+                or task.turn_generation != task_turn_generation
+                or task.turn_source_log_id != source_log_id
+                or task.status not in {"executing", "in_progress"}
+                or source.task_id != task_id
+                or source.task_retry_count != task.retry_count
+                or source.task_turn_generation != task_turn_generation
+                or source.turn_scope != "source"
+                or source.instance_id != instance_id
+                or source.actual_transport != actual_transport
+            ):
+                raise LaunchSupersededError("Codex capacity retry context is stale")
+            from backend.services.terminal_arbitration import (
+                exact_turn_has_terminal_output,
+                source_alias_original_log_id,
+                source_shape_is_canonical,
+            )
+
+            original_id = source_alias_original_log_id(source)
+            original = (
+                await db.get(LogEntry, original_id)
+                if original_id is not None
+                else None
+            )
+            if (
+                not source_shape_is_canonical(source, original)
+                or await exact_turn_has_terminal_output(
+                    db, task, source, source_original=original
+                )
+            ):
+                raise LaunchSupersededError(
+                    "Codex capacity retry has terminal output or malformed source"
+                )
+            task_retry_count = task.retry_count
+        token = object()
+        self._codex_capacity_retry_permits[token] = _CodexCapacityRetryPermit(
+            token, instance_id, task_id, task_retry_count, task_turn_generation,
+            source_log_id, actual_transport, time.monotonic() + 120,
+        )
+        return token
+
+    def revoke_codex_capacity_retry_permit(self, token: object | None) -> None:
+        if token is not None:
+            self._codex_capacity_retry_permits.pop(token, None)
+
     async def _persist_actual_turn_transport(
         self,
         *,
@@ -1907,6 +1995,7 @@ class InstanceManager:
         source_log_id: int | None,
         actual_transport: str,
         sequential_turn_token: object | None = None,
+        codex_capacity_retry_token: object | None = None,
         browser_child_admission: _BrowserChildLaunchAdmission | None = None,
     ) -> bool:
         """Persist the final runtime route before its first provider effect.
@@ -2314,6 +2403,36 @@ class InstanceManager:
                 )
 
             if source.actual_transport is not None:
+                now = time.monotonic()
+                for retry_token, retry_permit in list(
+                    self._codex_capacity_retry_permits.items()
+                ):
+                    if retry_permit.expires_at_monotonic <= now:
+                        self._codex_capacity_retry_permits.pop(retry_token, None)
+                try:
+                    capacity_permit = self._codex_capacity_retry_permits.get(
+                        codex_capacity_retry_token
+                    )
+                except TypeError:
+                    capacity_permit = None
+                capacity_matches = bool(
+                    capacity_permit is not None
+                    and capacity_permit.token is codex_capacity_retry_token
+                    and capacity_permit.instance_id == instance_id
+                    and capacity_permit.task_id == task_id
+                    and capacity_permit.task_retry_count == task_retry_count
+                    and capacity_permit.task_turn_generation == task_turn_generation
+                    and capacity_permit.source_log_id == bound_source_id
+                    and source.actual_transport == actual_transport
+                    and capacity_permit.actual_transport == actual_transport
+                    and capacity_permit.expires_at_monotonic > now
+                )
+                if capacity_matches:
+                    self._codex_capacity_retry_permits.pop(codex_capacity_retry_token, None)
+                elif codex_capacity_retry_token is not None:
+                    raise LaunchSupersededError(
+                        f"Task {task_id} capacity retry authority is stale or invalid"
+                    )
                 self._prune_sequential_turn_continuations()
                 try:
                     continuation = self._sequential_turn_continuations.get(
@@ -2334,7 +2453,7 @@ class InstanceManager:
                     and continuation.actual_transport == actual_transport
                     and continuation.expires_at_monotonic > time.monotonic()
                 )
-                if not continuation_matches:
+                if not continuation_matches and not capacity_matches:
                     raise LaunchSupersededError(
                         f"Task {task_id} already crossed its provider boundary "
                         f"through {source.actual_transport}; fresh launch was blocked"
@@ -2342,14 +2461,15 @@ class InstanceManager:
                 # Consume before the commit/provider effect.  If commit loses
                 # its acknowledgement or the caller is cancelled afterwards,
                 # the token remains spent and the uncertain turn cannot replay.
-                consumed = self._sequential_turn_continuations.pop(
-                    sequential_turn_token,
-                    None,
-                )
-                if consumed is not continuation:
-                    raise LaunchSupersededError(
-                        "Sequential turn continuation was already consumed"
+                if continuation_matches:
+                    consumed = self._sequential_turn_continuations.pop(
+                        sequential_turn_token,
+                        None,
                     )
+                    if consumed is not continuation:
+                        raise LaunchSupersededError(
+                            "Sequential turn continuation was already consumed"
+                        )
             else:
                 if sequential_turn_token is not None:
                     raise LaunchSupersededError(
@@ -2404,6 +2524,7 @@ class InstanceManager:
         codex_service_tier: str = "default",
         on_launch_admitted: Callable[[], Awaitable[None]] | None = None,
         sequential_turn_token: object | None = None,
+        codex_capacity_retry_token: object | None = None,
         initiating_user_id: int | None = None,
         initiating_user_role: str = "member",
         execution_mode: str = "sandbox",
@@ -2471,6 +2592,7 @@ class InstanceManager:
                 source_log_id=source_log_id,
                 actual_transport=actual_transport,
                 sequential_turn_token=sequential_turn_token,
+                codex_capacity_retry_token=codex_capacity_retry_token,
                 browser_child_admission=browser_child_admission,
             )
             if on_launch_admitted is not None:
@@ -11193,6 +11315,7 @@ class InstanceManager:
             from backend.services.claude_pool import (
                 is_transient_for, transient_retry_delay,
                 collect_process_output_for_detection,
+                is_codex_capacity_retryable,
             )
 
             params = self._launch_params.get(instance_id) or {}
@@ -11223,8 +11346,10 @@ class InstanceManager:
                 return False
 
             attempt = self._transient_attempts.get(instance_id, 0) + 1
+            capacity_failure = provider == "codex" and is_codex_capacity_retryable(combined)
             if (
-                _settings.transient_retry_max is not None
+                not capacity_failure
+                and _settings.transient_retry_max is not None
                 and attempt > _settings.transient_retry_max
             ):
                 logger.warning(
@@ -11257,18 +11382,39 @@ class InstanceManager:
                 task_id,
                 delay,
                 attempt,
-                _settings.transient_retry_max
-                if _settings.transient_retry_max is not None
-                else "∞",
+                "∞"
+                if capacity_failure or _settings.transient_retry_max is None
+                else _settings.transient_retry_max,
             )
             await self.broadcaster.broadcast(f"task:{task_id}", {
                 "event_type": "transient_retry",
                 "task_id": task_id,
                 "attempt": attempt,
-                "max_attempts": _settings.transient_retry_max,
+                "max_attempts": (
+                    None if capacity_failure else _settings.transient_retry_max
+                ),
                 "delay": round(delay, 1),
             })
             await asyncio.sleep(delay)
+
+            codex_capacity_retry_token = None
+            if capacity_failure:
+                source_id = params.get("source_log_id")
+                if type(source_id) is int and source_id > 0:
+                    async with self.db_factory() as db:
+                        source = await db.get(LogEntry, source_id)
+                    if source is not None and source.actual_transport is not None:
+                        codex_capacity_retry_token = (
+                            await self.mint_codex_capacity_retry_permit(
+                                instance_id=instance_id,
+                                task_id=task_id,
+                                task_turn_generation=params.get(
+                                    "task_turn_generation"
+                                ),
+                                source_log_id=source_id,
+                                actual_transport=source.actual_transport,
+                            )
+                        )
 
             await self.launch(
                 instance_id=instance_id,
@@ -11292,6 +11438,7 @@ class InstanceManager:
                 codex_service_tier=params.get(
                     "codex_service_tier", "default"
                 ),
+                codex_capacity_retry_token=codex_capacity_retry_token,
             )
             return True
 
@@ -11315,6 +11462,8 @@ class InstanceManager:
                 )
                 self._transient_attempts.pop(instance_id, None)
                 return False
+            if 'codex_capacity_retry_token' in locals() and codex_capacity_retry_token is not None:
+                self.revoke_codex_capacity_retry_permit(codex_capacity_retry_token)
             logger.exception("Chat transient retry failed for task %d", task_id)
             self._transient_attempts.pop(instance_id, None)
             return False

@@ -8426,6 +8426,7 @@ class GlobalDispatcher:
         thinking_budget: int | None,
         effort_level: str | None,
         label: str,
+        codex_capacity_retry_token: object | None = None,
     ) -> int:
         """Resume (or fresh-launch) a task on a specific account, wait for the
         process + output consumer, and return its exit code."""
@@ -8463,6 +8464,8 @@ class GlobalDispatcher:
                 config_dir=config_dir,
                 enable_workflows=task.enable_workflows,
                 enabled_skills=task.enabled_skills,
+                source_log_id=task.turn_source_log_id,
+                codex_capacity_retry_token=codex_capacity_retry_token,
             )
         else:
             full_prompt = await self._build_task_prompt(task)
@@ -8481,6 +8484,8 @@ class GlobalDispatcher:
                 config_dir=config_dir,
                 enable_workflows=task.enable_workflows,
                 enabled_skills=task.enabled_skills,
+                source_log_id=task.turn_source_log_id,
+                codex_capacity_retry_token=codex_capacity_retry_token,
             )
 
         process = self.instance_manager.processes.get(instance_id)
@@ -10657,6 +10662,35 @@ class GlobalDispatcher:
         failure is no longer transient (or the configured budget is exhausted) we hand off
         to account rotation, then to the normal retry/fail path.
         """
+        while True:
+            should_retry = await self._run_transient_retry_attempt(
+                instance_id,
+                task,
+                generation,
+                cwd,
+                git_env,
+                thinking_budget=thinking_budget,
+                effort_level=effort_level,
+                attempt=attempt,
+            )
+            if not should_retry:
+                return
+            attempt += 1
+
+    async def _run_transient_retry_attempt(
+        self,
+        instance_id: int,
+        task: Task,
+        generation: _TaskLifecycleGeneration,
+        cwd: str,
+        git_env: dict | None,
+        *,
+        thinking_budget: int | None,
+        effort_level: str | None,
+        attempt: int,
+    ) -> bool:
+        """Run one backoff/relaunch cycle; return whether the loop continues."""
+
         combined = await self._collect_failure_output(instance_id, task.id)
         if await self._automatic_relaunch_is_blocked_by_turn_source(
             generation,
@@ -10667,9 +10701,18 @@ class GlobalDispatcher:
                 "Transient provider failure occurred after the exact turn "
                 "crossed its external-effect boundary",
             )
-            return
+            return False
 
-        from backend.services.claude_pool import is_transient_for, transient_retry_delay
+        from backend.services.claude_pool import (
+            is_codex_capacity_retryable,
+            is_transient_for,
+            transient_retry_delay,
+        )
+
+        capacity_failure = (
+            (task.provider or "claude").lower() == "codex"
+            and is_codex_capacity_retryable(combined)
+        )
 
         delay = transient_retry_delay(
             attempt,
@@ -10681,9 +10724,9 @@ class GlobalDispatcher:
             task.id,
             delay,
             attempt,
-            settings.transient_retry_max
-            if settings.transient_retry_max is not None
-            else "∞",
+            "∞"
+            if capacity_failure or settings.transient_retry_max is None
+            else settings.transient_retry_max,
         )
         await self.broadcaster.broadcast(
             f"task:{task.id}",
@@ -10691,7 +10734,9 @@ class GlobalDispatcher:
                 "event_type": "transient_retry",
                 "task_id": task.id,
                 "attempt": attempt,
-                "max_attempts": settings.transient_retry_max,
+                "max_attempts": (
+                    None if capacity_failure else settings.transient_retry_max
+                ),
                 "delay": round(delay, 1),
             },
         )
@@ -10702,29 +10747,57 @@ class GlobalDispatcher:
                 "Transient retry for task %s was superseded during backoff",
                 task.id,
             )
-            return
+            return False
 
         config_dir = self.instance_manager.get_config_dir(instance_id)
         async with self.db_factory() as db:
             current = await self._read_owned_lifecycle_task(db, generation)
             if current is None:
-                return
+                return False
             session_id = current.session_id or task.session_id
 
-        exit_code = await self._relaunch_and_wait(
-            instance_id,
-            task,
-            generation,
-            cwd,
-            git_env,
-            config_dir,
-            session_id,
-            thinking_budget=thinking_budget,
-            effort_level=effort_level,
-            label=f"Transient retry #{attempt}",
-        )
+        capacity_retry_token = None
+        if (
+            (task.provider or "claude").lower() == "codex"
+            and is_codex_capacity_retryable(combined)
+        ):
+            source_id = task.turn_source_log_id
+            if type(source_id) is int and source_id > 0:
+                async with self.db_factory() as db:
+                    source = await db.get(LogEntry, source_id)
+                if source is not None and source.actual_transport is not None:
+                    capacity_retry_token = (
+                        await self.instance_manager.mint_codex_capacity_retry_permit(
+                            instance_id=instance_id,
+                            task_id=task.id,
+                            task_turn_generation=generation.turn_generation,
+                            source_log_id=source_id,
+                            actual_transport=source.actual_transport,
+                        )
+                    )
+
+        try:
+            exit_code = await self._relaunch_and_wait(
+                instance_id,
+                task,
+                generation,
+                cwd,
+                git_env,
+                config_dir,
+                session_id,
+                thinking_budget=thinking_budget,
+                effort_level=effort_level,
+                label=f"Transient retry #{attempt}",
+                codex_capacity_retry_token=capacity_retry_token,
+            )
+        except BaseException:
+            if capacity_retry_token is not None:
+                self.instance_manager.revoke_codex_capacity_retry_permit(
+                    capacity_retry_token
+                )
+            raise
         if not await self._task_claim_is_active(generation):
-            return
+            return False
 
         # PTY mode: another transient overload also aborts with exit_code 0, so
         # the flag — not the exit code — tells us whether it recovered.
@@ -10739,19 +10812,24 @@ class GlobalDispatcher:
                 count_completion=exit_code == 0,
             )
             if not changed:
-                return
+                return False
             logger.info(
                 "Task %d recovered after %d transient retry(ies)", task.id, attempt
             )
-            return
+            return False
 
         # Still failing — keep backing off while it's transient and budget
         # remains (flag covers PTY's exit_code-0 repeat; text covers stderr).
         combined = await self._collect_failure_output(instance_id, task.id)
+        capacity_failure = (
+            (task.provider or "claude").lower() == "codex"
+            and is_codex_capacity_retryable(combined)
+        )
         if (
             settings.transient_retry_enabled
             and (
-                settings.transient_retry_max is None
+                capacity_failure
+                or settings.transient_retry_max is None
                 or attempt < settings.transient_retry_max
             )
             and (
@@ -10765,17 +10843,7 @@ class GlobalDispatcher:
                 is True
             )
         ):
-            await self._run_transient_retry(
-                instance_id,
-                task,
-                generation,
-                cwd,
-                git_env,
-                thinking_budget=thinking_budget,
-                effort_level=effort_level,
-                attempt=attempt + 1,
-            )
-            return
+            return True
 
         # No longer transient, or budget exhausted → account rotation, then
         # normal retry/fail. (Rotation never re-enters the transient path, so
@@ -10800,13 +10868,14 @@ class GlobalDispatcher:
                 thinking_budget=thinking_budget,
                 effort_level=effort_level,
             )
-            return
+            return False
 
         if still_transient:
             reason = f"Transient server overload persisted after {attempt} retries"
         else:
             reason = f"Exit code: {exit_code} after {attempt} transient retry(ies)"
         await self._retry_or_fail_mode_task(generation, reason)
+        return False
 
     async def _run_task_lifecycle(
         self, instance_id: int, task: Task, git_env: dict | None = None

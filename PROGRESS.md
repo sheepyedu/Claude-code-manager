@@ -1114,3 +1114,10 @@ ocean/forest/rose 归入 Legacy 组。Header 顶栏导航重构为 AppShell（�
 - 修复：新增精确 Apex 容量错误识别，并接入现有无限 transient retry（transient_retry_max=None）和指数退避；只对已证明属于 Apex managed home 的运行时做 gateway 分类。若 exact turn 已产生终端输出，仍 fail closed，禁止重放副作用。
 - 验证：Apex 409 分类、同账号重试、chat/dispatcher 安全门定向测试 10 passed。
 - 提交：待本次修复提交后补录 commit ID。
+## 2026-08-13 — Codex capacity provider-boundary 无限重试
+
+- 问题：`Selected model is at capacity` 已被 transient classifier 命中，但第二次 `launch()` 会被既有 provider-boundary 围栏拒绝；Dispatcher 递归重试也不适合真正的无上限运行。
+- 修复：新增 exact Task/retry/turn/source/Instance/transport 的单次内存 permit，只在无 canonical terminal output 时签发，并在 provider admission 前消费；stop、取消、过期、上下文漂移和复用均 fail closed。普通与 chat 重试都在退避后紧邻 launch 签发 permit；capacity 无视有限 retry budget，仍使用带 jitter 的封顶指数退避。
+- 效率：Dispatcher 改为迭代重试循环，长期 capacity 波动不会堆积 Python 调用栈；WebSocket 对 capacity 广播 `max_attempts=null`。
+- 验证：capacity/admission 定向回归 21 passed；`test_service_dispatcher.py` 394 passed。
+- 提交：待本次提交后回填。

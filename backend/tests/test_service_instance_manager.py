@@ -3331,6 +3331,151 @@ async def test_successful_mode_predecessor_mints_one_real_sequential_launch(
 
 
 @pytest.mark.asyncio
+async def test_codex_capacity_permit_allows_one_exact_relaunch(
+    db_factory,
+    monkeypatch,
+    tmp_path,
+):
+    instance_id, task_id, source_id = await _make_actual_transport_scope(
+        db_factory,
+        provider="codex",
+    )
+    async with db_factory() as db:
+        source = await db.get(LogEntry, source_id)
+        source.actual_transport = "codex_app_server"
+        await db.commit()
+
+    monkeypatch.setattr(settings, "codex_app_server_enabled", True)
+    manager = InstanceManager(db_factory, MagicMock(broadcast=AsyncMock()))
+    manager._launch_codex_app_server = AsyncMock()
+
+    async def launch_app_server(**kwargs):
+        await kwargs["on_launch_admitted"]()
+        return 61_330
+
+    manager._launch_codex_app_server.side_effect = launch_app_server
+    token = await manager.mint_codex_capacity_retry_permit(
+        instance_id=instance_id,
+        task_id=task_id,
+        task_turn_generation=7,
+        source_log_id=source_id,
+        actual_transport="codex_app_server",
+    )
+    launch_kwargs = {
+        "instance_id": instance_id,
+        "task_id": task_id,
+        "task_turn_generation": 7,
+        "cwd": str(tmp_path),
+        "provider": "codex",
+        "config_dir": str(tmp_path / "codex-home"),
+        "source_log_id": source_id,
+    }
+
+    assert await manager.launch(
+        prompt="retry exact capacity rejection",
+        codex_capacity_retry_token=token,
+        **launch_kwargs,
+    ) == 61_330
+    assert token not in manager._codex_capacity_retry_permits
+
+    with pytest.raises(LaunchSupersededError, match="stale or invalid"):
+        await manager.launch(
+            prompt="permit cannot be reused",
+            codex_capacity_retry_token=token,
+            **launch_kwargs,
+        )
+    # The second adapter is entered, but its on_launch_admitted callback
+    # rejects before any provider effect can be emitted.
+    assert manager._launch_codex_app_server.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_codex_capacity_permit_rejected_after_terminal_output(
+    db_factory,
+):
+    instance_id, task_id, source_id = await _make_actual_transport_scope(
+        db_factory,
+        provider="codex",
+    )
+    async with db_factory() as db:
+        source = await db.get(LogEntry, source_id)
+        source.actual_transport = "codex_app_server"
+        db.add_all(
+            [LogEntry(
+                instance_id=instance_id,
+                task_id=task_id,
+                task_retry_count=2,
+                task_turn_generation=7,
+                turn_scope="foreground",
+                event_type="message",
+                role="assistant",
+                content="completed output",
+                is_error=False,
+                native_turn_id="turn-capacity",
+                raw_json=json.dumps({
+                    "type": "item.completed",
+                    "turn_id": "turn-capacity",
+                    "item": {"type": "agent_message", "text": "completed output"},
+                }),
+            ), LogEntry(
+                instance_id=instance_id,
+                task_id=task_id,
+                task_retry_count=2,
+                task_turn_generation=7,
+                turn_scope="foreground",
+                event_type="system_event",
+                role=None,
+                content="turn.completed",
+                is_error=False,
+                native_turn_id="turn-capacity",
+                raw_json=json.dumps({
+                    "type": "turn.completed",
+                    "turn_id": "turn-capacity",
+                    "status": "completed",
+                    "success": True,
+                    "error": None,
+                }),
+            )]
+        )
+        await db.commit()
+
+    manager = InstanceManager(db_factory, MagicMock(broadcast=AsyncMock()))
+    with pytest.raises(LaunchSupersededError, match="terminal output"):
+        await manager.mint_codex_capacity_retry_permit(
+            instance_id=instance_id,
+            task_id=task_id,
+            task_turn_generation=7,
+            source_log_id=source_id,
+            actual_transport="codex_app_server",
+        )
+
+
+@pytest.mark.asyncio
+async def test_codex_capacity_permit_is_revoked_by_stop(
+    db_factory,
+):
+    instance_id, task_id, source_id = await _make_actual_transport_scope(
+        db_factory,
+        provider="codex",
+    )
+    async with db_factory() as db:
+        source = await db.get(LogEntry, source_id)
+        source.actual_transport = "codex_app_server"
+        await db.commit()
+
+    manager = InstanceManager(db_factory, MagicMock(broadcast=AsyncMock()))
+    token = await manager.mint_codex_capacity_retry_permit(
+        instance_id=instance_id,
+        task_id=task_id,
+        task_turn_generation=7,
+        source_log_id=source_id,
+        actual_transport="codex_app_server",
+    )
+    manager._begin_stopping(instance_id)
+    assert token not in manager._codex_capacity_retry_permits
+
+
+@pytest.mark.asyncio
 async def test_concurrent_sequential_turn_mints_publish_one_authority(
     db_factory,
 ):
@@ -9485,6 +9630,68 @@ async def test_apex_409_capacity_terminal_failure_retries_same_account(
     assert retry["provider"] == "codex"
     assert retry["model"] == "gpt-5.6-sol"
     broadcaster.broadcast.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_codex_model_capacity_ignores_configured_retry_limit(
+    db_factory, monkeypatch,
+):
+    import backend.services.claude_pool as claude_pool_module
+
+    async with db_factory() as db:
+        instance = Instance(name="capacity-unbounded", status="running")
+        task = Task(
+            title="capacity retry beyond budget",
+            status="executing",
+            provider="codex",
+            session_id="thread-capacity-unbounded",
+            last_cwd="/tmp/capacity-unbounded",
+            instance_id=None,
+        )
+        db.add_all([instance, task])
+        await db.flush()
+        task.instance_id = instance.id
+        source_id = await _bind_preflight_chat_source(
+            db, task, instance_id=instance.id
+        )
+        source = await db.get(LogEntry, source_id)
+        source.actual_transport = "codex_app_server"
+        await db.commit()
+
+    im = InstanceManager(db_factory, MagicMock(broadcast=AsyncMock()))
+    im._config_dirs[instance.id] = "/native/codex-3"
+    im._launch_params[instance.id] = {
+        "provider": "codex",
+        "prompt": "retry despite configured maximum",
+        "model": "gpt-5.6-sol",
+        "task_turn_generation": task.turn_generation,
+        "source_log_id": source_id,
+    }
+    im._transient_attempts[instance.id] = 99
+    im.get_recent_log_contents = AsyncMock(return_value=[])
+    im.launch = AsyncMock(return_value=61_331)
+    monkeypatch.setattr(settings, "transient_retry_max", 1)
+    monkeypatch.setattr(
+        claude_pool_module, "transient_retry_delay", lambda *_args: 0,
+    )
+
+    launched = await im._try_chat_transient_retry(
+        instance.id,
+        task.id,
+        1,
+        "Selected model is at capacity. Please try a different model.",
+    )
+
+    assert launched is True
+    assert im._transient_attempts[instance.id] == 100
+    im.launch.assert_awaited_once()
+    assert im.launch.await_args.kwargs["codex_capacity_retry_token"] is not None
+    retry = im.launch.await_args.kwargs
+    assert retry["task_id"] == task.id
+    assert retry["resume_session_id"] == "thread-capacity-unbounded"
+    assert retry["config_dir"] == "/native/codex-3"
+    assert retry["provider"] == "codex"
+    assert retry["model"] == "gpt-5.6-sol"
 
 
 @pytest.mark.asyncio
