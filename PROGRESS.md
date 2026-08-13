@@ -1120,4 +1120,4 @@ ocean/forest/rose 归入 Legacy 组。Header 顶栏导航重构为 AppShell（�
 - 修复：新增 exact Task/retry/turn/source/Instance/transport 的单次内存 permit，只在无 canonical terminal output 时签发，并在 provider admission 前消费；stop、取消、过期、上下文漂移和复用均 fail closed。普通与 chat 重试都在退避后紧邻 launch 签发 permit；capacity 无视有限 retry budget，仍使用带 jitter 的封顶指数退避。
 - 效率：Dispatcher 改为迭代重试循环，长期 capacity 波动不会堆积 Python 调用栈；WebSocket 对 capacity 广播 `max_attempts=null`。
 - 验证：capacity/admission 定向回归 21 passed；`test_service_dispatcher.py` 394 passed。
-- 提交：待本次提交后回填。
+- 提交：`25d4231`。
