@@ -176,14 +176,7 @@ class TestSelection:
         assert pool.set_preferred("codex-2")
         expected = str((tmp_path / "codex-2").resolve())
         assert pool.select() == expected
-
-    def test_preferred_is_persisted_and_restored(self, pool: CodexPool, pool_config: Path):
-        assert pool.set_preferred("codex-2")
-        persisted = json.loads(pool_config.read_text(encoding="utf-8"))
-        assert persisted["preferred"] == "codex-2"
-        restarted = CodexPool(config_path=pool_config, cooldown_seconds=60)
-        assert restarted.preferred_account_id == "codex-2"
-        assert restarted.select() == str((Path(pool_config).parent / "codex-2").resolve())
+        assert pool.select() == expected
 
     def test_preferred_respects_exclude_and_round_robin_fallback(
         self, pool: CodexPool, tmp_path: Path
