@@ -2176,14 +2176,14 @@ class CodexAppServer:
         # subprocess generation and is about to close its stdin.
         self._planned_shutdown: tuple[
             asyncio.subprocess.Process,
-            CodexTurnProcess | None,
+            frozenset[CodexTurnProcess],
             str,
         ] | None = None
         self._observed_transport_exit: tuple[
             asyncio.subprocess.Process,
             tuple[
                 asyncio.subprocess.Process,
-                CodexTurnProcess | None,
+                frozenset[CodexTurnProcess],
                 str,
             ] | None,
         ] | None = None
@@ -2230,6 +2230,53 @@ class CodexAppServer:
         return any(
             context.process is not process
             and context.process.returncode is None
+            for context in self._contexts_by_thread.values()
+        )
+
+    def live_task_turn_processes(
+        self,
+        process: CodexTurnProcess,
+    ) -> tuple[int | None, frozenset[CodexTurnProcess]]:
+        """Return the live adapter lineage belonging to the target CCM Task.
+
+        A Task can briefly own more than one adapter while a continuation is
+        replacing an older turn whose native descendants are still settling.
+        ``None`` is not a shareable identity: unknown owners remain isolated.
+        """
+
+        target = next(
+            (
+                context
+                for context in self._contexts_by_thread.values()
+                if context.process is process
+                and context.process.returncode is None
+            ),
+            None,
+        )
+        if target is None:
+            return None, frozenset()
+        task_id = target.task_id
+        if task_id is None:
+            return None, frozenset({process})
+        return task_id, frozenset(
+            context.process
+            for context in self._contexts_by_thread.values()
+            if context.process.returncode is None
+            and context.task_id == task_id
+        )
+
+    def has_live_turn_outside_task(
+        self,
+        task_id: int | None,
+        task_processes: frozenset[CodexTurnProcess],
+    ) -> bool:
+        return any(
+            context.process.returncode is None
+            and (
+                task_id is None
+                or context.task_id != task_id
+                or context.process not in task_processes
+            )
             for context in self._contexts_by_thread.values()
         )
 
@@ -7383,7 +7430,7 @@ class CodexAppServer:
         returncode: int | None,
         planned_shutdown: tuple[
             asyncio.subprocess.Process,
-            CodexTurnProcess | None,
+            frozenset[CodexTurnProcess],
             str,
         ] | None,
     ) -> None:
@@ -7442,7 +7489,7 @@ class CodexAppServer:
             if (
                 planned
                 and planned_shutdown is not None
-                and context.process is planned_shutdown[1]
+                and context.process in planned_shutdown[1]
             ):
                 context.process.finish(
                     130,
@@ -8432,6 +8479,7 @@ class CodexAppServer:
         self,
         *,
         interrupted_process: CodexTurnProcess | None = None,
+        interrupted_processes: frozenset[CodexTurnProcess] | None = None,
         reason: str = "CCM requested Codex app-server shutdown",
     ) -> None:
         """Permanently stop and verify this server object's process group."""
@@ -8453,7 +8501,13 @@ class CodexAppServer:
             ):
                 self._planned_shutdown = (
                     process,
-                    interrupted_process,
+                    interrupted_processes
+                    if interrupted_processes is not None
+                    else frozenset(
+                        {interrupted_process}
+                        if interrupted_process is not None
+                        else ()
+                    ),
                     reason,
                 )
             await self._shutdown_locked()
@@ -9141,11 +9195,6 @@ class CodexAppServerRegistry:
                         f"{starting} admitted app-server request(s) are in "
                         f"flight on its shared transport: {home}"
                     )
-                if server.has_other_live_turn_processes(process):
-                    raise CodexSharedTransportBusyError(
-                        "Cannot stop the claimed turn while another live turn "
-                        f"shares its Codex app-server transport: {home}"
-                    )
 
     async def stop_claimed_turn(
         self,
@@ -9200,28 +9249,32 @@ class CodexAppServerRegistry:
                             f"{starting} admitted app-server request(s) are "
                             f"in flight on its shared transport: {home}"
                         )
+                    task_id, task_processes = server.live_task_turn_processes(
+                        process
+                    )
                     # Close admission before the interrupt RPC.  A request
                     # admitted earlier remains visible in ``_starting`` and
                     # blocks transport-level escalation below.
                     self._draining.add(home)
                     drain_owned = True
 
-                interrupt_confirmed = False
-                try:
-                    interrupt_confirmed = await server.abandon_turn(
-                        process,
-                        reason,
-                    )
-                except BaseException:
-                    logger.exception(
-                        "Failed to interrupt claimed Codex turn: %s",
-                        home,
-                    )
+                interrupt_results: dict[CodexTurnProcess, bool] = {}
+                for task_process in task_processes:
+                    try:
+                        interrupt_results[task_process] = (
+                            await server.abandon_turn(task_process, reason)
+                        )
+                    except BaseException:
+                        interrupt_results[task_process] = False
+                        logger.exception(
+                            "Failed to interrupt claimed Codex Task turn: %s",
+                            home,
+                        )
                 async with self._lock:
                     server_is_current = self._servers.get(home) is server
-                    target_is_current = server.owns_live_turn_process(process)
-                    has_peer_turns = server.has_other_live_turn_processes(
-                        process
+                    has_peer_turns = server.has_live_turn_outside_task(
+                        task_id,
+                        task_processes,
                     )
                     starting = self._starting.get(home, 0)
                     registry_shutdown = self._shutdown_requested
@@ -9229,12 +9282,15 @@ class CodexAppServerRegistry:
                 blockers: list[str] = []
                 if not server_is_current:
                     blockers.append("the exact transport generation changed")
-                if (
-                    not interrupt_confirmed
-                    and process.returncode is None
-                    and not target_is_current
+                if any(
+                    not interrupt_results.get(task_process, False)
+                    and task_process.returncode is None
+                    and not server.owns_live_turn_process(task_process)
+                    for task_process in task_processes
                 ):
-                    blockers.append("the exact target generation changed")
+                    blockers.append(
+                        "an unconfirmed Task turn generation changed"
+                    )
                 if starting:
                     blockers.append(
                         f"{starting} admitted app-server request(s) are in flight"
@@ -9255,16 +9311,25 @@ class CodexAppServerRegistry:
                     # turns.  The per-turn runtime cleanup callback remains
                     # attached to ``process.finish`` and is awaited by the
                     # InstanceManager consumer.
-                    if not interrupt_confirmed and process.returncode is None:
+                    unconfirmed = [
+                        task_process
+                        for task_process in task_processes
+                        if not interrupt_results.get(task_process, False)
+                        and task_process.returncode is None
+                    ]
+                    if unconfirmed:
                         raise CodexSharedTransportBusyError(
-                            "Cannot stop the claimed turn while its exact "
-                            "interrupt is unconfirmed and another live turn "
+                            "Cannot stop every claimed Task turn while an "
+                            "exact interrupt is unconfirmed and another Task "
                             "shares its Codex app-server transport: "
                             f"{home}"
                         )
-                    if process.returncode is None:
+                    if any(
+                        task_process.returncode is None
+                        for task_process in task_processes
+                    ):
                         raise CodexSharedTransportBusyError(
-                            "Claimed turn interrupt did not terminate the "
+                            "Claimed Task interrupt did not terminate every "
                             "target adapter on shared Codex transport: "
                             f"{home}"
                         )
@@ -9279,17 +9344,19 @@ class CodexAppServerRegistry:
                 # MCP/code-mode helpers retained by Codex after a confirmed
                 # turn interrupt.
                 shutdown_attempted = True
-                await server.shutdown(
-                    interrupted_process=process,
-                    reason=reason,
-                )
+                shutdown_kwargs: dict[str, Any] = {"reason": reason}
+                if len(task_processes) == 1:
+                    shutdown_kwargs["interrupted_process"] = process
+                else:
+                    shutdown_kwargs["interrupted_processes"] = task_processes
+                await server.shutdown(**shutdown_kwargs)
 
                 # Real servers finish all adapters in their reader. Preserve
                 # the same guarantee for test doubles and an already-settled
                 # reader cancellation race. Peers are failures, never false
                 # successful completions.
                 for context in list(server._contexts_by_thread.values()):
-                    if context.process is process:
+                    if context.process in task_processes:
                         context.process.finish(
                             130,
                             reason,
