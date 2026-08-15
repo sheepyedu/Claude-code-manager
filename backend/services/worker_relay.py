@@ -32,6 +32,7 @@ from sqlalchemy import exists, func, or_, select, update
 from backend.config import settings
 from backend.models.log_entry import LogEntry
 from backend.models.monitor_session import MonitorCheck, MonitorSession
+from backend.models.sub_agent import SubAgentReport, SubAgentSession
 from backend.models.task import Task
 from backend.models.worker import Worker
 from backend.models.worker_turn_handoff import WorkerTurnHandoffReceipt
@@ -70,6 +71,12 @@ _TERMINAL_TASK_STATUSES = frozenset(
     {"completed", "failed", "cancelled", "conflict"}
 )
 _WORKER_BACKGROUND_MIRROR_SENTINEL = "worker-relay:background-active:v1"
+_WORKER_CHILD_MIRROR_META_KEY = "ccm_worker_mirror"
+_NATIVE_SUB_AGENT_MIRROR_VERSION = 1
+_SUB_AGENT_TERMINAL_STATUSES = frozenset({"completed", "failed", "stopped"})
+_NATIVE_SUB_AGENT_TERMINAL_STATUSES = frozenset(
+    {"completed", "failed", "cancelled"}
+)
 _FP_PREFIX = 20_000  # Match the history endpoint's exact observable prefix.
 WORKER_HANDOFF_RECOVERY_BASE_DELAY = 1.0
 WORKER_HANDOFF_RECOVERY_MAX_DELAY = 60.0
@@ -1491,6 +1498,237 @@ CHAT_EVENT_TYPES = {
     "system_init", "system_event", "thinking", "process_exit",
 }
 
+def _validated_sub_agent_relay_payload(
+    data: dict,
+    *,
+    terminal: bool,
+) -> dict[str, object] | None:
+    """Validate one Worker-owned CCM Sub-Agent mirror snapshot."""
+
+    remote_id = data.get("sub_agent_session_id")
+    description = data.get("description")
+    monitor_context = data.get("monitor_context")
+    status = data.get("status")
+    checks_done = data.get("checks_done")
+    last_summary = data.get("last_summary")
+    if (
+        type(remote_id) is not int
+        or remote_id <= 0
+        or data.get("agent_type") != "sub_agent"
+        or data.get("source") != "ccm"
+        or not isinstance(description, str)
+        or len(description) > 500
+        or (monitor_context is not None and not isinstance(monitor_context, str))
+        or type(checks_done) is not int
+        or checks_done < 0
+        or (last_summary is not None and not isinstance(last_summary, str))
+    ):
+        return None
+    if terminal:
+        if status not in _SUB_AGENT_TERMINAL_STATUSES:
+            return None
+    elif status != "running":
+        return None
+    return {
+        "remote_id": remote_id,
+        "description": description,
+        "monitor_context": monitor_context,
+        "status": status,
+        "checks_done": checks_done,
+        "last_summary": last_summary,
+    }
+
+
+def _validated_native_sub_agent_relay_payload(
+    data: dict,
+    *,
+    terminal: bool,
+) -> dict[str, object] | None:
+    """Validate a complete Worker-owned native child snapshot."""
+
+    remote_id = data.get("sub_agent_session_id")
+    agent_type = data.get("agent_type")
+    provider = data.get("provider")
+    description = data.get("description")
+    status = data.get("status")
+    checks_done = data.get("checks_done")
+    last_summary = data.get("last_summary")
+    codex_thread_id = data.get("codex_thread_id")
+    native_sequence = data.get("native_sequence")
+    model = data.get("model")
+    reasoning_effort = data.get("reasoning_effort")
+    if (
+        data.get("native_mirror_version")
+        != _NATIVE_SUB_AGENT_MIRROR_VERSION
+        or type(remote_id) is not int
+        or remote_id <= 0
+        or agent_type not in {"native-agent", "native-monitor"}
+        or data.get("source") != "native"
+        or provider not in {"claude", "codex"}
+        or not isinstance(description, str)
+        or len(description) > 500
+        or type(checks_done) is not int
+        or checks_done < 0
+        or (
+            last_summary is not None
+            and (
+                not isinstance(last_summary, str)
+                or len(last_summary) > 2000
+            )
+        )
+        or (
+            codex_thread_id is not None
+            and (
+                not isinstance(codex_thread_id, str)
+                or not codex_thread_id
+                or codex_thread_id != codex_thread_id.strip()
+                or len(codex_thread_id) > 255
+            )
+        )
+        or (provider == "codex" and codex_thread_id is None)
+        or (provider != "codex" and codex_thread_id is not None)
+        or (
+            provider == "codex"
+            and (
+                type(native_sequence) is not int
+                or native_sequence <= 0
+            )
+        )
+        or (provider != "codex" and native_sequence is not None)
+        or (
+            model is not None
+            and (not isinstance(model, str) or len(model) > 100)
+        )
+        or (
+            reasoning_effort is not None
+            and (
+                not isinstance(reasoning_effort, str)
+                or len(reasoning_effort) > 20
+            )
+        )
+    ):
+        return None
+    if terminal:
+        if status not in _NATIVE_SUB_AGENT_TERMINAL_STATUSES:
+            return None
+    elif status != "running":
+        return None
+    return {
+        "remote_id": remote_id,
+        "agent_type": agent_type,
+        "provider": provider,
+        "description": description,
+        "status": status,
+        "checks_done": checks_done,
+        "last_summary": last_summary,
+        "codex_thread_id": codex_thread_id,
+        "native_sequence": native_sequence,
+        "model": model,
+        "reasoning_effort": reasoning_effort,
+    }
+
+
+def _worker_child_mirror_meta(
+    *,
+    worker_id: int,
+    task_incarnation_id: str,
+    remote_id: int,
+    native_sequence: int | None = None,
+) -> str:
+    payload = {
+        _WORKER_CHILD_MIRROR_META_KEY: {
+            "worker_id": worker_id,
+            "task_incarnation_id": task_incarnation_id,
+            "remote_id": remote_id,
+        }
+    }
+    if native_sequence is not None:
+        payload["native_sequence"] = native_sequence
+    return json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    )
+
+
+def _worker_child_mirror_snapshot_identity(
+    meta: object,
+) -> tuple[tuple[int, str, int], int | None] | None:
+    if not isinstance(meta, str):
+        return None
+    try:
+        payload = json.loads(meta)
+    except (TypeError, ValueError):
+        return None
+    if (
+        not isinstance(payload, dict)
+        or set(payload)
+        not in (
+            {_WORKER_CHILD_MIRROR_META_KEY},
+            {_WORKER_CHILD_MIRROR_META_KEY, "native_sequence"},
+        )
+    ):
+        return None
+    identity = payload.get(_WORKER_CHILD_MIRROR_META_KEY)
+    if not isinstance(identity, dict) or set(identity) != {
+        "worker_id",
+        "task_incarnation_id",
+        "remote_id",
+    }:
+        return None
+    worker_id = identity.get("worker_id")
+    incarnation_id = identity.get("task_incarnation_id")
+    remote_id = identity.get("remote_id")
+    if (
+        type(worker_id) is not int
+        or worker_id <= 0
+        or not isinstance(incarnation_id, str)
+        or len(incarnation_id) != 32
+        or any(char not in "0123456789abcdef" for char in incarnation_id)
+        or type(remote_id) is not int
+        or remote_id <= 0
+    ):
+        return None
+    native_sequence = payload.get("native_sequence")
+    if native_sequence is not None and (
+        type(native_sequence) is not int or native_sequence <= 0
+    ):
+        return None
+    return (worker_id, incarnation_id, remote_id), native_sequence
+
+
+def worker_child_mirror_identity(
+    meta: object,
+) -> tuple[int, str, int] | None:
+    parsed = _worker_child_mirror_snapshot_identity(meta)
+    return parsed[0] if parsed is not None else None
+
+
+def _exact_worker_child_mirror(
+    mirrors: list[SubAgentSession],
+    expected_identity: tuple[int, str, int],
+) -> tuple[SubAgentSession | None, bool]:
+    """Select one exact mirror without aliasing historical Worker rows.
+
+    A Task can move from Worker A to Worker B while both Workers independently
+    allocate the same numeric child id.  Valid mirrors for other Worker/task
+    incarnations are history and may coexist.  A row with missing or malformed
+    identity is ambiguous, however, so the whole mutation must fail closed.
+    """
+
+    exact: list[SubAgentSession] = []
+    for mirror in mirrors:
+        identity = worker_child_mirror_identity(mirror.meta)
+        if identity is None:
+            return None, False
+        if identity == expected_identity:
+            exact.append(mirror)
+    if len(exact) > 1:
+        return None, False
+    return (exact[0] if exact else None), True
+
 # Unlike status/background/plan notifications, these events apply payload
 # fields directly to the Manager mirror.  They therefore cannot use the
 # Manager's current generation at receive time as their identity: every
@@ -1506,6 +1744,10 @@ EXACT_GENERATION_RELAY_EVENT_TYPES = frozenset({
     "monitor_session_created",
     "monitor_check",
     "monitor_session_status",
+    "sub_agent_count",
+    "sub_agent_session_created",
+    "sub_agent_report",
+    "sub_agent_session_status",
 })
 
 _INVALID_NATIVE_TURN_ID = object()
@@ -3658,6 +3900,36 @@ class WorkerRelay:
             return
         # monitor 事件用 "event" 键，chat 事件用 "event_type"，status_change 用 "event"
         event_type = data.get("event_type") or data.get("event")
+        ccm_sub_agent_relay_event = bool(
+            event_type
+            in {"sub_agent_session_created", "sub_agent_session_status"}
+            and data.get("event") == event_type
+        )
+        native_sub_agent_relay_event = bool(
+            event_type
+            in {
+                "sub_agent_session_created",
+                "sub_agent_report",
+                "sub_agent_session_status",
+            }
+            and data.get("native_mirror_version")
+            == _NATIVE_SUB_AGENT_MIRROR_VERSION
+            and data.get("source") == "native"
+        )
+        if (
+            event_type
+            in {
+                "sub_agent_session_created",
+                "sub_agent_report",
+                "sub_agent_session_status",
+            }
+            and "native_mirror_version" in data
+            and not native_sub_agent_relay_event
+        ):
+            # The key opts into the durable mirror contract.  Unsupported or
+            # partial declared versions must not silently fall back to the
+            # legacy notification-only namespace.
+            return
 
         # task_id：data 里有就用，没有从 channel 名解析（task:{id} 的 chat 事件不带）
         task_id = data.get("task_id")
@@ -3688,7 +3960,19 @@ class WorkerRelay:
         actual_transport = None
         worker_turn_handoff_id: str | None = None
         generation_scoped_event = (
-            event_type in EXACT_GENERATION_RELAY_EVENT_TYPES
+            (
+                event_type in EXACT_GENERATION_RELAY_EVENT_TYPES
+                and (
+                    event_type
+                    not in {
+                        "sub_agent_session_created",
+                        "sub_agent_report",
+                        "sub_agent_session_status",
+                    }
+                    or ccm_sub_agent_relay_event
+                    or native_sub_agent_relay_event
+                )
+            )
             or event_type in CHAT_EVENT_TYPES
         )
         if event_type in CHAT_EVENT_TYPES:
@@ -4267,6 +4551,484 @@ class WorkerRelay:
                     if ms.status in ("completed", "failed", "cancelled"):
                         ms.completed_at = func.now()
                 await db.commit()
+
+        elif native_sub_agent_relay_event:
+            incoming_status = data.get("status")
+            terminal = (
+                isinstance(incoming_status, str)
+                and incoming_status in _NATIVE_SUB_AGENT_TERMINAL_STATUSES
+            )
+            if (
+                event_type
+                in {"sub_agent_session_created", "sub_agent_report"}
+                and terminal
+            ):
+                return
+            if (
+                event_type == "sub_agent_session_status"
+                and data.get("status") == "running"
+                and data.get("provider") != "codex"
+            ):
+                return
+            payload = _validated_native_sub_agent_relay_payload(
+                data,
+                terminal=terminal,
+            )
+            check_number = data.get("check_number")
+            if event_type == "sub_agent_report" and (
+                type(check_number) is not int
+                or check_number <= 0
+                or payload is None
+                or check_number != payload["checks_done"]
+            ):
+                return
+            if (
+                payload is None
+                or type(worker.id) is not int
+                or worker.id <= 0
+                or not isinstance(observed.incarnation_id, str)
+                or len(observed.incarnation_id) != 32
+                or any(
+                    char not in "0123456789abcdef"
+                    for char in observed.incarnation_id
+                )
+            ):
+                return
+            remote_id = payload["remote_id"]
+            assert type(remote_id) is int
+            expected_identity = (
+                worker.id,
+                observed.incarnation_id,
+                remote_id,
+            )
+            mirror_meta = _worker_child_mirror_meta(
+                worker_id=worker.id,
+                task_incarnation_id=observed.incarnation_id,
+                remote_id=remote_id,
+                native_sequence=payload["native_sequence"],
+            )
+            async with self.db_factory() as db:
+                guarded = await db.execute(
+                    update(Task)
+                    .where(*_worker_task_generation_write_predicates(observed))
+                    .values(status=observed.status)
+                )
+                if guarded.rowcount != 1:
+                    await db.rollback()
+                    return
+                mirrors = list(
+                    (
+                        await db.execute(
+                            select(SubAgentSession)
+                            .where(
+                                SubAgentSession.task_id == task_id,
+                                SubAgentSession.remote_id == remote_id,
+                            )
+                            .with_for_update()
+                        )
+                    ).scalars()
+                )
+                mirror, trusted_identity_set = _exact_worker_child_mirror(
+                    mirrors,
+                    expected_identity,
+                )
+                if not trusted_identity_set:
+                    await db.rollback()
+                    return
+
+                if mirror is not None and (
+                    mirror.agent_type != payload["agent_type"]
+                    or mirror.source != "native"
+                    or mirror.provider != payload["provider"]
+                    or mirror.codex_thread_id != payload["codex_thread_id"]
+                ):
+                    await db.rollback()
+                    return
+
+                add_report = False
+                same_sequence = False
+                if mirror is not None and payload["provider"] == "codex":
+                    parsed_identity = _worker_child_mirror_snapshot_identity(
+                        mirror.meta
+                    )
+                    incoming_sequence = payload["native_sequence"]
+                    if (
+                        parsed_identity is None
+                        or type(incoming_sequence) is not int
+                    ):
+                        await db.rollback()
+                        return
+                    stored_sequence = parsed_identity[1]
+                    if (
+                        type(stored_sequence) is not int
+                        or incoming_sequence < stored_sequence
+                    ):
+                        await db.rollback()
+                        return
+                    same_sequence = incoming_sequence == stored_sequence
+                    if same_sequence and (
+                        mirror.status != payload["status"]
+                        or mirror.description != payload["description"]
+                        or mirror.model != payload["model"]
+                        or mirror.codex_effort_level
+                        != payload["reasoning_effort"]
+                        or mirror.checks_done != payload["checks_done"]
+                        or mirror.last_summary != payload["last_summary"]
+                    ):
+                        await db.rollback()
+                        return
+
+                if mirror is None:
+                    initial_status = (
+                        payload["status"] if terminal else "running"
+                    )
+                    mirror = SubAgentSession(
+                        task_id=task_id,
+                        remote_id=remote_id,
+                        agent_type=payload["agent_type"],
+                        source="native",
+                        description=payload["description"],
+                        interval=0,
+                        max_checks=0,
+                        model=payload["model"],
+                        provider=payload["provider"],
+                        status=initial_status,
+                        checks_done=payload["checks_done"],
+                        last_summary=payload["last_summary"],
+                        codex_thread_id=payload["codex_thread_id"],
+                        codex_effort_level=payload["reasoning_effort"],
+                        meta=mirror_meta,
+                        completed_at=(
+                            datetime.utcnow() if terminal else None
+                        ),
+                    )
+                    db.add(mirror)
+                    await db.flush()
+                    add_report = event_type == "sub_agent_report"
+                elif same_sequence:
+                    # Exact transport replay: retain one DB/report edge while
+                    # allowing the canonical snapshot to be forwarded again.
+                    pass
+                elif event_type == "sub_agent_session_created":
+                    if (
+                        mirror.provider == "codex"
+                        or mirror.status != "running"
+                        or mirror.description != payload["description"]
+                        or mirror.checks_done != payload["checks_done"]
+                        or mirror.last_summary != payload["last_summary"]
+                    ):
+                        # A new Codex sequence cannot legitimately recreate an
+                        # existing remote row.  Unsequenced Claude snapshots
+                        # retain their exact replay compatibility only.
+                        await db.rollback()
+                        return
+                elif event_type == "sub_agent_report":
+                    if mirror.status != "running":
+                        await db.rollback()
+                        return
+                    assert type(check_number) is int
+                    if mirror.checks_done > check_number:
+                        await db.rollback()
+                        return
+                    if mirror.checks_done == check_number:
+                        if mirror.last_summary != payload["last_summary"]:
+                            await db.rollback()
+                            return
+                    else:
+                        mirror.checks_done = check_number
+                        mirror.last_summary = payload["last_summary"]
+                        mirror.description = payload["description"]
+                        mirror.model = payload["model"]
+                        mirror.codex_effort_level = payload["reasoning_effort"]
+                        add_report = True
+                else:
+                    assert event_type == "sub_agent_session_status"
+                    if payload["status"] == "running":
+                        if (
+                            mirror.provider != "codex"
+                            or mirror.status
+                            not in {
+                                "running",
+                                *_NATIVE_SUB_AGENT_TERMINAL_STATUSES,
+                            }
+                        ):
+                            await db.rollback()
+                            return
+                        mirror.status = "running"
+                        mirror.description = payload["description"]
+                        mirror.model = payload["model"]
+                        mirror.checks_done = payload["checks_done"]
+                        mirror.last_summary = payload["last_summary"]
+                        mirror.codex_effort_level = payload["reasoning_effort"]
+                        mirror.completed_at = None
+                    elif mirror.status in _NATIVE_SUB_AGENT_TERMINAL_STATUSES:
+                        if mirror.status != payload["status"]:
+                            await db.rollback()
+                            return
+                    elif mirror.status == "running":
+                        mirror.status = payload["status"]
+                        mirror.description = payload["description"]
+                        mirror.model = payload["model"]
+                        mirror.checks_done = payload["checks_done"]
+                        mirror.last_summary = payload["last_summary"]
+                        mirror.codex_effort_level = payload["reasoning_effort"]
+                        mirror.completed_at = datetime.utcnow()
+                    else:
+                        await db.rollback()
+                        return
+
+                if mirror.provider == "codex":
+                    mirror.meta = mirror_meta
+
+                if add_report:
+                    assert type(check_number) is int
+                    db.add(SubAgentReport(
+                        session_id=mirror.id,
+                        check_number=check_number,
+                        status="running",
+                        summary=payload["last_summary"],
+                    ))
+                canonical_forward = {
+                    **data,
+                    "sub_agent_session_id": mirror.id,
+                    "agent_type": mirror.agent_type,
+                    "source": "native",
+                    "provider": mirror.provider,
+                    "description": mirror.description,
+                    "model": mirror.model,
+                    "reasoning_effort": mirror.codex_effort_level,
+                    "status": mirror.status,
+                    "checks_done": mirror.checks_done,
+                    "last_summary": mirror.last_summary,
+                    "codex_thread_id": mirror.codex_thread_id,
+                }
+                await db.commit()
+            persisted_forward = canonical_forward
+
+        elif (
+            event_type == "sub_agent_session_created"
+            and ccm_sub_agent_relay_event
+        ):
+            payload = _validated_sub_agent_relay_payload(
+                data,
+                terminal=False,
+            )
+            if (
+                payload is None
+                or type(worker.id) is not int
+                or worker.id <= 0
+                or not isinstance(observed.incarnation_id, str)
+                or len(observed.incarnation_id) != 32
+                or any(
+                    char not in "0123456789abcdef"
+                    for char in observed.incarnation_id
+                )
+            ):
+                return
+            remote_id = payload["remote_id"]
+            assert type(remote_id) is int
+            expected_identity = (
+                worker.id,
+                observed.incarnation_id,
+                remote_id,
+            )
+            mirror_meta = _worker_child_mirror_meta(
+                worker_id=worker.id,
+                task_incarnation_id=observed.incarnation_id,
+                remote_id=remote_id,
+            )
+            async with self.db_factory() as db:
+                guarded = await db.execute(
+                    update(Task)
+                    .where(*_worker_task_generation_write_predicates(observed))
+                    .values(status=observed.status)
+                )
+                if guarded.rowcount != 1:
+                    await db.rollback()
+                    return
+                mirrors = list(
+                    (
+                        await db.execute(
+                            select(SubAgentSession)
+                            .where(
+                                SubAgentSession.task_id == task_id,
+                                SubAgentSession.remote_id == remote_id,
+                            )
+                            .with_for_update()
+                        )
+                    ).scalars()
+                )
+                mirror, trusted_identity_set = _exact_worker_child_mirror(
+                    mirrors,
+                    expected_identity,
+                )
+                if not trusted_identity_set:
+                    await db.rollback()
+                    return
+                if mirror is not None:
+                    if (
+                        mirror.agent_type != "sub_agent"
+                        or mirror.source != "ccm"
+                        or mirror.status != "running"
+                        or mirror.description != payload["description"]
+                        or mirror.monitor_context != payload["monitor_context"]
+                        or mirror.checks_done != payload["checks_done"]
+                        or mirror.last_summary != payload["last_summary"]
+                    ):
+                        # A delayed created event must not revive a terminal
+                        # mirror or alias another child category/source.
+                        await db.rollback()
+                        return
+                else:
+                    mirror = SubAgentSession(
+                        task_id=task_id,
+                        remote_id=remote_id,
+                        agent_type="sub_agent",
+                        source="ccm",
+                        description=payload["description"],
+                        monitor_context=payload["monitor_context"],
+                        interval=0,
+                        max_checks=0,
+                        status="running",
+                        checks_done=payload["checks_done"],
+                        last_summary=payload["last_summary"],
+                        meta=mirror_meta,
+                    )
+                    db.add(mirror)
+                    await db.flush()
+                local_id = mirror.id
+                canonical_forward = {
+                    **data,
+                    "sub_agent_session_id": local_id,
+                    "description": mirror.description,
+                    "agent_type": "sub_agent",
+                    "source": "ccm",
+                    "monitor_context": mirror.monitor_context,
+                    "status": mirror.status,
+                    "checks_done": mirror.checks_done,
+                    "last_summary": mirror.last_summary,
+                }
+                await db.commit()
+            persisted_forward = canonical_forward
+
+        elif (
+            event_type == "sub_agent_session_status"
+            and ccm_sub_agent_relay_event
+        ):
+            payload = _validated_sub_agent_relay_payload(
+                data,
+                terminal=True,
+            )
+            if (
+                payload is None
+                or type(worker.id) is not int
+                or worker.id <= 0
+                or not isinstance(observed.incarnation_id, str)
+                or len(observed.incarnation_id) != 32
+                or any(
+                    char not in "0123456789abcdef"
+                    for char in observed.incarnation_id
+                )
+            ):
+                return
+            remote_id = payload["remote_id"]
+            assert type(remote_id) is int
+            expected_identity = (
+                worker.id,
+                observed.incarnation_id,
+                remote_id,
+            )
+            mirror_meta = _worker_child_mirror_meta(
+                worker_id=worker.id,
+                task_incarnation_id=observed.incarnation_id,
+                remote_id=remote_id,
+            )
+            async with self.db_factory() as db:
+                guarded = await db.execute(
+                    update(Task)
+                    .where(*_worker_task_generation_write_predicates(observed))
+                    .values(status=observed.status)
+                )
+                if guarded.rowcount != 1:
+                    await db.rollback()
+                    return
+                mirrors = list(
+                    (
+                        await db.execute(
+                            select(SubAgentSession)
+                            .where(
+                                SubAgentSession.task_id == task_id,
+                                SubAgentSession.remote_id == remote_id,
+                            )
+                            .with_for_update()
+                        )
+                    ).scalars()
+                )
+                mirror, trusted_identity_set = _exact_worker_child_mirror(
+                    mirrors,
+                    expected_identity,
+                )
+                if not trusted_identity_set:
+                    await db.rollback()
+                    return
+                if mirror is not None:
+                    if (
+                        mirror.agent_type != "sub_agent"
+                        or mirror.source != "ccm"
+                    ):
+                        await db.rollback()
+                        return
+                    if mirror.status in _SUB_AGENT_TERMINAL_STATUSES:
+                        if mirror.status != payload["status"]:
+                            # First terminal evidence wins.  A duplicate from
+                            # the Worker can acknowledge it but never rewrite
+                            # or revive it with a different terminal result.
+                            await db.rollback()
+                            return
+                    elif mirror.status == "running":
+                        mirror.status = payload["status"]
+                        mirror.description = payload["description"]
+                        mirror.monitor_context = payload["monitor_context"]
+                        mirror.checks_done = payload["checks_done"]
+                        mirror.last_summary = payload["last_summary"]
+                        mirror.completed_at = datetime.utcnow()
+                    else:
+                        await db.rollback()
+                        return
+                else:
+                    # Status is a complete snapshot so a lost/reordered
+                    # created event does not leave the Manager without a row.
+                    mirror = SubAgentSession(
+                        task_id=task_id,
+                        remote_id=remote_id,
+                        agent_type="sub_agent",
+                        source="ccm",
+                        description=payload["description"],
+                        monitor_context=payload["monitor_context"],
+                        interval=0,
+                        max_checks=0,
+                        status=payload["status"],
+                        checks_done=payload["checks_done"],
+                        last_summary=payload["last_summary"],
+                        meta=mirror_meta,
+                        completed_at=datetime.utcnow(),
+                    )
+                    db.add(mirror)
+                    await db.flush()
+                local_id = mirror.id
+                canonical_forward = {
+                    **data,
+                    "sub_agent_session_id": local_id,
+                    "description": mirror.description,
+                    "agent_type": "sub_agent",
+                    "source": "ccm",
+                    "monitor_context": mirror.monitor_context,
+                    "status": mirror.status,
+                    "checks_done": mirror.checks_done,
+                    "last_summary": mirror.last_summary,
+                }
+                await db.commit()
+            persisted_forward = canonical_forward
 
         # 4) 镜像广播到来源同名 channel（剥 worker 的 instance_id，对 Manager 无意义）
         forward = persisted_forward or {

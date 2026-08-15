@@ -1490,7 +1490,8 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
     }
     if (eventType === 'monitor_session_created' || eventType === 'monitor_session_status'
         || eventType === 'sub_agent_session_created' || eventType === 'sub_agent_session_status') {
-      api.listMonitorSessions(task.id).then(setMonitorSessions).catch(() => {});
+      api.listAllSubAgentSessions(task.id).then(setMonitorSessions).catch(() => {});
+      if (eventType.startsWith('sub_agent_')) onTaskUpdated?.();
       return;
     }
 
@@ -1563,15 +1564,15 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
       return;
     }
 
-    // 模型原生子 agent 的进度（PTY 观测，经 sub_agent_sessions 镜像）
+    // 模型原生子 agent 的进度（Provider 生命周期观测，经通用表镜像）
     if (eventType === 'sub_agent_report') {
-      api.listMonitorSessions(task.id).then(setMonitorSessions).catch(() => {});
+      api.listAllSubAgentSessions(task.id).then(setMonitorSessions).catch(() => {});
       return;
     }
 
     // CCM Sub-Agent progress: show in chat as system_event, update panel
     if (eventType === 'sub_agent_progress') {
-      api.listMonitorSessions(task.id).then(setMonitorSessions).catch(() => {});
+      api.listAllSubAgentSessions(task.id).then(setMonitorSessions).catch(() => {});
       const summary = msg.data.summary as string;
       const saSessionId = msg.data.sub_agent_session_id as number;
       const description = msg.data.description as string;
@@ -1598,13 +1599,13 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
 
     // Sub-Agent session status change: just refresh panel
     if (eventType === 'sub_agent_session_status' || eventType === 'sub_agent_session_created') {
-      api.listMonitorSessions(task.id).then(setMonitorSessions).catch(() => {});
+      api.listAllSubAgentSessions(task.id).then(setMonitorSessions).catch(() => {});
       return;
     }
 
     if (eventType === 'monitor_check') {
       // Always refresh panel data
-      api.listMonitorSessions(task.id).then(setMonitorSessions).catch(() => {});
+      api.listAllSubAgentSessions(task.id).then(setMonitorSessions).catch(() => {});
       // Dedup: don't insert into chat flow. If chat_injected=true, a separate
       // user_message event will arrive. If false, it's a non-important check
       // that only belongs in MonitorPanel. Legacy events (chat_injected
@@ -2171,13 +2172,14 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
     fetchHistory();
   }, [fetchHistory]);
 
-  // Always load monitor sessions (commands can create monitors even without permanent skill)
+  // Load the unified read model: CCM monitors, one-shot agents, and native
+  // provider children all share the same header indicator and detail panel.
   useEffect(() => {
-    api.listMonitorSessions(task.id).then(setMonitorSessions).catch(() => {});
+    api.listAllSubAgentSessions(task.id).then(setMonitorSessions).catch(() => {});
   }, [task.id]);
 
 
-  const monitorCount = useMemo(
+  const activeSubAgentCount = useMemo(
     () => monitorSessions.filter((s) => s.status === 'running').length,
     [monitorSessions]
   );
@@ -2838,9 +2840,11 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
           >
             <SubAgentIndicator
               taskId={task.id}
-              count={monitorCount}
-              active={monitorCount > 0}
-              onNavigate={() => setShowMonitorPanel(!showMonitorPanel)}
+              count={activeSubAgentCount}
+              active={activeSubAgentCount > 0}
+              onNavigate={hasControlAccess
+                ? () => setShowMonitorPanel(!showMonitorPanel)
+                : undefined}
             />
             {!deliveryReadOnly && (
               <button
