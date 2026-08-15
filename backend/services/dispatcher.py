@@ -56,6 +56,9 @@ from backend.services.instance_manager import (
     InstanceAlreadyRunningError,
     InstanceManager,
 )
+from backend.services.process_identity import (
+    persisted_process_is_definitively_dead,
+)
 from backend.services.process_safety import require_safe_process_group_id
 from backend.services.pr_review_runtime import (
     is_pr_sandbox_task,
@@ -2742,6 +2745,13 @@ class GlobalDispatcher:
                     # sides of this exact Task/Instance evidence.
                     live_task_ids.add(inst.current_task_id)
                     continue
+                # A bare ``os.kill(pid, 0)`` cannot tell this generation from an
+                # unrelated process that inherited the number after PID reuse
+                # or a host restart, so compare the recorded start ticks and
+                # boot id too. Rows persisted before those columns existed have
+                # no identity to compare and stay conservatively fail closed.
+                # A NULL PID records no process at all, so there is nothing to
+                # probe and nothing that can still be alive.
                 pid_may_be_alive = False
                 if inst.pid is not None:
                     codex_transport_pids = getattr(
@@ -2755,15 +2765,10 @@ class GlobalDispatcher:
                         else set()
                     )
                     if inst.pid not in live_transport_pids:
-                        try:
-                            os.kill(inst.pid, 0)
-                            pid_may_be_alive = True
-                        except ProcessLookupError:
-                            pass
-                        except OSError:
-                            # Anything other than a definitive ESRCH is uncertain
-                            # and therefore fail-closed against duplicate writes.
-                            pid_may_be_alive = True
+                        pid_may_be_alive = not persisted_process_is_definitively_dead(
+                            inst.pid,
+                            inst.process_identity,
+                        )
                 logger.warning(
                     "Quarantining unowned instance %s (%s), persisted PID %s%s",
                     inst.id,
@@ -3120,7 +3125,11 @@ class GlobalDispatcher:
                     # A definitively dead/no-PID generation is safe to detach.
                     # For an uncertain live PID, retain both links as evidence
                     # so retry/cleanup can continue to block duplicate work.
-                    quarantine_values.update(current_task_id=None, pid=None)
+                    quarantine_values.update(
+                        current_task_id=None,
+                        pid=None,
+                        process_identity=None,
+                    )
                 quarantined = await db.execute(
                     update(Instance)
                     .where(
@@ -3133,6 +3142,12 @@ class GlobalDispatcher:
                         Instance.status == inst.status,
                         Instance.current_task_id == inst.current_task_id,
                         Instance.pid == inst.pid,
+                        (
+                            Instance.process_identity.is_(None)
+                            if inst.process_identity is None
+                            else Instance.process_identity
+                            == inst.process_identity
+                        ),
                         (
                             Instance.started_at.is_(None)
                             if inst.started_at is None
@@ -4990,6 +5005,7 @@ class GlobalDispatcher:
                 current_plan_run_id=run.id,
                 current_task_id=None,
                 pid=None,
+                process_identity=None,
                 started_at=now,
             )
         )
@@ -12245,7 +12261,12 @@ class GlobalDispatcher:
                     instance_reset = await db.execute(
                         update(Instance)
                         .where(*instance_predicates)
-                        .values(status="idle", current_task_id=None, pid=None)
+                        .values(
+                            status="idle",
+                            current_task_id=None,
+                            pid=None,
+                            process_identity=None,
+                        )
                     )
                     if not instance_reset.rowcount:
                         # The Task transition above belongs to the same

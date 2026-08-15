@@ -1,5 +1,3 @@
-import errno
-import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -15,6 +13,9 @@ from backend.models.task import Task
 from backend.models.test_harness import TestHarnessChildBinding
 from backend.models.task_ssh_grant import TaskSSHGrant
 from backend.models.worker_task_termination import WorkerTaskTerminationReceipt
+from backend.services.process_identity import (
+    persisted_process_is_definitively_dead,
+)
 from backend.services.task_creation import (
     purge_task_access_grants,
     stage_task_record,
@@ -182,25 +183,6 @@ def task_is_pr_review_superseded(task: Task | None) -> bool:
     )
 
 
-def persisted_pid_is_definitively_dead(pid: int) -> bool:
-    """Return True only when a signal-free PID probe proves ``ESRCH``.
-
-    A successful ``kill(pid, 0)`` means the process still exists. Permission
-    failures and every other probe error are uncertain, so destructive
-    cleanup must preserve the persisted PID/owner evidence and fail closed.
-    """
-
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return True
-    except OSError as exc:
-        return exc.errno == errno.ESRCH
-    except Exception:
-        return False
-    return False
-
-
 TaskGenerationFence = tuple[
     int,
     int | None,
@@ -240,7 +222,7 @@ class TestHarnessDeleteGraph:
     evidence_storage_keys: tuple[str, ...]
     child_tasks: tuple[tuple[int, str, str, int, int], ...]
     child_instances: tuple[
-        tuple[int, int, str, int | None, datetime | None], ...
+        tuple[int, int, str, int | None, str | None, datetime | None], ...
     ]
 
 
@@ -491,7 +473,10 @@ async def _lock_test_harness_delete_graph(
                     instance.pid is not None
                     and (
                         instance.status not in {"error", "stopped"}
-                        or not persisted_pid_is_definitively_dead(instance.pid)
+                        or not persisted_process_is_definitively_dead(
+                            instance.pid,
+                            instance.process_identity,
+                        )
                     )
                 )
             ):
@@ -590,6 +575,7 @@ async def _lock_test_harness_delete_graph(
                 int(instance.current_task_id),
                 instance.status,
                 instance.pid,
+                instance.process_identity,
                 instance.started_at,
             )
             for instance in child_instances
@@ -615,12 +601,24 @@ async def _delete_test_harness_graph(
     )
     from backend.models.workspace_review import WorkspaceReviewRun
 
-    for instance_id, child_task_id, status, pid, started_at in graph.child_instances:
+    for (
+        instance_id,
+        child_task_id,
+        status,
+        pid,
+        process_identity,
+        started_at,
+    ) in graph.child_instances:
         predicates = [
             Instance.id == instance_id,
             Instance.current_task_id == child_task_id,
             Instance.status == status,
             Instance.pid.is_(None) if pid is None else Instance.pid == pid,
+            (
+                Instance.process_identity.is_(None)
+                if process_identity is None
+                else Instance.process_identity == process_identity
+            ),
             (
                 Instance.started_at.is_(None)
                 if started_at is None
@@ -630,7 +628,11 @@ async def _delete_test_harness_graph(
         detached = await db.execute(
             update(Instance)
             .where(*predicates)
-            .values(current_task_id=None, pid=None)
+            .values(
+                current_task_id=None,
+                pid=None,
+                process_identity=None,
+            )
         )
         if detached.rowcount != 1:
             raise RuntimeError(
@@ -1753,7 +1755,10 @@ class TaskQueue:
                 continue
             if (
                 instance.status not in ("error", "stopped")
-                or not persisted_pid_is_definitively_dead(instance.pid)
+                or not persisted_process_is_definitively_dead(
+                    instance.pid,
+                    instance.process_identity,
+                )
             ):
                 await self.db.rollback()
                 return False
@@ -1769,6 +1774,11 @@ class TaskQueue:
             else:
                 predicates.append(Instance.pid == instance.pid)
             predicates.append(
+                Instance.process_identity.is_(None)
+                if instance.process_identity is None
+                else Instance.process_identity == instance.process_identity
+            )
+            predicates.append(
                 Instance.started_at.is_(None)
                 if instance.started_at is None
                 else Instance.started_at == instance.started_at
@@ -1776,7 +1786,11 @@ class TaskQueue:
             detached = await self.db.execute(
                 update(Instance)
                 .where(*predicates)
-                .values(current_task_id=None, pid=None)
+                .values(
+                    current_task_id=None,
+                    pid=None,
+                    process_identity=None,
+                )
             )
             if not detached.rowcount:
                 await self.db.rollback()

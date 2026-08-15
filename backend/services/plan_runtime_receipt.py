@@ -17,6 +17,7 @@ from backend.models.plan_agent import (
     PlanAgentRuntimeReceipt,
     PlanAgentStep,
 )
+from backend.services import process_identity
 from backend.services.process_safety import require_safe_process_group_id
 
 
@@ -93,12 +94,7 @@ def _is_int_at_least(value: object, minimum: int) -> bool:
 
 
 def _is_canonical_boot_id(value: object) -> bool:
-    if not isinstance(value, str) or len(value) != 36:
-        return False
-    try:
-        return str(uuid.UUID(value)) == value
-    except (ValueError, AttributeError):
-        return False
+    return process_identity.is_canonical_boot_id(value)
 
 
 def _is_runtime_token(value: object) -> bool:
