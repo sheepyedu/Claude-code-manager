@@ -897,6 +897,7 @@ def _codex_thread_absent(exc: BaseException) -> bool:
             "no such thread",
             "thread does not exist",
             "thread already deleted",
+            "no rollout found for thread id",
         )
     )
 
