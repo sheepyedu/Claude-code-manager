@@ -4,6 +4,7 @@ import os
 import threading
 import time
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -106,6 +107,51 @@ async def test_codex_verify_endpoint_rejects_non_admin_before_pool_access():
         await codex_verify_account(request, "codex-1", live=True)
 
     assert exc_info.value.status_code == 403
+
+
+def test_pool_settings_api_persistence_is_atomic_and_private(
+    pool: CodexPool, pool_config: Path
+):
+    from backend.api.codex_pool import _persist_pool_settings
+
+    expected = {
+        "enabled": True,
+        "cooldown_seconds": 600,
+        "quota_switch_threshold_percent": 80.0,
+        "routing_policy": "native_first",
+        "preferred_account_id": "codex-1",
+    }
+
+    assert _persist_pool_settings(pool, expected) == expected
+    stored = json.loads(pool_config.read_text(encoding="utf-8"))
+    assert stored["pool_settings"] == expected
+    assert pool_config.stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.asyncio
+async def test_pool_settings_update_activates_serialized_file_policy(
+    pool: CodexPool,
+):
+    from backend.api.codex_pool import (
+        CodexPoolSettingsBody,
+        codex_update_pool_settings,
+    )
+
+    request = Request({"type": "http", "method": "PUT", "path": "/"})
+    request.state.user_id = 1
+    request.state.user_role = "admin"
+    body = CodexPoolSettingsBody(**pool.settings())
+
+    with (
+        patch("backend.api.codex_pool._get_pool", return_value=pool),
+        patch(
+            "backend.api.codex_pool._persist_pool_settings",
+            return_value=body.model_dump(),
+        ),
+    ):
+        result = await codex_update_pool_settings(request, body)
+
+    assert result == body.model_dump()
 
 
 def _rollout(home: Path, session_id: str, timestamp: str = "2026-07-21T00-00-00") -> Path:
@@ -424,6 +470,39 @@ class TestSessionLookup:
 
 
 class TestReload:
+    def test_legacy_config_uses_runtime_defaults(self, pool: CodexPool):
+        assert pool.settings() == {
+            "enabled": True,
+            "cooldown_seconds": 60,
+            "quota_switch_threshold_percent": 90.0,
+            "routing_policy": "api_first",
+            "preferred_account_id": None,
+        }
+
+    def test_persisted_pool_settings_survive_reload(
+        self, pool: CodexPool, pool_config: Path
+    ):
+        data = json.loads(pool_config.read_text(encoding="utf-8"))
+        data["pool_settings"] = {
+            "enabled": False,
+            "cooldown_seconds": 900,
+            "quota_switch_threshold_percent": 75,
+            "routing_policy": "native_first",
+            "preferred_account_id": "codex-2",
+        }
+        pool_config.write_text(json.dumps(data), encoding="utf-8")
+
+        pool.reload()
+
+        assert pool.settings() == {
+            "enabled": False,
+            "cooldown_seconds": 900,
+            "quota_switch_threshold_percent": 75.0,
+            "routing_policy": "native_first",
+            "preferred_account_id": "codex-2",
+        }
+        assert pool.select() is None
+
     def test_clears_removed_runtime_references_and_quota_cache(
         self, pool: CodexPool, pool_config: Path
     ):
@@ -1208,6 +1287,50 @@ class TestCloudRouterCodexProjection:
             Path(account.codex_home).resolve()
         )
         assert pool.status()["last_selected"] is None
+
+    def test_native_first_policy_is_loaded_from_pool_config(self, tmp_path):
+        account = _FakeCloudRouterCodexAccount(tmp_path / "cloudrouter-1")
+        pool, native_home = self._mixed_pool(tmp_path, account)
+        data = json.loads(pool._config_path.read_text(encoding="utf-8"))
+        data["pool_settings"] = {"routing_policy": "native_first"}
+        pool._config_path.write_text(json.dumps(data), encoding="utf-8")
+        pool.reload()
+
+        assert pool.select(model="gpt-5.5") == str(native_home.resolve())
+
+    def test_api_first_keeps_unknown_api_ahead_of_native(self, tmp_path):
+        account = _FakeCloudRouterCodexAccount(tmp_path / "cloudrouter-1")
+        snapshot = {
+            "available": True,
+            "known": False,
+            "reason": "not_probed",
+            "state": "unknown",
+            "windows": [],
+        }
+        pool, _native_home = self._mixed_pool(tmp_path, account, snapshot)
+
+        assert pool.select(model="gpt-5.5") == str(
+            Path(account.codex_home).resolve()
+        )
+
+    def test_unknown_api_health_remains_api_only_fallback(self, tmp_path):
+        account = _FakeCloudRouterCodexAccount(tmp_path / "cloudrouter-1")
+        snapshot = {
+            "available": True,
+            "known": False,
+            "reason": "not_probed",
+            "state": "unknown",
+            "windows": [],
+        }
+        pool = CodexPool(
+            config_path=tmp_path / "missing-codex-pool.json",
+            cloudrouter_store=_FakeCloudRouterCodexStore(account, snapshot),
+            bootstrap_default=False,
+        )
+
+        assert pool.select(model="gpt-5.5") == str(
+            Path(account.codex_home).resolve()
+        )
 
     def test_unsupported_api_model_preserves_native_fallback(self, tmp_path):
         account = _FakeCloudRouterCodexAccount(tmp_path / "cloudrouter-1")

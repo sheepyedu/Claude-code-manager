@@ -146,6 +146,21 @@ def test_task_distill_prompt_treats_conversation_as_data():
     assert "--- 对话记录 ---" in prompt
 
 
+def test_codex_distill_refuses_default_account_when_pool_is_paused():
+    pool = MagicMock()
+    pool.enabled = False
+
+    with pytest.raises(
+        skill_distill_module.CodexDistillAccountUnavailableError,
+        match="paused",
+    ):
+        skill_distill_module._select_codex_distill_home(
+            pool,
+            bound_account_id=None,
+            model="gpt-5.5",
+        )
+
+
 @pytest.mark.asyncio
 async def test_claude_task_distill_keeps_existing_json_result_path(monkeypatch):
     monkeypatch.setenv(
@@ -171,21 +186,17 @@ async def test_claude_task_distill_keeps_existing_json_result_path(monkeypatch):
     cmd = create_process.await_args.args
     assert cmd[:3] == (settings.claude_binary, "-p", "-")
     assert "--max-turns" in cmd
-    assert "--dangerously-skip-permissions" not in cmd
+    assert "--dangerously-skip-permissions" in cmd
     assert cmd[cmd.index("--tools") + 1] == ""
     assert cmd[cmd.index("--allowedTools") + 1] == ""
-    assert cmd[cmd.index("--setting-sources") + 1] == ""
-    assert "--strict-mcp-config" in cmd
+    assert "--setting-sources" not in cmd
+    assert "--strict-mcp-config" not in cmd
     assert "--no-session-persistence" in cmd
     assert (
         "CCM_TEST_UNKNOWN_MANAGER_SECRET"
         not in create_process.await_args.kwargs["env"]
     )
-    skill_distill_module.generate_claude_zero_tool_isolation_settings.assert_called_once_with(
-        "task-distill",
-        61,
-        ("/manager-secret",),
-    )
+    skill_distill_module.generate_claude_zero_tool_isolation_settings.assert_not_called()
     assert result["provider"] == "claude"
     assert result["content"] == "# Claude 提炼结果"
 

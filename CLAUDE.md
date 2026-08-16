@@ -189,6 +189,7 @@ claude-manager/
 
 ## 关键约定
 
+- **Codex 号池在线策略**: `pool_settings` 与账号记录一起原子保存在 `CODEX_POOL_CONFIG_PATH` 的私有 JSON 中，前端可在线修改启停、冷却、主动换号阈值、API/OAuth 路由顺序和首选账号并立即生效；部署级总开关和路径仍由环境变量控制。暂停后所有新 Codex 主任务、Monitor、Sub-Agent 与 Distill 必须 fail closed，禁止回落到 ambient `CODEX_HOME`。设置写入与登录操作共用进程内互斥锁，避免账号文件并发改写。
 - **MCP 内部回调地址**: MCP/AskUser 子进程回调 origin 统一由 `internal_api_endpoint.py` 解析：显式配置优先，否则使用可信 ASGI `scope["server"]` 捕获的真实监听地址，最后才回退 `settings.host/port`；禁止依赖可能与 Uvicorn `--port` 不一致的静态端口。
 - **Harness owner 终态围栏**: Owner Task 的 terminal/retry/reset writer 必须先在 exact incarnation/retry/turn 上安装 durable terminal gate，再排空 Harness/Workspace/Browser child 图；Run/Workspace 即使业务状态已终态，只要 `cleanup_status != completed` 仍属于 active graph，禁止新 Run、G→G+1 handoff 或普通 Task mutation 越过。Manager mirror 中 `worker_id != NULL` 或 `shared_from_id != NULL` 的 Task 不得本地 materialize Harness/Workspace，只有 authoritative Worker 数据库中的本地 Task 可启动。任何同时需要 owner fence 与 Instance lifecycle lock 的路径固定按 Harness owner fence → lifecycle lock 取锁。
 - **CCM MCP 模块隔离**: Task-scoped CCM stdio MCP 必须由 Manager 启动时捕获源码字节，内容寻址后写入 Task 私有 runtime，并用当前可信解释器的 `python -I` 启动；禁止把运行中 checkout 放进 `PYTHONPATH`，也不能依赖 MCP 配置里的非标准 `cwd`。单文件 HTTP broker 必须无项目内 import；Browser MCP 连同浏览器/网络策略/契约模块冻结为同一 zipapp，绝不能在 Task 已可修改 checkout 后回读 live `backend`。Claude Task 的 `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` 会把实际 permission mode 强制为 `default`，因此每个可能注入的 CCM MCP server/tool 必须同步进入 `task_agent_isolation._mcp_allow_rules()` 的精确 allowlist；不能关闭 scrub 或依赖 `acceptEdits` 绕过。
