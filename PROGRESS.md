@@ -4,6 +4,14 @@
 
 ## 已完成功能
 
+### 本地上游功能整合与 Codex 账号池在线策略（2026-08-17）
+
+- 先将 Claude host-style 启动、宿主 `PATH`/`rg`、共享 Codex transport 精确停止等未提交修复固化为 `d6e59d6c`；随后引入长 PTY 超时、timeout 终态保真、后台生命周期展示、`process_exit` 状态校正、时区时间戳和关闭自动更新提示（`92f9a776`、`e607e4d0`、`3adf6214`、`06a1550b`、`454b8c96`、`af1a6811`）。
+- 停止链路引入排队消息保护与同 Task 多 live turn 收敛（`3bbab450`、`21d83849`），并手动保留本地语义：不同 Task 共用 app-server 时，精确中断目标后保留共享 transport，不再永久返回 409 或误杀同行 Task。
+- Codex 账号池新增可持久化的启停、冷却、主动换号阈值、`api_first/native_first` 和首选账号设置（`ad6c212c`、`2914a771`）。`api_first` 继续把 ApexRouter/API 候选置于原生 OAuth 之前；文件激活失败会原子回滚。当前分支未包含上游较新的 Worker node-control schema，因此账号设置与登录共享进程内互斥锁，不虚构不存在的数据库 fence。
+- API 网关整合 APIBest 与 Codex CLI 对齐的 Fast 请求验证（`c86b84b7`、`8631943d`、`6cc58db5`、`03e418b1`）；保留既有 Apex capacity/409 无限重试和 provider-boundary permit，不把 response 遥测值误报为实际 Fast 证明。
+- 验证：Pool/CloudRouter/Tier Proxy/Distill `222 passed`；capacity/dispatcher `5 passed`；Task stop API `18 passed`；Codex stop/background/tier 定向 `16 passed`；前端 Pool/Chat/Update `234 passed`；TypeScript、production build、Python compile 与 whitespace 检查通过。完整 app-server 测试为 `297 passed, 3 skipped, 4 failed`，四项均因本机自动注入 `/home/ubuntu/.codex/.tmp/plugins` 的外部 Skills inventory，而测试仍断言空 inventory；与本轮功能 diff 无关。
+
 ### 本地分支路由修复（2026-08-12）
 - 在本地分支 `local-ccm-fixes-20260812` 保存此前未提交的调试/功能修改，commit `216e10e`。
 - 修复 Codex Task 已完成但原生线程 runtime 残留 `systemError`/`notLoaded` 时无法修改 Model/Speed 的问题：路由提交只需证明线程不会继续执行旧路由；下一次对话仍按严格终态恢复流程处理。
