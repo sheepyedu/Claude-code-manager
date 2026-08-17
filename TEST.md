@@ -248,7 +248,9 @@ websocket identity 校验及固定端口上的孤儿 Chrome 不会被复用；
 | `test_codex_pool.py` | 可持久化运行策略、暂停 fail-closed、API/OAuth 路由顺序、独立 round-robin cursor、额度终态分类和最终路由 marker |
 | `test_resume_config_dir.py` | preferred 手动切换、已有会话粘性、Task durable binding、多副本消歧、runtime-busy 短退避、disabled source 等待可迁移目标，以及 rollout copy 期间取消/代次变化不会产生无主副本 |
 | `test_service_instance_manager.py` | Claude/Codex reactive/proactive 换号、精确 queued message 保留、Codex copy→rebind→binding 的 cancellation-settled 事务、direct/ephemeral per-home admission，以及 silent exit/`turn.failed` 按真实 provider 归因且不重复报错 |
-| `PoolDrawer.test.tsx` | Claude/Codex 的「优先账号」「最近使用」独立展示、Codex 在线策略保存，以及恢复自动后的 API-first/旧会话绑定提示 |
+| `test_cloudrouter_accounts.py` | 安全删除 tombstone 的有界脱敏 cleanup code/reason/attempt/error 时间、重启持久性、幂等重试，以及 unsafe storage 失败不被降格为 409 |
+| `test_service_instance_manager.py::test_api_account_delete_*` / `test_*launch_commit*_actual_instance_provider` | 删除扫描只信 exact source transport 对应 provider 与 durable binding；真实 provider 在 provider boundary 和 PID commit 中持久化，漂移时 fail closed |
+| `PoolDrawer.test.tsx` | Claude/Codex 的「优先账号」「最近使用」独立展示、Codex 在线策略保存、恢复自动后的 API-first/旧会话绑定提示，以及 pending cleanup 的停用/阻塞原因与显式重试 |
 
 #### `test_api_projects.py` — 项目 API
 
@@ -645,6 +647,7 @@ Codex Fast 人工 smoke 使用隔离账号且会消耗额度：同一支持模�
 | `test_service_instance_manager.py::test_parse_codex_file_change_started_is_tool_use` | file_change 的 item.started → tool_use（真实事件流实证 started 存在，源码注释不实） |
 | `test_codex_app_server.py::test_notifications_stream_delta_and_finish_process` | app-server `thread/tokenUsage/updated` 保留真实 `modelContextWindow`、latest total/reasoning token，而非累计 thread total |
 | `test_codex_app_server.py::test_existing_goal_turn_notification_rebinds_submission_id` | adopted goal 同时保留 active/submission 两个通知 ID，任一 ID 的 assistant/terminal 事件都不能丢 |
+| `test_native_sub_agents.py::test_codex_native_thread_*` / `test_worker_relay_proxy.py::test_relay_*native_sub_agent*` | Codex 原生 child thread 的 spawn/progress/terminal 持久镜像、sequence 幂等、terminal-only 历史、较新 sequence 重激活，以及 Worker remote id → Manager local id 映射 |
 | `test_codex_app_server.py::test_signal_interrupt_reconciles_and_pauses_existing_goal_turn` | adopted goal Interrupt 只做一次 pause RPC，再中断权威 active turn |
 | `test_service_instance_manager.py::test_internal_codex_abort_is_not_a_successful_chat_terminal` | transport/admission 内部 abort 不得伪装成用户 Interrupt 的 completed |
 | `test_codex_app_server.py::test_claimed_stop_terminates_all_live_turns_for_same_task` / `test_claimed_stop_interrupts_target_without_disrupting_shared_transport` / `test_claimed_stop_rejects_an_in_flight_steer_before_interrupt` / `test_unconfirmed_descendant_abandon_escalates_transport_shutdown` | 已持久 claim 的 stop 按 `task_id` 终止同 Task 全部 live turn并统一标记 interrupt；不同 Task peer 存在时精确收敛目标并保留共享 transport，未确认中断保留运行证据；drain 后拒绝新 steer；真正 unclaimed cleanup 仍 fail closed 关闭账号 transport |

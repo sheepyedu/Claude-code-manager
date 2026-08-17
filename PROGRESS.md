@@ -1129,3 +1129,11 @@ ocean/forest/rose 归入 Legacy 组。Header 顶栏导航重构为 AppShell（�
 - 效率：Dispatcher 改为迭代重试循环，长期 capacity 波动不会堆积 Python 调用栈；WebSocket 对 capacity 广播 `max_attempts=null`。
 - 验证：capacity/admission 定向回归 21 passed；`test_service_dispatcher.py` 394 passed。
 - 提交：`25d4231`。
+
+## 2026-08-17 — 分阶段吸纳 main 的运行时、Harness、Plan、子代理与账号清理修复
+
+- **问题**：本地分支保留了 ApexRouter API-first、capacity 无限重试、host-style Claude runtime 等定制，但缺少 main 最近对共享 Codex transport、跨重启 PID 身份、Harness 连接饥饿、Plan runtime receipt、Codex 原生 child 镜像和 API 账号 cleanup diagnostics 的修复；直接合并会覆盖本地运行策略并引入不存在的 Worker node-control API。
+- **解决**：按依赖顺序逐项 cherry-pick/手工移植。共享 app-server 不再被当成 Task 独占 PID；Instance 用 PID/start ticks/boot ID 证明跨重启身份；Harness 慢快照释放 DB/owner fence 并 singleflight；Plan cleanup/recovery 修复 missing rollout、空 error owner、并发 cleanup 和 run ID 复用；Codex child lifecycle 以 sequence 幂等持久化并跨 Worker 映射本地 ID；API 账号 pending tombstone 增加有界脱敏诊断，删除占用只信 canonical source transport 对应 provider 与 durable binding。保留本地 Apex 优先级、409/capacity 无限退避重试和关闭 Claude Task isolation 的策略。
+- **避免复发**：跨分支移植 Worker/runtime 功能必须补齐 exact Task incarnation fence，不能引用本地不存在的控制层；安全测试必须隔离真实 `CODEX_HOME`；账号删除不能用可变 `Task.provider` 或复用槽位的陈旧 `Instance.provider` 作负证明；前端终态时序用例并发假红必须单独复跑确认。
+- **验证**：新增/高风险矩阵：process/capacity/cleanup lifecycle `65 passed`，Plan runtime `5 passed`，native child `23 passed`，Harness `6 passed`，cleanup/provider-boundary `18 passed`，前端账号池 `53 passed`，受影响前端组合单次 `208 passed, 1 timing failure` 且失败项独立复跑通过；TypeScript + Vite production build、Python compileall、migration roundtrip 和 `git diff --check` 通过。整文件 InstanceManager 仍有 26 个既有 isolation-on 假设失败，与本地明确关闭 isolation 的运行策略冲突，未为通过旧假设而恢复隔离。
+- **提交**：`93d3889f`、`c8481a18`、`ed4231c7`、`450e1534`、`47e485c6`、`42e069f1`、`6e17473c`、`23e35a4d`、`8100ab4e`、`7ad8c50b`、`a64cfe46`、`a918c557`。
