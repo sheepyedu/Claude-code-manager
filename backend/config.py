@@ -167,6 +167,7 @@ class Settings(BaseSettings):
     pool_enabled: bool = True
     pool_config_path: str = "~/.claude-pool/accounts.json"
     pool_cooldown_seconds: int = 300  # per-account cooldown after rate limit
+    claude_task_isolation_enabled: bool = False
 
     # --- Codex account pool ---
     codex_pool_enabled: bool = True

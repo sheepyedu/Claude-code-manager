@@ -15865,6 +15865,59 @@ async def test_launch_delegates_to_pty_backend_for_claude():
 
 
 @pytest.mark.asyncio
+async def test_launch_for_claude_without_task_isolation_skips_seccomp_setup(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "backend.config.settings.claude_task_isolation_enabled",
+        False,
+    )
+    monkeypatch.setattr(
+        "backend.services.task_agent_isolation.generate_claude_task_isolation_settings",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("task isolation should be skipped")),
+    )
+    monkeypatch.setattr(
+        "backend.services.task_agent_isolation.validate_claude_task_isolation_settings",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("task isolation should be skipped")),
+    )
+
+    im = InstanceManager(_FakeDBFactory(), MagicMock())
+    calls = {}
+
+    class FakeBackend:
+        _pool = types.SimpleNamespace(_sessions={})
+
+        @staticmethod
+        def build_config(**_kwargs):
+            return types.SimpleNamespace(
+                env_overrides={},
+                claude_binary="claude",
+                dangerously_skip_permissions=False,
+            )
+
+        async def launch_for_ccm(self, **kwargs):
+            calls.update(kwargs)
+            im.processes[kwargs["instance_id"]] = MagicMock(pid=4243)
+            return "sess-no-isolation"
+
+    im._pty_backend = FakeBackend()
+    im._pty_enabled = True
+
+    pid = await im.launch(
+        instance_id=8,
+        prompt="do it",
+        task_id=3,
+        cwd="/w",
+        model="default",
+        provider="claude",
+    )
+
+    assert pid == 4243
+    assert calls["instance_id"] == 8
+    assert calls["model"] is None
+
+
+@pytest.mark.asyncio
 async def test_pty_launch_callback_runs_immediately_before_backend_launch():
     im = InstanceManager(_FakeDBFactory(), MagicMock())
     instance_id = 17

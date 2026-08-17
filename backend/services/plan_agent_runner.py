@@ -980,7 +980,7 @@ def _build_command(
     model: str,
     effort: str | None,
     schema: dict,
-    isolation_settings_path: str,
+    isolation_settings_path: str | None = None,
 ) -> list[str]:
     if provider != "claude":
         raise ValueError(
@@ -1001,11 +1001,6 @@ def _build_command(
         "--strict-mcp-config",
         "--mcp-config",
         '{"mcpServers":{}}',
-        "--settings",
-        isolation_settings_path,
-        "--setting-sources",
-        "",
-        "--no-chrome",
         "--tools",
         "Glob,Grep,Read",
         "--allowedTools",
@@ -1017,6 +1012,16 @@ def _build_command(
         "--model",
         model,
     ]
+    if isolation_settings_path is not None:
+        command[13:13] = [
+            "--settings",
+            isolation_settings_path,
+            "--setting-sources",
+            "",
+            "--no-chrome",
+        ]
+    else:
+        command.append("--dangerously-skip-permissions")
     if effort:
         command.extend(["--effort", effort])
     return command
@@ -2415,23 +2420,25 @@ class PlanAgentRunner:
                 validate_claude_task_isolation_settings,
             )
 
-            isolation_identifier = step_id or task_id
-            isolation_path = generate_claude_read_only_isolation_settings(
-                "plan",
-                isolation_identifier,
-                protected_paths,
-            )
-            try:
-                await asyncio.to_thread(
-                    validate_claude_task_isolation_settings,
-                    isolation_path,
-                    claude_binary=settings.claude_binary,
-                    tools=CLAUDE_READ_ONLY_BUILTIN_TOOLS,
-                    include_mcp_tools=False,
+            isolation_path = None
+            if settings.claude_task_isolation_enabled:
+                isolation_identifier = step_id or task_id
+                isolation_path = generate_claude_read_only_isolation_settings(
+                    "plan",
+                    isolation_identifier,
+                    protected_paths,
                 )
-            except BaseException:
-                await asyncio.to_thread(runtime_temp_dir.cleanup_if_unbound)
-                raise
+                try:
+                    await asyncio.to_thread(
+                        validate_claude_task_isolation_settings,
+                        isolation_path,
+                        claude_binary=settings.claude_binary,
+                        tools=CLAUDE_READ_ONLY_BUILTIN_TOOLS,
+                        include_mcp_tools=False,
+                    )
+                except BaseException:
+                    await asyncio.to_thread(runtime_temp_dir.cleanup_if_unbound)
+                    raise
             command = _build_command(
                 provider=provider,
                 model=model,

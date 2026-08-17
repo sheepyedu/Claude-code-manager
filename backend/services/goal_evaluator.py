@@ -765,19 +765,21 @@ class GoalEvaluator:
             ) from exc
         evaluator_cwd = os.path.abspath(os.sep)
         try:
-            isolation_settings = generate_claude_zero_tool_isolation_settings(
-                "goal-evaluator",
-                (
-                    task_id
-                    if isinstance(task_id, int) and task_id > 0
-                    else max(1, os.getpid())
-                ),
-                protected_paths,
-            )
-            validate_claude_zero_tool_isolation_settings(
-                isolation_settings,
-                claude_binary=settings.claude_binary,
-            )
+            isolation_settings = None
+            if settings.claude_task_isolation_enabled:
+                isolation_settings = generate_claude_zero_tool_isolation_settings(
+                    "goal-evaluator",
+                    (
+                        task_id
+                        if isinstance(task_id, int) and task_id > 0
+                        else max(1, os.getpid())
+                    ),
+                    protected_paths,
+                )
+                validate_claude_zero_tool_isolation_settings(
+                    isolation_settings,
+                    claude_binary=settings.claude_binary,
+                )
         except TaskAgentIsolationError as exc:
             try:
                 remove_claude_auth_projection(
@@ -1228,17 +1230,12 @@ class GoalEvaluator:
             raise ValueError(
                 "Codex goal evaluation requires the audited app-server transport"
             )
-        return [
+        command = [
             settings.claude_binary,
             "-p", prompt,
             "--output-format", "json",
             "--permission-mode", "acceptEdits",
-            "--settings", str(isolation_settings_path),
-            "--setting-sources", "",
-            "--strict-mcp-config",
             "--mcp-config", '{"mcpServers":{}}',
-            "--disable-slash-commands",
-            "--no-chrome",
             "--tools", "",
             "--allowedTools", "",
             "--no-session-persistence",
@@ -1246,6 +1243,19 @@ class GoalEvaluator:
             "--model", model,
             "--max-turns", "1",
         ]
+        if isolation_settings_path is not None:
+            command[5:5] = [
+                "--settings",
+                str(isolation_settings_path),
+                "--setting-sources",
+                "",
+                "--strict-mcp-config",
+                "--disable-slash-commands",
+                "--no-chrome",
+            ]
+        else:
+            command.append("--dangerously-skip-permissions")
+        return command
 
     def _build_eval_prompt(self, condition: str, conversation_summary: str) -> str:
         return f"""\

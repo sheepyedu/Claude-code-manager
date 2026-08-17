@@ -423,6 +423,7 @@ websocket identity 校验及固定端口上的孤儿 Chrome 不会被复用；
 | `test_codex_renderer_omits_unset_optional_fields` | 未设置的 cwd/env/enabled_tools/timeouts 不进入 Codex 配置，避免空 allow-list 改变工具语义 |
 | `test_codex_renderers_support_empty_specs` | 空 spec 集合得到空 app-server 配置和空 exec argv |
 | `test_codex_exec_renderer_emits_one_merged_server_table_override` | 多 server 合并为一个 `mcp_servers` inline table 覆盖，绕开 CLI dotted-path 拆名且不丢配置 |
+| `test_update_migrate_hardening.py::test_linux_prerequisite_gate_requires_matching_apply_seccomp` | 仅在 `CLAUDE_TASK_ISOLATION_ENABLED=true` 时才检查 Claude 的 `apply-seccomp` 依赖；默认 host-style Claude 启动不再要求 sandbox-runtime |
 | `test_codex_renderers_reject_duplicate_server_names` | 两种 Codex 输出都拒绝重名 server |
 | `test_codex_renderers_reject_names_the_cli_cannot_initialize` | 提前拒绝 Codex 初始化阶段不接受的空白、点号、空格和非 ASCII server 名 |
 | `test_codex_renderers_do_not_write_codex_home` | renderer 不创建或修改 `$CODEX_HOME/config.toml` |

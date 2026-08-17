@@ -1068,8 +1068,19 @@ def scrub_task_model_environment(
 def task_model_tool_environment(source: Mapping[str, str]) -> dict[str, str]:
     """Return the non-secret core environment safe for model shell tools."""
 
+    path = source.get("PATH")
+    if not isinstance(path, str) or not path.strip():
+        path = os.pathsep.join(
+            candidate
+            for candidate in (
+                "/usr/local/bin",
+                "/usr/bin",
+                "/bin",
+            )
+            if candidate
+        )
     result = {
-        "PATH": os.defpath,
+        "PATH": path,
         "HOME": str(Path.home()),
     }
     for key in ("LANG", "LANGUAGE", "TZ"):

@@ -1016,7 +1016,7 @@ async def test_task_ssh_profile_denies_host_keys_and_direct_network(
             "GOOGLE_*",
         ]
     assert shell_policy["set"] == {
-            "PATH": os.defpath,
+            "PATH": os.environ["PATH"],
             "HOME": str(Path.home()),
             **({"LANG": os.environ["LANG"]} if os.environ.get("LANG") else {}),
             **({"LANGUAGE": os.environ["LANGUAGE"]} if os.environ.get("LANGUAGE") else {}),
@@ -3054,9 +3054,15 @@ async def test_start_turn_uses_native_resume_and_turn_start():
     assert resume_call.args[1]["approvalPolicy"] == "never"
     assert resume_call.args[1]["sandbox"] == "danger-full-access"
     assert resume_call.args[1]["serviceTier"] is None
-    assert resume_call.args[1]["config"]["shell_environment_policy"]["set"] == {
-        "GIT_AUTHOR_NAME": "CCM"
+    expected_shell_env = {
+        "PATH": os.environ["PATH"],
+        "HOME": str(Path.home()),
+        **({"LANG": os.environ["LANG"]} if os.environ.get("LANG") else {}),
+        **({"LANGUAGE": os.environ["LANGUAGE"]} if os.environ.get("LANGUAGE") else {}),
+        **({"TZ": os.environ["TZ"]} if os.environ.get("TZ") else {}),
+        "GIT_AUTHOR_NAME": "CCM",
     }
+    assert resume_call.args[1]["config"]["shell_environment_policy"]["set"] == expected_shell_env
     assert resume_call.args[1]["config"]["mcp_servers"]["ccm_skills"] == {
         "command": "python",
         "args": [
@@ -4159,7 +4165,7 @@ async def test_real_codex_managed_public_network_extended_boundary(
             "include_only": [],
             "experimental_use_profile": False,
             "set": {
-                "PATH": os.defpath,
+                "PATH": os.environ["PATH"],
                 "HOME": str(Path.home()),
                 "GIT_TERMINAL_PROMPT": "0",
                 "GCM_INTERACTIVE": "never",
@@ -4222,7 +4228,7 @@ async def test_real_codex_managed_public_network_extended_boundary(
             ),
             "",
             "[shell_environment_policy.set]",
-            f"PATH = {json.dumps(os.defpath)}",
+            f"PATH = {json.dumps(os.environ['PATH'])}",
             f"HOME = {json.dumps(str(Path.home()))}",
             'GIT_TERMINAL_PROMPT = "0"',
             'GCM_INTERACTIVE = "never"',
@@ -9323,7 +9329,7 @@ async def test_unconfirmed_unclaimed_abort_does_not_kill_live_peer(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_claimed_stop_refuses_to_disrupt_shared_transport_with_live_peer(
+async def test_claimed_stop_interrupts_target_without_disrupting_shared_transport(
     tmp_path,
 ):
     """An explicit stop stays effective when exact descendant cleanup wedges."""
@@ -9388,6 +9394,13 @@ async def test_claimed_stop_refuses_to_disrupt_shared_transport_with_live_peer(
 
     target_context = server._contexts_by_thread["thread-target"]
     peer_context = server._contexts_by_thread["thread-peer"]
+    async def confirm_interrupt(exact_process, reason):
+        assert exact_process is target
+        target.finish(130, reason, termination_kind="internal_abort")
+        server._detach_turn_context(target_context)
+        return True
+
+    server.abandon_turn = AsyncMock(side_effect=confirm_interrupt)
     server.shutdown = AsyncMock()
     registry = CodexAppServerRegistry("codex")
     registry._servers[home] = server
@@ -9396,20 +9409,20 @@ async def test_claimed_stop_refuses_to_disrupt_shared_transport_with_live_peer(
         "thread-peer": home,
     })
 
-    with pytest.raises(
-        CodexSharedTransportBusyError,
-        match="another live turn shares",
-    ):
-        await registry.stop_claimed_turn(
-            home,
-            target,
-            reason="user requested stop",
-        )
+    assert await registry.stop_claimed_turn(
+        home,
+        target,
+        reason="user requested stop",
+    ) is False
 
     server.shutdown.assert_not_awaited()
-    assert target.returncode is None
+    server.abandon_turn.assert_awaited_once_with(
+        target,
+        "user requested stop",
+    )
+    assert target.returncode == 130
     assert peer.returncode is None
-    assert server._contexts_by_thread["thread-target"] is target_context
+    assert "thread-target" not in server._contexts_by_thread
     assert server._contexts_by_thread["thread-peer"] is peer_context
     assert registry._servers[home] is server
     assert registry._thread_owners == {

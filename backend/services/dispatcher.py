@@ -17119,32 +17119,33 @@ Do NOT create a new PR. Push fixes to the existing branch."""
                 extra_paths=(() if not config_dir else (config_dir,)),
                 include_direct_git_credentials=True,
             )
-        isolation_path = generate_claude_aux_isolation_settings(
-            namespace="monitor",
-            identifier=monitor_session_id,
-            protected_paths=protected_paths,
-            turn_generation=turn_generation,
-            disable_direct_network=direct_network_disabled,
-        )
-        await asyncio.to_thread(
-            validate_claude_task_isolation_settings,
-            isolation_path,
-            claude_binary=settings.claude_binary,
-            tools=CLAUDE_MONITOR_BUILTIN_TOOLS,
-        )
-        cmd.extend([
-            "--settings",
-            str(isolation_path),
-            "--setting-sources",
-            "",
-            "--strict-mcp-config",
-            "--disable-slash-commands",
-            "--no-chrome",
-            "--tools",
-            ",".join(CLAUDE_MONITOR_BUILTIN_TOOLS),
-            "--allowedTools",
-            ",".join(CLAUDE_MONITOR_BUILTIN_TOOLS),
-        ])
+        if settings.claude_task_isolation_enabled:
+            isolation_path = generate_claude_aux_isolation_settings(
+                namespace="monitor",
+                identifier=monitor_session_id,
+                protected_paths=protected_paths,
+                turn_generation=turn_generation,
+                disable_direct_network=direct_network_disabled,
+            )
+            await asyncio.to_thread(
+                validate_claude_task_isolation_settings,
+                isolation_path,
+                claude_binary=settings.claude_binary,
+                tools=CLAUDE_MONITOR_BUILTIN_TOOLS,
+            )
+            cmd.extend([
+                "--settings",
+                str(isolation_path),
+                "--setting-sources",
+                "",
+                "--strict-mcp-config",
+                "--disable-slash-commands",
+                "--no-chrome",
+                "--tools",
+                ",".join(CLAUDE_MONITOR_BUILTIN_TOOLS),
+                "--allowedTools",
+                ",".join(CLAUDE_MONITOR_BUILTIN_TOOLS),
+            ])
 
         async with self.instance_manager._cloudrouter_runtime_admission(
             "claude",
@@ -17606,31 +17607,32 @@ Codex 中工具会显示为上述 mcp__ccm_monitor_agent__* canonical 名称；
                 extra_paths=(() if not config_dir else (config_dir,)),
                 include_direct_git_credentials=True,
             )
-        isolation_path = generate_claude_aux_isolation_settings(
-            namespace="sub-agent",
-            identifier=session_id,
-            protected_paths=protected_paths,
-            disable_direct_network=direct_network_disabled,
-        )
-        await asyncio.to_thread(
-            validate_claude_task_isolation_settings,
-            isolation_path,
-            claude_binary=settings.claude_binary,
-            tools=CLAUDE_SUB_AGENT_BUILTIN_TOOLS,
-        )
-        cmd.extend([
-            "--settings",
-            str(isolation_path),
-            "--setting-sources",
-            "",
-            "--strict-mcp-config",
-            "--disable-slash-commands",
-            "--no-chrome",
-            "--tools",
-            ",".join(CLAUDE_SUB_AGENT_BUILTIN_TOOLS),
-            "--allowedTools",
-            ",".join(CLAUDE_SUB_AGENT_BUILTIN_TOOLS),
-        ])
+        if settings.claude_task_isolation_enabled:
+            isolation_path = generate_claude_aux_isolation_settings(
+                namespace="sub-agent",
+                identifier=session_id,
+                protected_paths=protected_paths,
+                disable_direct_network=direct_network_disabled,
+            )
+            await asyncio.to_thread(
+                validate_claude_task_isolation_settings,
+                isolation_path,
+                claude_binary=settings.claude_binary,
+                tools=CLAUDE_SUB_AGENT_BUILTIN_TOOLS,
+            )
+            cmd.extend([
+                "--settings",
+                str(isolation_path),
+                "--setting-sources",
+                "",
+                "--strict-mcp-config",
+                "--disable-slash-commands",
+                "--no-chrome",
+                "--tools",
+                ",".join(CLAUDE_SUB_AGENT_BUILTIN_TOOLS),
+                "--allowedTools",
+                ",".join(CLAUDE_SUB_AGENT_BUILTIN_TOOLS),
+            ])
 
         async with self.instance_manager._cloudrouter_runtime_admission(
             "claude",

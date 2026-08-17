@@ -3144,6 +3144,7 @@ class InstanceManager:
             and task_id
             and not pr_review_task
             and not delivery_task
+            and settings.claude_task_isolation_enabled
         ):
             from backend.services.mcp_config import generate_mcp_config
 
@@ -3161,6 +3162,7 @@ class InstanceManager:
             and task_id
             and not pr_review_task
             and not unrestricted_admin_turn
+            and settings.claude_task_isolation_enabled
         ):
             from backend.services.task_agent_isolation import (
                 CLAUDE_TASK_BUILTIN_TOOLS,
@@ -5795,6 +5797,7 @@ class InstanceManager:
                         )
                     else:
                         cfg.claude_binary = str(final_binary)
+                        cfg.dangerously_skip_permissions = True
                     cfg.env_overrides = overrides
                     return cfg
 

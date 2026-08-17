@@ -230,17 +230,12 @@ def _build_task_distill_command(
             "Codex distillation requires the audited app-server transport"
         )
 
-    return [
+    command = [
         settings.claude_binary,
         "-p", "-",
         "--output-format", "json",
         "--permission-mode", "acceptEdits",
-        "--settings", str(isolation_settings_path),
-        "--setting-sources", "",
-        "--strict-mcp-config",
         "--mcp-config", '{"mcpServers":{}}',
-        "--disable-slash-commands",
-        "--no-chrome",
         "--tools", "",
         "--allowedTools", "",
         "--no-session-persistence",
@@ -248,6 +243,19 @@ def _build_task_distill_command(
         "--model", model,
         "--max-turns", "1",
     ]
+    if isolation_settings_path is not None:
+        command[5:5] = [
+            "--settings",
+            str(isolation_settings_path),
+            "--setting-sources",
+            "",
+            "--strict-mcp-config",
+            "--disable-slash-commands",
+            "--no-chrome",
+        ]
+    else:
+        command.append("--dangerously-skip-permissions")
+    return command
 
 
 def _extract_task_distill_content(provider: str, raw: str) -> str:
@@ -829,19 +837,21 @@ async def distill_task_conversation(
                 environment=env,
             )
             apply_claude_auth_projection(env, auth_projection)
-            isolation_settings = generate_claude_zero_tool_isolation_settings(
-                "task-distill",
-                (
-                    task_id
-                    if isinstance(task_id, int) and task_id > 0
-                    else max(1, os.getpid())
-                ),
-                protected_paths,
-            )
-            validate_claude_zero_tool_isolation_settings(
-                isolation_settings,
-                claude_binary=settings.claude_binary,
-            )
+            isolation_settings = None
+            if settings.claude_task_isolation_enabled:
+                isolation_settings = generate_claude_zero_tool_isolation_settings(
+                    "task-distill",
+                    (
+                        task_id
+                        if isinstance(task_id, int) and task_id > 0
+                        else max(1, os.getpid())
+                    ),
+                    protected_paths,
+                )
+                validate_claude_zero_tool_isolation_settings(
+                    isolation_settings,
+                    claude_binary=settings.claude_binary,
+                )
         except (ClaudeAuthProjectionError, TaskAgentIsolationError) as exc:
             if projection_identifier is not None and projection_binding is not None:
                 try:

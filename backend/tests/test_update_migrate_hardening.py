@@ -100,10 +100,25 @@ def _git_project(tmp_path: Path, *, frontend: bool = False) -> tuple[Path, str, 
 def _fake_tools(tmp_path: Path) -> tuple[dict[str, str], Path, Path, Path]:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
+    toolchain_dir = tmp_path / "toolchain"
+    toolchain_dir.mkdir()
     service_log = tmp_path / "service.log"
     uv_log = tmp_path / "uv.log"
     active_state = tmp_path / "active"
     active_state.write_text("active")
+
+    for directory in ("/usr/local/bin", "/usr/bin", "/bin"):
+        path = Path(directory)
+        if not path.is_dir():
+            continue
+        for source in path.iterdir():
+            if source.name in {"bwrap", "socat"}:
+                continue
+            if not source.is_file() or not os.access(source, os.X_OK):
+                continue
+            target = toolchain_dir / source.name
+            if not target.exists():
+                target.symlink_to(source)
 
     systemctl = bin_dir / "systemctl"
     systemctl.write_text(
@@ -197,8 +212,9 @@ def _fake_tools(tmp_path: Path) -> tuple[dict[str, str], Path, Path, Path]:
 
     env = {
         **os.environ,
-        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "PATH": f"{bin_dir}:{toolchain_dir}",
         "CCM_ESCAPED": "1",
+        "CLAUDE_TASK_ISOLATION_ENABLED": "true",
         "CCM_UPDATE_HEALTHCHECK_MODE": "required",
         "CCM_UPDATE_PIDCHECK_MODE": "skip",
         "CCM_UPDATE_START_ATTEMPTS": "1",

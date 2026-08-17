@@ -699,6 +699,7 @@ Agent、未知 PID、权限不足或清后仍达到触发线都会阻止新容�
 | `POOL_ENABLED` | `true` | 启用 Claude 账号池 |
 | `POOL_CONFIG_PATH` | `~/.claude-pool/accounts.json` | 账号池配置文件路径 |
 | `POOL_COOLDOWN_SECONDS` | `300` | 撞限账号的冷却时长（秒） |
+| `CLAUDE_TASK_ISOLATION_ENABLED` | `false` | Claude 任务是否启用 sandbox-runtime 隔离；关闭时按 host-style 运行，不再要求 `apply-seccomp` |
 
 号池默认启用。首次启动时，如果 `accounts.json` 不存在但 `~/.claude/.credentials.json` 有有效凭证，系统会自动将默认账号加入号池。
 

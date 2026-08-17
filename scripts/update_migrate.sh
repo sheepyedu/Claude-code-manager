@@ -1479,6 +1479,13 @@ if ! assert_deployment_lease_owner >&9 2>&1; then
 fi
 
 require_local_claude_isolation_prerequisites() {
+    case "${CLAUDE_TASK_ISOLATION_ENABLED:-false}" in
+        true|1|yes|on)
+            ;;
+        *)
+            return 0
+            ;;
+    esac
     [ "$(uname -s 2>/dev/null)" = "Linux" ] || return 0
     local missing=()
     command -v bwrap >/dev/null 2>&1 || missing+=("bubblewrap (bwrap)")

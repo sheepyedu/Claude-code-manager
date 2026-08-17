@@ -376,18 +376,20 @@ class DiscussionService:
                 environment=env,
             )
             apply_claude_auth_projection(env, projection)
-            isolation_path = generate_claude_read_only_isolation_settings(
-                context.namespace,
-                context.identifier,
-                protected_paths,
-            )
-            await asyncio.to_thread(
-                validate_claude_task_isolation_settings,
-                isolation_path,
-                claude_binary=settings.claude_binary,
-                tools=CLAUDE_READ_ONLY_BUILTIN_TOOLS,
-                include_mcp_tools=False,
-            )
+            isolation_path = None
+            if settings.claude_task_isolation_enabled:
+                isolation_path = generate_claude_read_only_isolation_settings(
+                    context.namespace,
+                    context.identifier,
+                    protected_paths,
+                )
+                await asyncio.to_thread(
+                    validate_claude_task_isolation_settings,
+                    isolation_path,
+                    claude_binary=settings.claude_binary,
+                    tools=CLAUDE_READ_ONLY_BUILTIN_TOOLS,
+                    include_mcp_tools=False,
+                )
         except (
             ClaudeAuthProjectionError,
             TaskAgentIsolationError,
@@ -1690,26 +1692,31 @@ Guidelines:
         model: str,
         resume_session_id: str | None = None,
         *,
-        isolation_settings_path: str,
+        isolation_settings_path: str | None = None,
         repository_cwd: str | None,
     ) -> list[str]:
         tools = ",".join(CLAUDE_READ_ONLY_BUILTIN_TOOLS)
         cmd = [
             settings.claude_binary,
             "--permission-mode", "plan",
-            "--settings", isolation_settings_path,
-            "--setting-sources", "",
-            "--strict-mcp-config",
             "--mcp-config", '{"mcpServers":{}}',
-            "--disable-slash-commands",
-            "--no-chrome",
-            "--tools", tools,
-            "--allowedTools", tools,
             "--exclude-dynamic-system-prompt-sections",
             "--output-format", "stream-json",
             "--verbose",
             "--model", model,
         ]
+        if isolation_settings_path is not None:
+            cmd.extend([
+                "--settings", isolation_settings_path,
+                "--setting-sources", "",
+                "--strict-mcp-config",
+                "--disable-slash-commands",
+                "--no-chrome",
+                "--tools", tools,
+                "--allowedTools", tools,
+            ])
+        else:
+            cmd.append("--dangerously-skip-permissions")
         if repository_cwd:
             cmd.extend([
                 "--append-system-prompt",

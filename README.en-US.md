@@ -570,6 +570,7 @@ Shared Docker execution mode's `/tmp` is independent 2GB tmpfs in container, als
 | `POOL_ENABLED` | `true` | Enable Claude account pool |
 | `POOL_CONFIG_PATH` | `~/.claude-pool/accounts.json` | Account pool config file path |
 | `POOL_COOLDOWN_SECONDS` | `300` | Cooldown duration for hit-limit accounts (seconds) |
+| `CLAUDE_TASK_ISOLATION_ENABLED` | `false` | Whether Claude task runs use sandbox-runtime isolation; when disabled, CCM uses host-style launch and does not require `apply-seccomp` |
 
 Pool enabled by default. On first startup, if `accounts.json` doesn't exist but `~/.claude/.credentials.json` has valid credentials, system auto-adds default account to pool.
 

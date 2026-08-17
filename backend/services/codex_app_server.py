@@ -5426,11 +5426,7 @@ class CodexAppServer:
                 task_model_tool_environment,
             )
 
-            core_shell_environment = (
-                task_model_tool_environment(os.environ)
-                if task_ssh_protected_paths or network_isolated
-                else {}
-            )
+            core_shell_environment = task_model_tool_environment(os.environ)
             shell_environment = dict(core_shell_environment)
             shell_environment.update(dict(git_env or {}))
             if task_ssh_disable_network:
@@ -9014,16 +9010,14 @@ class CodexAppServerRegistry:
         *,
         reason: str,
     ) -> bool:
-        """Stop one durably-owned turn and recycle its account transport.
+        """Stop one durably-owned turn and recycle its account transport when safe.
 
-        Exact thread/turn interruption is always attempted first.  It is not,
-        however, sufficient proof that task-scoped native helpers are gone:
-        Codex keeps MCP servers and code-mode hosts below the persistent
-        app-server even after a turn reports ``interrupted``.  Once admission
-        is drained, therefore recycle the account transport for every explicit
-        stop.  Non-target adapters fail and use the ordinary task retry path;
-        returning success while target-owned native helpers remain alive is
-        not an acceptable outcome.
+        Exact thread/turn interruption is always attempted first.  If another
+        Task is using the same account transport, the target adapter can still
+        be detached safely after a confirmed interrupt; recycling the shared
+        transport in that case would kill the unrelated Task.  When the target
+        is the only live turn, recycle the transport as an additional proof
+        that task-scoped native helpers are gone.
 
         Returns whether transport shutdown was required.
         """
@@ -9061,18 +9055,6 @@ class CodexAppServerRegistry:
                             "Cannot stop the claimed turn while "
                             f"{starting} admitted app-server request(s) are "
                             f"in flight on its shared transport: {home}"
-                        )
-                    if server.has_other_live_turn_processes(process):
-                        # Explicit stop currently requires recycling the whole
-                        # account transport to prove task-scoped MCP helpers
-                        # are gone.  Never interrupt first and discover peers
-                        # afterwards: recycling here would turn an unrelated
-                        # peer with emitted output/external effects into an
-                        # unreplayable failure.
-                        raise CodexSharedTransportBusyError(
-                            "Cannot stop the claimed turn while another live "
-                            "turn shares its Codex app-server transport: "
-                            f"{home}"
                         )
                     # Close admission before the interrupt RPC.  A request
                     # admitted earlier remains visible in ``_starting`` and
@@ -9123,11 +9105,30 @@ class CodexAppServerRegistry:
                     )
 
                 if has_peer_turns:
-                    raise CodexSharedTransportBusyError(
-                        "Cannot recycle the claimed turn because another live "
-                        "turn appeared on its Codex app-server transport: "
-                        f"{home}"
-                    )
+                    # A confirmed exact interrupt is sufficient to finish the
+                    # target Task's adapter.  Do not recycle a shared account
+                    # transport: doing so would terminate unrelated live
+                    # turns.  The per-turn runtime cleanup callback remains
+                    # attached to ``process.finish`` and is awaited by the
+                    # InstanceManager consumer.
+                    if not interrupt_confirmed and process.returncode is None:
+                        raise CodexSharedTransportBusyError(
+                            "Cannot stop the claimed turn while its exact "
+                            "interrupt is unconfirmed and another live turn "
+                            "shares its Codex app-server transport: "
+                            f"{home}"
+                        )
+                    if process.returncode is None:
+                        raise CodexSharedTransportBusyError(
+                            "Claimed turn interrupt did not terminate the "
+                            "target adapter on shared Codex transport: "
+                            f"{home}"
+                        )
+                    async with self._lock:
+                        if self._servers.get(home) is server:
+                            self._draining.discard(home)
+                            drain_owned = False
+                    return False
 
                 # Admission is drained.  Transport recycle is the only
                 # available lifecycle boundary that also closes task-scoped
