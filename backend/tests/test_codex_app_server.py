@@ -4793,8 +4793,15 @@ async def test_real_codex_linked_git_projection_allows_read_commands_not_commit(
 
 
 @pytest.mark.asyncio
-async def test_tool_free_profile_clears_inherited_mcp_and_native_tools():
-    server = CodexAppServer("codex")
+async def test_tool_free_profile_clears_inherited_mcp_and_native_tools(
+    tmp_path,
+):
+    # Keep the exact deny-list assertion independent of whichever skills are
+    # installed in the developer/CI account running this test. Production
+    # intentionally adds every SKILL.md already present in the selected home.
+    codex_home = tmp_path / "codex-home"
+    codex_home.mkdir()
+    server = CodexAppServer("codex", codex_home=codex_home)
     server._process = SimpleNamespace(pid=4321, returncode=None)
     server.ensure_started = AsyncMock()
     async def request(method, params, **_kwargs):

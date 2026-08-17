@@ -159,6 +159,7 @@ class WorkerTaskGeneration:
     termination_uncertainty: object | None = None
     legacy_carrier_conflict_present: bool = False
     legacy_carrier_conflict: object | None = None
+    incarnation_id: str | None = None
 
 
 def has_worker_termination_uncertainty(metadata: object) -> bool:
@@ -195,6 +196,7 @@ def _generation_marker_payload(generation: WorkerTaskGeneration) -> dict:
     return {
         "task_id": generation.task_id,
         "worker_id": generation.worker_id,
+        "incarnation_id": generation.incarnation_id,
         "status": generation.status,
         "retry_count": generation.retry_count,
         "turn_generation": generation.turn_generation,
@@ -273,6 +275,7 @@ def worker_task_generation(
     return WorkerTaskGeneration(
         task_id=task.id,
         worker_id=worker_id,
+        incarnation_id=task.incarnation_id,
         status=task.status,
         retry_count=task.retry_count,
         turn_generation=task.turn_generation,
@@ -318,6 +321,7 @@ def worker_task_generation_predicates(
         Task.id == generation.task_id,
         Task.worker_id == generation.worker_id,
         Task.shared_from_id.is_(None),
+        _nullable_eq(Task.incarnation_id, generation.incarnation_id),
         Task.status == generation.status,
         Task.retry_count == generation.retry_count,
         Task.turn_generation == generation.turn_generation,
@@ -424,6 +428,7 @@ def _same_worker_turn_handoff_generation(
         and _has_worker_turn_handoff(observed)
         and current.task_id == observed.task_id
         and current.worker_id == observed.worker_id
+        and current.incarnation_id == observed.incarnation_id
         and current.status == observed.status
         and current.retry_count == observed.retry_count
         and current.turn_generation == observed.turn_generation
@@ -494,6 +499,7 @@ async def read_worker_task_generation(
             select(
                 Task.id,
                 Task.worker_id,
+                Task.incarnation_id,
                 Task.status,
                 Task.retry_count,
                 Task.turn_generation,
@@ -520,6 +526,7 @@ async def read_worker_task_generation(
     return WorkerTaskGeneration(
         task_id=row.id,
         worker_id=row.worker_id,
+        incarnation_id=row.incarnation_id,
         status=row.status,
         retry_count=row.retry_count,
         turn_generation=row.turn_generation,

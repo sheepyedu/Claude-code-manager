@@ -2842,9 +2842,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
               taskId={task.id}
               count={activeSubAgentCount}
               active={activeSubAgentCount > 0}
-              onNavigate={hasControlAccess
-                ? () => setShowMonitorPanel(!showMonitorPanel)
-                : undefined}
+              onNavigate={() => setShowMonitorPanel(!showMonitorPanel)}
             />
             {!deliveryReadOnly && (
               <button
