@@ -238,6 +238,9 @@ async def list_workspace_reviews(
 ) -> list[dict[str, Any]]:
     task = await _task_or_404(task_id, db)
     await require_task_access(request, task, db)
+    # The refresh opens its own sessions and performs slow repository work.
+    # Return the request-owned ACL connection before entering that path.
+    await db.rollback()
     try:
         await refresh_workspace_review_staleness(task_id)
     except WorkspaceReviewError:

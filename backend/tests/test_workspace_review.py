@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import event, select
 
 from backend.models.project import Project
 from backend.models.task import Task
@@ -22,11 +22,241 @@ from backend.services.workspace_review import (
     WorkspaceReviewBusyError,
     WorkspaceReviewError,
     WorkspaceReviewManager,
+    WorkspaceSnapshot,
     capture_workspace_snapshot,
     detect_preview_config,
+    refresh_workspace_review_staleness,
     validate_preview_config,
     workspace_review_capability,
 )
+
+
+@pytest.mark.asyncio
+async def test_staleness_refresh_skips_snapshot_without_workspace_evidence(
+    monkeypatch,
+    db_factory,
+    tmp_path,
+):
+    workspace = _make_repo(tmp_path)
+    async with db_factory() as db:
+        project = Project(
+            name="No workspace evidence",
+            local_path=str(workspace),
+            status="ready",
+            preview_config=_http_preview_config(),
+        )
+        db.add(project)
+        await db.flush()
+        task = Task(
+            title="No workspace evidence",
+            status="executing",
+            project_id=project.id,
+            last_cwd=str(workspace),
+        )
+        db.add(task)
+        await db.commit()
+        task_id = task.id
+
+    capture = AsyncMock()
+    monkeypatch.setattr(workspace_review_module, "capture_workspace_snapshot", capture)
+    await refresh_workspace_review_staleness(task_id, db_factory=db_factory)
+    capture.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_staleness_refresh_singleflights_without_holding_a_db_connection(
+    monkeypatch,
+    db_factory,
+    db_engine,
+    tmp_path,
+):
+    workspace = _make_repo(tmp_path)
+    config = _http_preview_config()
+    head = _git(workspace, "rev-parse", "HEAD")
+    async with db_factory() as db:
+        project = Project(
+            name="Single-flight workspace evidence",
+            local_path=str(workspace),
+            status="ready",
+            preview_config=config,
+        )
+        db.add(project)
+        await db.flush()
+        task = Task(
+            title="Single-flight workspace evidence",
+            status="executing",
+            project_id=project.id,
+            last_cwd=str(workspace),
+        )
+        db.add(task)
+        await db.flush()
+        db.add(WorkspaceReviewRun(
+            id="a" * 32,
+            task_id=task.id,
+            project_id=project.id,
+            mode="review_only",
+            profile="standard",
+            goal="Verify staleness",
+            status="completed",
+            stage="completed",
+            workspace_path=str(workspace),
+            git_head=head,
+            workspace_fingerprint="0" * 64,
+            preview_config=config,
+            stale=False,
+            cleanup_status="completed",
+        ))
+        await db.commit()
+        task_id = task.id
+
+    checked_out = 0
+
+    def _checkout(*_args):
+        nonlocal checked_out
+        checked_out += 1
+
+    def _checkin(*_args):
+        nonlocal checked_out
+        checked_out -= 1
+
+    event.listen(db_engine.sync_engine, "checkout", _checkout)
+    event.listen(db_engine.sync_engine, "checkin", _checkin)
+    started = asyncio.Event()
+    release = asyncio.Event()
+    capture_calls = 0
+    connections_during_capture: list[int] = []
+
+    async def _slow_capture(*_args, **_kwargs):
+        nonlocal capture_calls
+        capture_calls += 1
+        connections_during_capture.append(checked_out)
+        started.set()
+        await release.wait()
+        return WorkspaceSnapshot(
+            path=workspace.resolve(),
+            git_head=head,
+            fingerprint="f" * 64,
+            changed_paths=(),
+        )
+
+    monkeypatch.setattr(workspace_review_module, "capture_workspace_snapshot", _slow_capture)
+    refreshes = [
+        asyncio.create_task(
+            refresh_workspace_review_staleness(task_id, db_factory=db_factory)
+        )
+        for _ in range(8)
+    ]
+    try:
+        await asyncio.wait_for(started.wait(), timeout=1)
+        await asyncio.sleep(0.05)
+        assert capture_calls == 1
+        assert connections_during_capture == [0]
+    finally:
+        release.set()
+        await asyncio.gather(*refreshes, return_exceptions=True)
+        event.remove(db_engine.sync_engine, "checkout", _checkout)
+        event.remove(db_engine.sync_engine, "checkin", _checkin)
+
+    async with db_factory() as db:
+        refreshed = await db.get(WorkspaceReviewRun, "a" * 32)
+        assert refreshed is not None
+        assert refreshed.stale is True
+
+
+@pytest.mark.asyncio
+async def test_workspace_start_snapshots_without_db_or_manager_writer_fences(
+    monkeypatch,
+    db_factory,
+    db_engine,
+    tmp_path,
+):
+    from backend.config import settings
+
+    monkeypatch.setattr(settings, "auth_token", "workspace-start-test-token")
+    monkeypatch.setattr(workspace_review_module, "async_session", db_factory)
+    workspace = _make_repo(tmp_path)
+    config = _http_preview_config()
+    head = _git(workspace, "rev-parse", "HEAD")
+    async with db_factory() as db:
+        project = Project(
+            name="Lock-free start snapshot",
+            local_path=str(workspace),
+            status="ready",
+            preview_config=config,
+        )
+        db.add(project)
+        await db.flush()
+        task = Task(
+            title="Lock-free start snapshot",
+            status="completed",
+            provider="codex",
+            project_id=project.id,
+            last_cwd=str(workspace),
+        )
+        db.add(task)
+        await db.commit()
+        task_id = task.id
+
+    checked_out = 0
+
+    def _checkout(*_args):
+        nonlocal checked_out
+        checked_out += 1
+
+    def _checkin(*_args):
+        nonlocal checked_out
+        checked_out -= 1
+
+    event.listen(db_engine.sync_engine, "checkout", _checkout)
+    event.listen(db_engine.sync_engine, "checkin", _checkin)
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def _slow_capture(*_args, **_kwargs):
+        assert checked_out == 0
+        started.set()
+        await release.wait()
+        return WorkspaceSnapshot(
+            path=workspace.resolve(),
+            git_head=head,
+            fingerprint="d" * 64,
+            changed_paths=(),
+        )
+
+    monkeypatch.setattr(workspace_review_module, "capture_workspace_snapshot", _slow_capture)
+    manager = WorkspaceReviewManager()
+    manager._run_pipeline = AsyncMock(return_value=None)
+    start = asyncio.create_task(manager.start(
+        task_id=task_id,
+        goal="Keep Task control responsive during snapshot",
+        runtime_config={
+            "provider": "codex",
+            "model": "gpt-5.6-sol",
+            "reasoning_effort": "high",
+            "codex_service_tier": "default",
+        },
+    ))
+    try:
+        await asyncio.wait_for(started.wait(), timeout=1)
+        assert checked_out == 0
+        async with db_factory() as db:
+            current = await db.get(Task, task_id)
+            assert current is not None
+            current.title = "Control-plane writer completed during snapshot"
+            await asyncio.wait_for(db.commit(), timeout=1)
+        release.set()
+        run = await asyncio.wait_for(start, timeout=1)
+        await asyncio.wait_for(manager._pipelines[run.id], timeout=1)
+    finally:
+        release.set()
+        if not start.done():
+            start.cancel()
+        await asyncio.gather(start, return_exceptions=True)
+        event.remove(db_engine.sync_engine, "checkout", _checkout)
+        event.remove(db_engine.sync_engine, "checkin", _checkin)
+
+    assert run.task_id == task_id
+    assert run.workspace_fingerprint == "d" * 64
 
 
 def _git(workspace: Path, *args: str) -> str:

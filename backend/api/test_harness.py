@@ -40,7 +40,10 @@ from backend.services.test_harness_runtime import (
     build_saved_harness_runtime,
     harness_runtime_config_payload,
 )
-from backend.services.workspace_review import workspace_review_capability
+from backend.services.workspace_review import (
+    WorkspaceReviewError,
+    workspace_review_capability,
+)
 from backend.services.test_harness_targets import untrusted_git_target_capability
 from backend.services.test_harness_owner_fence import (
     TestHarnessOwnerIdentity,
@@ -360,9 +363,13 @@ async def list_test_harness_runs(
 ) -> list[dict[str, Any]]:
     task = await _task_or_404(task_id, db)
     await require_task_access(request, task, db)
+    # Freshness probing uses independent service sessions and may spend
+    # seconds in Git. Release the request-scoped ACL transaction first so
+    # high-frequency polling cannot exhaust a small connection pool.
+    await db.rollback()
     try:
         await test_harness_service.refresh_task_staleness(task_id)
-    except (TestHarnessError, OSError, ValueError):
+    except (TestHarnessError, WorkspaceReviewError, OSError, ValueError):
         # Historical evidence remains readable if the checkout is temporarily
         # unavailable; it simply cannot be freshly proven in this poll.
         pass

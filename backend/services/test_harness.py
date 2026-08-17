@@ -304,23 +304,40 @@ class TestHarnessService:
         owner_user_id: int | None = None,
         owner_identity: TestHarnessOwnerIdentity | None = None,
     ) -> TestHarnessRun:
+        normalized = spec.normalized()
         async with test_harness_owner_fence(task_id):
-            return await self._start_task_run_under_owner_fence(
+            run, created, plan = await self._admit_task_run_under_owner_fence(
                 task_id=task_id,
-                spec=spec,
+                spec=normalized,
                 owner_user_id=owner_user_id,
                 owner_identity=owner_identity,
             )
+            if not created:
+                return run
+            if normalized.target_kind != "current_workspace":
+                return await self._activate_admitted_task_run(
+                    run=run,
+                    spec=normalized,
+                    plan=plan,
+                )
 
-    async def _start_task_run_under_owner_fence(
+        # The durable Harness Run is now visible to terminalization. Slow Git
+        # and filesystem inspection must not retain the process-local owner
+        # fence and block stop/cancel for this Task.
+        return await self._activate_admitted_task_run(
+            run=run,
+            spec=normalized,
+            plan=plan,
+        )
+
+    async def _admit_task_run_under_owner_fence(
         self,
         *,
         task_id: int,
         spec: TestHarnessSpec,
         owner_user_id: int | None = None,
         owner_identity: TestHarnessOwnerIdentity | None = None,
-    ) -> TestHarnessRun:
-        normalized = spec.normalized()
+    ) -> tuple[TestHarnessRun, bool, dict[str, Any]]:
         async with self.db_factory() as db:
             task = await db.get(Task, task_id)
             if task is None:
@@ -348,19 +365,19 @@ class TestHarnessService:
                 )
             owner_identity = owner_identity or current_owner_identity
             project = await db.get(Project, task.project_id) if task.project_id else None
-            runtime = self._runtime_for_task(task, normalized)
+            runtime = self._runtime_for_task(task, spec)
             plan = compile_test_plan(
-                goal=normalized.goal,
-                profile=normalized.profile,
-                allow_actions=normalized.allow_actions,
-                viewport_width=normalized.viewport_width,
-                viewport_height=normalized.viewport_height,
-                max_steps=normalized.max_steps or 20,
-                max_actions=normalized.max_actions or 0,
-                supplied=normalized.test_plan,
+                goal=spec.goal,
+                profile=spec.profile,
+                allow_actions=spec.allow_actions,
+                viewport_width=spec.viewport_width,
+                viewport_height=spec.viewport_height,
+                max_steps=spec.max_steps or 20,
+                max_actions=spec.max_actions or 0,
+                supplied=spec.test_plan,
             )
             project_id = project.id if project is not None else None
-            if normalized.target_kind in {"pull_request", "git_ref"}:
+            if spec.target_kind in {"pull_request", "git_ref"}:
                 capability = await untrusted_git_target_capability(
                     project=project,
                 )
@@ -373,19 +390,25 @@ class TestHarnessService:
             task_id=task_id,
             project_id=project_id,
             owner_user_id=owner_user_id,
-            spec=normalized,
+            spec=spec,
             plan=plan,
             runtime=runtime,
             owner_identity=owner_identity,
         )
-        if not created:
-            return run
+        return run, created, plan
 
-        if normalized.target_kind == "current_workspace":
+    async def _activate_admitted_task_run(
+        self,
+        *,
+        run: TestHarnessRun,
+        spec: TestHarnessSpec,
+        plan: dict[str, Any],
+    ) -> TestHarnessRun:
+        if spec.target_kind == "current_workspace":
             try:
                 await self._start_workspace_review(
                     run_id=run.id,
-                    spec=normalized,
+                    spec=spec,
                     test_plan=plan,
                 )
             except BaseException as exc:
@@ -399,7 +422,7 @@ class TestHarnessService:
                     cleanup_error=cleanup_error,
                 )
                 raise
-        elif normalized.target_kind == "fixed_url":
+        elif spec.target_kind == "fixed_url":
             # A fixed URL needs the caller to reserve either an inline browser
             # tool or a separate Task, then attach that exact job below.
             await self._update_run(
@@ -409,7 +432,7 @@ class TestHarnessService:
                 title="等待浏览器执行器",
                 source_key="harness:waiting-for-browser",
             )
-        elif normalized.target_kind in {"pull_request", "git_ref"}:
+        elif spec.target_kind in {"pull_request", "git_ref"}:
             pipeline = asyncio.create_task(
                 self._run_git_target_pipeline(run.id),
                 name=f"test-harness-git-{run.id}",
@@ -3464,20 +3487,50 @@ class TestHarnessService:
                             TestHarnessSandboxLease.run_id == run.id
                         )
                     )
+                    workspace_owner = await db.scalar(
+                        select(WorkspaceReviewRun.id).where(
+                            WorkspaceReviewRun.harness_run_id == run.id
+                        )
+                    )
+                    child_binding = await db.scalar(
+                        select(TestHarnessChildBinding.id).where(
+                            TestHarnessChildBinding.harness_run_id == run.id
+                        )
+                    )
+                    attempt = await db.scalar(
+                        select(TestHarnessAttempt.id).where(
+                            TestHarnessAttempt.run_id == run.id
+                        )
+                    )
                     sandbox_cleaned = (
                         sandbox_lease is not None
                         and sandbox_lease.cleanup_status == "completed"
                     )
+                    # current_workspace admission now commits the Harness Run
+                    # before its lock-free snapshot. No downstream ownership
+                    # row means no Preview, Browser child, or Sandbox was ever
+                    # materialized, so restart cleanup is already proven.
+                    pre_materialization_clean = bool(
+                        run.target_kind == "current_workspace"
+                        and run.workspace_review_run_id is None
+                        and run.browser_review_job_id is None
+                        and run.agent_task_id is None
+                        and workspace_owner is None
+                        and child_binding is None
+                        and attempt is None
+                        and sandbox_lease is None
+                    )
+                    cleanup_proven = sandbox_cleaned or pre_materialization_clean
                     run.status = "failed"
                     run.stage = "interrupted"
                     run.verdict = "error"
                     run.error = "Manager restarted before this test run reached a terminal state"
                     run.cleanup_status = (
-                        "completed" if sandbox_cleaned else "unconfirmed"
+                        "completed" if cleanup_proven else "unconfirmed"
                     )
                     run.cleanup_error = (
                         None
-                        if sandbox_cleaned
+                        if cleanup_proven
                         else "The previous process could not prove browser, preview, or sandbox cleanup"
                     )
                     run.completed_at = datetime.utcnow()
