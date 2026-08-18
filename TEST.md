@@ -991,6 +991,9 @@ python -m pytest \
 | `TestRateLimitDetection` / `TestAuthFailureDetection` / `TestPoolRotatable` | 限速/认证失败文案检测（窄正则，含中英文与各时区变体） |
 | `test_cloudrouter_claude_launch_replaces_inherited_auth_env` / `test_cloudrouter_claude_pty_projects_direct_auth_for_model_only` | CloudRouter Claude direct/PTY 启动均以所选账号 Key 覆盖 ambient auth，保留子进程凭据清洗开关 |
 | `test_real_claude_pty_uses_managed_bearer_token` | opt-in 真实 Claude PTY 调用：预置当前 Key 为 rejected，验证 Bearer 投影仍能完成首轮响应；需 `CCM_RUN_REAL_CLAUDE_API_TESTS=1`、`CCM_REAL_CLAUDE_API_KEY_FILE` 和 `CCM_REAL_CLAUDE_BASE_URL` |
+| `test_add_apex_builds_private_dual_provider_home` / `test_apex_native_models_are_split_between_claude_and_codex` | ApexRouter 同一 Key 创建 Claude/Codex 私有运行目录，并兼容 native `models[].slug` 与 OpenAI `data[].id` 模型目录投影 |
+| `test_legacy_codex_only_apex_account_adds_safe_claude_runtime` / `test_legacy_apex_migration_preflights_codex_before_writing` | 旧 Codex-only Apex 账号只在 Claude 目标文件与现有 Codex 路由全部通过预检后迁移，失败不留下部分写入 |
+| `test_apex_409_capacity_is_transient_only_for_exact_apex_codex_home` / `test_codex_capacity_permit_allows_one_exact_relaunch` | Apex 409 capacity 只对 exact Apex Codex home 进入无限退避，并以一次性 Task/turn/source/transport permit 越过 launch fence |
 | `test_add_apibest_builds_private_dual_provider_home` / `test_apibest_empty_authenticated_models_falls_back_to_pricing_catalog` / `test_generic_api_accounts_require_upstream_fast_capability_and_reload` | APIBest 双 provider 私有账号目录、「认证 models 空目录 → 公开 pricing 模型发现」，以及 API 网关显式 Fast 能力来源校验 |
 | `test_claude_login_error_message_is_turn_fatal` | Claude 以 exit 0 返回普通 `Not logged in` error message 时仍判定回合失败 |
 | `TestTransientOverloadDetection` | **瞬时 429/过载检测**：命中 Anthropic 官方文案 `Server is temporarily limiting requests (not your usage limit)` / overloaded；与「额度用尽/认证失败」互斥（那些走换号）；无误报 |

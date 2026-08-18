@@ -1121,7 +1121,7 @@ ocean/forest/rose 归入 Legacy 组。Header 顶栏导航重构为 AppShell（�
 - 问题：ApexRouter 在共享上游账号暂时没有可用槽位时返回 HTTP 409 no eligible account is ready。旧逻辑把 409 排除在 Codex transient 之外，Task 因此直接失败。
 - 修复：新增精确 Apex 容量错误识别，并接入现有无限 transient retry（transient_retry_max=None）和指数退避；只对已证明属于 Apex managed home 的运行时做 gateway 分类。若 exact turn 已产生终端输出，仍 fail closed，禁止重放副作用。
 - 验证：Apex 409 分类、同账号重试、chat/dispatcher 安全门定向测试 10 passed。
-- 提交：待本次修复提交后补录 commit ID。
+- 提交：`c78718b8`。
 ## 2026-08-13 — Codex capacity provider-boundary 无限重试
 
 - 问题：`Selected model is at capacity` 已被 transient classifier 命中，但第二次 `launch()` 会被既有 provider-boundary 围栏拒绝；Dispatcher 递归重试也不适合真正的无上限运行。
@@ -1137,3 +1137,10 @@ ocean/forest/rose 归入 Legacy 组。Header 顶栏导航重构为 AppShell（�
 - **避免复发**：跨分支移植 Worker/runtime 功能必须补齐 exact Task incarnation fence，不能引用本地不存在的控制层；安全测试必须隔离真实 `CODEX_HOME`；账号删除不能用可变 `Task.provider` 或复用槽位的陈旧 `Instance.provider` 作负证明；前端终态时序用例并发假红必须单独复跑确认。
 - **验证**：新增/高风险矩阵：process/capacity/cleanup lifecycle `65 passed`，Plan runtime `5 passed`，native child `23 passed`，Harness `6 passed`，cleanup/provider-boundary `18 passed`，前端账号池 `53 passed`，受影响前端组合单次 `208 passed, 1 timing failure` 且失败项独立复跑通过；TypeScript + Vite production build、Python compileall、migration roundtrip 和 `git diff --check` 通过。整文件 InstanceManager 仍有 26 个既有 isolation-on 假设失败，与本地明确关闭 isolation 的运行策略冲突，未为通过旧假设而恢复隔离。
 - **提交**：`93d3889f`、`c8481a18`、`ed4231c7`、`450e1534`、`47e485c6`、`42e069f1`、`6e17473c`、`23e35a4d`、`8100ab4e`、`7ad8c50b`、`a64cfe46`、`a918c557`。
+
+## 2026-08-18 — ApexRouter 双协议账号池与安全迁移
+
+- **问题**：本地分支已有 Apex Codex capacity 无限重试，但仍把 Apex 账号固定投影为 Codex-only；上游最近提交已支持同一 Key 的 Claude/Codex 模型目录，旧账号迁移的首版还可能在发现 Codex 配置被修改前先写入部分 Claude 文件。
+- **解决**：吸收 Apex 双协议模型探测与私有运行目录投影，并补入 legacy migration 全量预检；旧 Codex-only endpoint 只有在现有 Claude/Codex 文件都安全时才原子收敛。保留本地 exact Apex 409 分类、一次性 provider-boundary permit、指数退避无限重试和 API-first/手动 preferred 路由。
+- **避免复发**：账号协议扩展必须同时验证模型目录、两类号池投影、旧运行目录迁移和删除占用扫描；迁移必须在第一次写入前验证所有既有受管文件，capacity 修复不得因账号类型扩展而放宽到非 Apex home。
+- **验证**：Apex/账号池定向矩阵 355 passed，capacity 高风险矩阵 125 passed，前端账号池 49 passed，TypeScript 通过。后端全量在既有 migration/isolation/API 测试失败和一个无超时长等待后于 44% 中止，已完成 `3028 passed, 3 skipped, 19 failed`；失败项均不涉及本次 Apex 文件，且其中 migration trigger/isolation 分歧已在本地基线记录。实现提交 `1e86f8ed`、`de1f9994`。
