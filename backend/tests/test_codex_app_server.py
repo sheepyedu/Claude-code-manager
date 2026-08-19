@@ -2215,6 +2215,7 @@ async def test_task_isolation_rechecks_inventory_after_thread_binding(
                 "thread": {
                     "id": "thread-task-rebind",
                     "status": {"type": "idle"},
+                    "turns": [],
                 },
             }
         if method == "thread/archive":
@@ -2322,6 +2323,7 @@ async def test_task_isolated_resume_recycles_loaded_runtime_before_exact_resume(
                 "thread": {
                     "id": thread_id,
                     "status": {"type": "idle"},
+                    "turns": [],
                 },
             }
         if method == "thread/archive":
@@ -2445,6 +2447,7 @@ async def test_network_isolated_delivery_resume_recycles_loaded_runtime(
                 "thread": {
                     "id": thread_id,
                     "status": {"type": "idle"},
+                    "turns": [],
                 },
             }
         if method == "thread/archive":
@@ -2588,6 +2591,7 @@ async def test_task_isolated_resume_recycle_failure_is_uncertain_and_fail_closed
                 "thread": {
                     "id": thread_id,
                     "status": {"type": "idle"},
+                    "turns": [],
                 },
             }
         if method == failing_method:
@@ -2650,6 +2654,7 @@ async def test_task_isolated_resume_retry_recycles_after_preflight_failure(
                 "thread": {
                     "id": thread_id,
                     "status": {"type": "idle"},
+                    "turns": [],
                 },
             }
         if method == "thread/archive":
@@ -3151,6 +3156,16 @@ async def test_start_turn_recycles_system_error_once_before_idle_admission():
                     },
                 }
             }
+        if method == "thread/goal/get":
+            return {"goal": None}
+        if method == "thread/read":
+            return {
+                "thread": {
+                    "id": "thread-system-error",
+                    "status": {"type": "systemError"},
+                    "turns": [],
+                },
+            }
         if method == "thread/archive":
             return {}
         if method == "thread/unarchive":
@@ -3173,6 +3188,8 @@ async def test_start_turn_recycles_system_error_once_before_idle_admission():
     assert thread_id == "thread-system-error"
     assert [method for method, _ in calls] == [
         "thread/resume",
+        "thread/goal/get",
+        "thread/read",
         "thread/archive",
         "thread/unarchive",
         "thread/resume",
@@ -3207,6 +3224,16 @@ async def test_start_turn_stops_after_one_persistent_system_error_recycle():
                     "status": {"type": "systemError"},
                 }
             }
+        if method == "thread/goal/get":
+            return {"goal": None}
+        if method == "thread/read":
+            return {
+                "thread": {
+                    "id": "thread-still-system-error",
+                    "status": {"type": "systemError"},
+                    "turns": [],
+                },
+            }
         if method == "thread/archive":
             return {}
         if method == "thread/unarchive":
@@ -3230,6 +3257,8 @@ async def test_start_turn_stops_after_one_persistent_system_error_recycle():
     assert caught.value.recovery_attempted is True
     assert [method for method, _ in calls] == [
         "thread/resume",
+        "thread/goal/get",
+        "thread/read",
         "thread/archive",
         "thread/unarchive",
         "thread/resume",
@@ -6678,10 +6707,27 @@ async def test_unsubscribe_thread_rejects_active_turn_and_validates_status():
 async def test_recycle_thread_runtime_reloads_idle_thread_and_keeps_identity():
     server = CodexAppServer("codex")
     server.ensure_started = AsyncMock()
-    server._request = AsyncMock(side_effect=[
-        {},
-        {"thread": {"id": "thread-monitor"}},
-    ])
+    calls = []
+
+    async def request(method, params, **_kwargs):
+        calls.append((method, params))
+        if method == "thread/goal/get":
+            return {"goal": None}
+        if method == "thread/read":
+            return {
+                "thread": {
+                    "id": "thread-monitor",
+                    "status": {"type": "idle"},
+                    "turns": [],
+                },
+            }
+        if method == "thread/archive":
+            return {}
+        if method == "thread/unarchive":
+            return {"thread": {"id": "thread-monitor"}}
+        raise AssertionError(method)
+
+    server._request = AsyncMock(side_effect=request)
     process = MagicMock(returncode=None)
     server._contexts_by_thread["thread-monitor"] = SimpleNamespace(
         process=process,
@@ -6695,11 +6741,296 @@ async def test_recycle_thread_runtime_reloads_idle_thread_and_keeps_identity():
     process.returncode = 0
     await server.recycle_thread_runtime("thread-monitor")
 
-    assert [call.args for call in server._request.await_args_list] == [
+    assert calls == [
+        ("thread/goal/get", {"threadId": "thread-monitor"}),
+        (
+            "thread/read",
+            {"threadId": "thread-monitor", "includeTurns": True},
+        ),
         ("thread/archive", {"threadId": "thread-monitor"}),
         ("thread/unarchive", {"threadId": "thread-monitor"}),
     ]
     assert "thread-monitor" in server._known_threads
+
+
+@pytest.mark.asyncio
+async def test_recycle_thread_runtime_requires_complete_persisted_turns_proof():
+    server = CodexAppServer("codex")
+    server.ensure_started = AsyncMock()
+    calls = []
+
+    async def request(method, params, **_kwargs):
+        calls.append((method, params))
+        if method == "thread/goal/get":
+            return {"goal": None}
+        if method == "thread/read":
+            return {
+                "thread": {
+                    "id": "thread-incomplete-proof",
+                    "status": {"type": "idle"},
+                },
+            }
+        raise AssertionError(method)
+
+    server._request = AsyncMock(side_effect=request)
+    with pytest.raises(CodexAppServerError, match="omitted persisted turns"):
+        await server.recycle_thread_runtime("thread-incomplete-proof")
+
+    assert calls == [
+        ("thread/goal/get", {"threadId": "thread-incomplete-proof"}),
+        (
+            "thread/read",
+            {"threadId": "thread-incomplete-proof", "includeTurns": True},
+        ),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_recycle_thread_runtime_unsubscribes_idle_descendants_first():
+    server = CodexAppServer("codex")
+    server.ensure_started = AsyncMock()
+    calls = []
+
+    async def request(method, params, **_kwargs):
+        calls.append((method, params))
+        if method == "thread/goal/get":
+            return {"goal": None}
+        if method == "thread/read":
+            if params["threadId"] == "thread-parent":
+                return {
+                    "thread": {
+                        "id": "thread-parent",
+                        "status": {"type": "systemError"},
+                        "turns": [{
+                            "items": [{
+                                "type": "subAgentActivity",
+                                "agentThreadId": "thread-child",
+                            }],
+                        }],
+                    },
+                }
+            return {
+                "thread": {
+                    "id": params["threadId"],
+                    "status": {"type": "idle"},
+                },
+            }
+        if method == "thread/unsubscribe":
+            return {"status": "unsubscribed"}
+        if method == "thread/archive":
+            return {}
+        if method == "thread/unarchive":
+            return {"thread": {"id": "thread-parent"}}
+        raise AssertionError(method)
+
+    server._request = AsyncMock(side_effect=request)
+    await server.recycle_thread_runtime("thread-parent")
+
+    assert calls == [
+        ("thread/goal/get", {"threadId": "thread-parent"}),
+        (
+            "thread/read",
+            {"threadId": "thread-parent", "includeTurns": True},
+        ),
+        ("thread/goal/get", {"threadId": "thread-child"}),
+        (
+            "thread/read",
+            {"threadId": "thread-child", "includeTurns": False},
+        ),
+        ("thread/unsubscribe", {"threadId": "thread-child"}),
+        ("thread/archive", {"threadId": "thread-parent"}),
+        ("thread/unarchive", {"threadId": "thread-parent"}),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_recycle_thread_runtime_ignores_unreachable_persisted_relations():
+    server = CodexAppServer("codex")
+    server.ensure_started = AsyncMock()
+    calls = []
+
+    async def request(method, params, **_kwargs):
+        calls.append((method, params))
+        if method == "thread/goal/get":
+            return {"goal": None}
+        if method == "thread/read":
+            return {
+                "thread": {
+                    "id": "thread-parent",
+                    "status": {"type": "idle"},
+                    "turns": [{
+                        "items": [{
+                            "type": "collabAgentToolCall",
+                            "senderThreadId": "thread-unrelated",
+                            "receiverThreadIds": ["thread-must-not-touch"],
+                        }],
+                    }],
+                },
+            }
+        if method == "thread/archive":
+            return {}
+        if method == "thread/unarchive":
+            return {"thread": {"id": "thread-parent"}}
+        raise AssertionError(method)
+
+    server._request = AsyncMock(side_effect=request)
+    await server.recycle_thread_runtime("thread-parent")
+
+    assert not any(method == "thread/unsubscribe" for method, _ in calls)
+    assert calls[-2:] == [
+        ("thread/archive", {"threadId": "thread-parent"}),
+        ("thread/unarchive", {"threadId": "thread-parent"}),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_recycle_thread_runtime_rejects_active_descendant_before_archive():
+    server = CodexAppServer("codex")
+    server.ensure_started = AsyncMock()
+    calls = []
+
+    async def request(method, params, **_kwargs):
+        calls.append((method, params))
+        if method == "thread/goal/get":
+            return {"goal": None}
+        if method == "thread/read":
+            if params["threadId"] == "thread-parent":
+                return {
+                    "thread": {
+                        "id": "thread-parent",
+                        "status": {"type": "systemError"},
+                        "turns": [{
+                            "items": [{
+                                "type": "collabAgentToolCall",
+                                "senderThreadId": "thread-parent",
+                                "receiverThreadIds": ["thread-child"],
+                            }],
+                        }],
+                    },
+                }
+            return {
+                "thread": {
+                    "id": params["threadId"],
+                    "status": {"type": "active"},
+                },
+            }
+        raise AssertionError(method)
+
+    server._request = AsyncMock(side_effect=request)
+    with pytest.raises(CodexThreadNotIdleError, match="thread-child"):
+        await server.recycle_thread_runtime("thread-parent")
+
+    assert calls == [
+        ("thread/goal/get", {"threadId": "thread-parent"}),
+        (
+            "thread/read",
+            {"threadId": "thread-parent", "includeTurns": True},
+        ),
+        ("thread/goal/get", {"threadId": "thread-child"}),
+        (
+            "thread/read",
+            {"threadId": "thread-child", "includeTurns": False},
+        ),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_recycle_thread_runtime_rejects_resumable_descendant_goal():
+    server = CodexAppServer("codex")
+    server.ensure_started = AsyncMock()
+    server._children_by_thread["thread-parent"] = {"thread-child"}
+    calls = []
+
+    async def request(method, params, **_kwargs):
+        calls.append((method, params))
+        if method == "thread/goal/get":
+            if params["threadId"] == "thread-child":
+                return {"goal": {"status": "paused"}}
+            return {"goal": None}
+        if method == "thread/read":
+            return {
+                "thread": {
+                    "id": "thread-parent",
+                    "status": {"type": "systemError"},
+                    "turns": [],
+                },
+            }
+        raise AssertionError(method)
+
+    server._request = AsyncMock(side_effect=request)
+    with pytest.raises(CodexThreadNotIdleError, match="goal:paused"):
+        await server.recycle_thread_runtime("thread-parent")
+
+    assert calls == [
+        ("thread/goal/get", {"threadId": "thread-parent"}),
+        (
+            "thread/read",
+            {"threadId": "thread-parent", "includeTurns": True},
+        ),
+        ("thread/goal/get", {"threadId": "thread-child"}),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_recycle_thread_runtime_releases_nested_descendants_deepest_first():
+    server = CodexAppServer("codex")
+    server.ensure_started = AsyncMock()
+    calls = []
+
+    async def request(method, params, **_kwargs):
+        calls.append((method, params))
+        if method == "thread/goal/get":
+            return {"goal": None}
+        if method == "thread/read":
+            thread_id = params["threadId"]
+            if thread_id == "thread-parent":
+                return {
+                    "thread": {
+                        "id": thread_id,
+                        "status": {"type": "systemError"},
+                        "turns": [{
+                            "items": [
+                                {
+                                    "type": "collabAgentToolCall",
+                                    "senderThreadId": "thread-parent",
+                                    "receiverThreadIds": ["thread-child"],
+                                },
+                                {
+                                    "type": "collabAgentToolCall",
+                                    "senderThreadId": "thread-child",
+                                    "receiverThreadIds": ["thread-grandchild"],
+                                },
+                            ],
+                        }],
+                    },
+                }
+            return {
+                "thread": {
+                    "id": thread_id,
+                    "status": {"type": "idle"},
+                },
+            }
+        if method == "thread/unsubscribe":
+            return {"status": "unsubscribed"}
+        if method == "thread/archive":
+            return {}
+        if method == "thread/unarchive":
+            return {"thread": {"id": "thread-parent"}}
+        raise AssertionError(method)
+
+    server._request = AsyncMock(side_effect=request)
+    await server.recycle_thread_runtime("thread-parent")
+
+    unsubscribed = [
+        params["threadId"]
+        for method, params in calls
+        if method == "thread/unsubscribe"
+    ]
+    assert unsubscribed == ["thread-grandchild", "thread-child"]
+    assert calls[-2:] == [
+        ("thread/archive", {"threadId": "thread-parent"}),
+        ("thread/unarchive", {"threadId": "thread-parent"}),
+    ]
 
 
 @pytest.mark.asyncio
@@ -6712,6 +7043,16 @@ async def test_recycle_thread_runtime_unarchives_despite_cancellation():
 
     async def request(method, params, **_kwargs):
         calls.append((method, params))
+        if method == "thread/goal/get":
+            return {"goal": None}
+        if method == "thread/read":
+            return {
+                "thread": {
+                    "id": "thread-monitor",
+                    "status": {"type": "idle"},
+                    "turns": [],
+                },
+            }
         if method == "thread/archive":
             archive_started.set()
             await release_archive.wait()
@@ -6732,6 +7073,11 @@ async def test_recycle_thread_runtime_unarchives_despite_cancellation():
         await operation
 
     assert calls == [
+        ("thread/goal/get", {"threadId": "thread-monitor"}),
+        (
+            "thread/read",
+            {"threadId": "thread-monitor", "includeTurns": True},
+        ),
         ("thread/archive", {"threadId": "thread-monitor"}),
         ("thread/unarchive", {"threadId": "thread-monitor"}),
     ]
@@ -6742,6 +7088,14 @@ async def test_recycle_thread_runtime_rejects_wrong_unarchived_thread():
     server = CodexAppServer("codex")
     server.ensure_started = AsyncMock()
     server._request = AsyncMock(side_effect=[
+        {"goal": None},
+        {
+            "thread": {
+                "id": "thread-monitor",
+                "status": {"type": "idle"},
+                "turns": [],
+            },
+        },
         {},
         {"thread": {"id": "different-thread"}},
     ])
@@ -12233,6 +12587,7 @@ async def test_registry_preserves_owner_when_task_recycle_effect_is_uncertain(
                 "thread": {
                     "id": thread_id,
                     "status": {"type": "idle"},
+                    "turns": [],
                 },
             }
         if method == "thread/archive":
@@ -12291,6 +12646,7 @@ async def test_registry_preserves_owner_when_task_recycle_is_cancelled(
                 "thread": {
                     "id": thread_id,
                     "status": {"type": "idle"},
+                    "turns": [],
                 },
             }
         if method == "thread/archive":

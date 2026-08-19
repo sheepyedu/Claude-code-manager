@@ -370,6 +370,65 @@ async def test_fast_proxy_repairs_missing_transport_tier(request_tier):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("model", ["gpt-5.6-sol", "gpt-5.6-terra"])
+async def test_gpt_5_6_proxy_removes_legacy_prompt_cache_retention(model):
+    seen = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, content=_sse(tier="default"))
+
+    proxy = await _running_proxy(handler)
+    proxy.set_thread_tier("thread-1", "default")
+    body = _request_body(tier=None)
+    body.update({
+        "model": model,
+        "prompt_cache_retention": "24h",
+        "prompt_cache_options": {"ttl": "30m"},
+    })
+    try:
+        async with httpx.AsyncClient(trust_env=False) as client:
+            response = await client.post(
+                f"{proxy.local_base_url}/responses",
+                headers={"x-client-request-id": "thread-1"},
+                json=body,
+            )
+        assert response.status_code == 200
+        assert "prompt_cache_retention" not in seen["body"]
+        assert seen["body"]["prompt_cache_options"] == {"ttl": "30m"}
+    finally:
+        await proxy.close()
+
+
+@pytest.mark.asyncio
+async def test_earlier_model_proxy_preserves_prompt_cache_retention():
+    seen = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, content=_sse(tier="default"))
+
+    proxy = await _running_proxy(handler)
+    proxy.set_thread_tier("thread-1", "default")
+    body = _request_body(tier=None)
+    body.update({
+        "model": "gpt-5.5",
+        "prompt_cache_retention": "24h",
+    })
+    try:
+        async with httpx.AsyncClient(trust_env=False) as client:
+            response = await client.post(
+                f"{proxy.local_base_url}/responses",
+                headers={"x-client-request-id": "thread-1"},
+                json=body,
+            )
+        assert response.status_code == 200
+        assert seen["body"]["prompt_cache_retention"] == "24h"
+    finally:
+        await proxy.close()
+
+
+@pytest.mark.asyncio
 async def test_rejected_child_request_does_not_claim_lineage():
     calls = 0
 

@@ -603,6 +603,19 @@ def normalize_codex_home(codex_home: str | os.PathLike[str] | None = None) -> st
     return str(Path(configured).expanduser().resolve(strict=False))
 
 
+def _require_native_thread_id(value: Any, *, field: str) -> str:
+    """Validate one bounded native identifier before a lifecycle mutation."""
+
+    if (
+        not isinstance(value, str)
+        or not value
+        or len(value) > 256
+        or any(ord(char) < 0x20 or ord(char) == 0x7F for char in value)
+    ):
+        raise CodexAppServerError(f"Missing or invalid Codex {field}")
+    return value
+
+
 def _parse_codex_app_server_version(value: Any) -> tuple[int, int, int] | None:
     """Parse the exact app-server generation's canonical initialize proof."""
 
@@ -5620,6 +5633,7 @@ class CodexAppServer:
                 )
 
         task_resume_runtime_recycled = False
+        task_resume_quiescence_snapshot: dict[str, Any] | None = None
         if resume_session_id and (task_ssh_protected_paths or network_isolated):
             # ``thread/resume`` applies request-local MCP, feature and skill
             # overrides only while loading an unloaded rollout. Codex keeps a
@@ -5643,9 +5657,12 @@ class CodexAppServer:
             )
             runtime_needs_recycle = True
             try:
-                await self.require_thread_routing_quiescence(
-                    str(resume_session_id),
-                    allow_terminal=False,
+                task_resume_quiescence_snapshot = (
+                    await self.require_thread_routing_quiescence(
+                        str(resume_session_id),
+                        allow_terminal=False,
+                        include_turns=True,
+                    )
                 )
             except CodexThreadTerminalStateError as exc:
                 if exc.state == "notLoaded":
@@ -5669,7 +5686,10 @@ class CodexAppServer:
                     raise
             if runtime_needs_recycle:
                 try:
-                    await self.recycle_thread_runtime(str(resume_session_id))
+                    await self.recycle_thread_runtime(
+                        str(resume_session_id),
+                        quiescence_snapshot=task_resume_quiescence_snapshot,
+                    )
                     task_resume_runtime_recycled = True
                 except CodexThreadRuntimeRecycleCancelled:
                     raise
@@ -7179,6 +7199,7 @@ class CodexAppServer:
         thread_id: str,
         *,
         allow_terminal: bool = True,
+        include_turns: bool = False,
     ) -> dict[str, Any]:
         """Prove a persisted thread cannot autonomously use its old route.
 
@@ -7203,7 +7224,7 @@ class CodexAppServer:
             "thread/read",
             {
                 "threadId": thread_id,
-                "includeTurns": False,
+                "includeTurns": include_turns,
             },
         )
         thread = response.get("thread") if isinstance(response, dict) else None
@@ -7222,6 +7243,11 @@ class CodexAppServer:
                 thread,
                 thread_id=thread_id,
                 operation="isolated runtime recovery",
+            )
+        if include_turns and not isinstance(thread.get("turns"), list):
+            raise CodexAppServerError(
+                "thread/read omitted persisted turns required for safe "
+                f"runtime recycle: {thread_id}"
             )
         return {
             "thread": thread,
@@ -7419,7 +7445,12 @@ class CodexAppServer:
             self._known_threads.discard(thread_id)
         return status
 
-    async def recycle_thread_runtime(self, thread_id: str) -> None:
+    async def recycle_thread_runtime(
+        self,
+        thread_id: str,
+        *,
+        quiescence_snapshot: dict[str, Any] | None = None,
+    ) -> None:
         """Reload one idle thread without changing its persisted identity.
 
         Codex keeps a resumed thread's MCP clients alive, so a later
@@ -7435,6 +7466,27 @@ class CodexAppServer:
             raise CodexAppServerBusyError(
                 f"Codex thread {thread_id} still has an active turn"
             )
+
+        if quiescence_snapshot is None:
+            root = await self._read_quiescent_thread_for_recycle(
+                thread_id,
+                include_turns=True,
+            )
+        else:
+            root = self._validate_recycle_quiescence_snapshot(
+                thread_id,
+                quiescence_snapshot,
+            )
+        self._remember_persisted_child_relations(thread_id, root)
+        root_status = root.get("status")
+        if (
+            isinstance(root_status, dict)
+            and root_status.get("type") == "notLoaded"
+        ):
+            # There is no loaded runtime or writer to refresh.  Avoid turning
+            # an already-safe state into an archive mutation.
+            return
+        await self._unsubscribe_idle_descendants_before_recycle(thread_id)
 
         async def _archive_then_unarchive() -> None:
             await self._request(
@@ -7461,6 +7513,234 @@ class CodexAppServer:
         # propagating cancellation or any RPC failure.
         await _settle_registry_cleanup(_archive_then_unarchive())
         self._known_threads.add(thread_id)
+
+    @staticmethod
+    def _validate_recycle_quiescence_snapshot(
+        thread_id: str,
+        snapshot: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Validate a same-reservation proof before reusing it for recycle."""
+
+        if not isinstance(snapshot, dict):
+            raise CodexAppServerError(
+                f"Invalid runtime recycle proof for {thread_id}"
+            )
+        goal = snapshot.get("goal")
+        if goal is not None and (
+            not isinstance(goal, dict) or goal.get("status") != "complete"
+        ):
+            raise CodexThreadNotIdleError(
+                thread_id,
+                (
+                    f"goal:{goal.get('status') or 'unknown'}"
+                    if isinstance(goal, dict)
+                    else "goal:unknown"
+                ),
+                operation="runtime recycle",
+            )
+        thread = snapshot.get("thread")
+        if not isinstance(thread, dict) or thread.get("id") != thread_id:
+            raise CodexAppServerError(
+                f"Invalid runtime recycle thread proof for {thread_id}"
+            )
+        _require_routing_quiescent_thread_status(
+            thread,
+            thread_id=thread_id,
+            operation="runtime recycle",
+        )
+        if not isinstance(thread.get("turns"), list):
+            raise CodexAppServerError(
+                "Runtime recycle proof omitted persisted turns for "
+                f"{thread_id}"
+            )
+        return thread
+
+    async def _read_quiescent_thread_for_recycle(
+        self,
+        thread_id: str,
+        *,
+        include_turns: bool,
+    ) -> dict[str, Any]:
+        """Return an exact native no-execution proof for one recycle target."""
+
+        await self._require_no_resumable_thread_goal(
+            thread_id,
+            operation="runtime recycle",
+        )
+        response = await self._request(
+            "thread/read",
+            {
+                "threadId": thread_id,
+                "includeTurns": include_turns,
+            },
+        )
+        thread = response.get("thread") if isinstance(response, dict) else None
+        if not isinstance(thread, dict) or thread.get("id") != thread_id:
+            raise CodexAppServerError(
+                "thread/read returned an invalid thread before runtime "
+                f"recycle: {thread_id}"
+            )
+        _require_routing_quiescent_thread_status(
+            thread,
+            thread_id=thread_id,
+            operation="runtime recycle",
+        )
+        if include_turns and not isinstance(thread.get("turns"), list):
+            raise CodexAppServerError(
+                "thread/read omitted persisted turns required for safe "
+                f"runtime recycle: {thread_id}"
+            )
+        return thread
+
+    def _remember_persisted_child_relations(
+        self,
+        root_thread_id: str,
+        thread: dict[str, Any],
+    ) -> None:
+        """Rebuild safe child edges from persisted native collaboration items."""
+
+        turns = thread.get("turns")
+        if turns is None:
+            return
+        if not isinstance(turns, list):
+            raise CodexAppServerError(
+                "thread/read returned invalid persisted turns before runtime "
+                f"recycle: {root_thread_id}"
+            )
+
+        candidates: list[tuple[str, str]] = []
+        for turn in turns:
+            if not isinstance(turn, dict):
+                continue
+            items = turn.get("items")
+            if not isinstance(items, list):
+                continue
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                item_type = str(item.get("type") or "").replace("_", "").lower()
+                if item_type == "subagentactivity":
+                    child_id = item.get("agentThreadId") or item.get(
+                        "agent_thread_id"
+                    )
+                    if child_id is None:
+                        continue
+                    candidates.append((
+                        root_thread_id,
+                        _require_native_thread_id(
+                            child_id,
+                            field="child thread id",
+                        ),
+                    ))
+                    continue
+                if item_type != "collabagenttoolcall":
+                    continue
+                parent_id = item.get("senderThreadId") or item.get(
+                    "sender_thread_id"
+                ) or root_thread_id
+                parent_id = _require_native_thread_id(
+                    parent_id,
+                    field="parent thread id",
+                )
+                receiver_ids = (
+                    item.get("receiverThreadIds")
+                    if "receiverThreadIds" in item
+                    else item.get("receiver_thread_ids")
+                )
+                if not isinstance(receiver_ids, list):
+                    raise CodexAppServerError(
+                        "Persisted collaboration item has invalid receivers "
+                        f"before runtime recycle: {root_thread_id}"
+                    )
+                for child_id in receiver_ids:
+                    candidates.append((
+                        parent_id,
+                        _require_native_thread_id(
+                            child_id,
+                            field="child thread id",
+                        ),
+                    ))
+
+        # Accept only edges reachable from this exact root.  A malformed or
+        # unrelated sender embedded in history must never cause CCM to
+        # unsubscribe another thread.
+        reachable = {root_thread_id}
+        pending = list(candidates)
+        while pending:
+            remaining: list[tuple[str, str]] = []
+            progressed = False
+            for parent_id, child_id in pending:
+                if parent_id not in reachable:
+                    remaining.append((parent_id, child_id))
+                    continue
+                self._record_child_relation(parent_id, child_id)
+                if child_id not in reachable:
+                    reachable.add(child_id)
+                    progressed = True
+            if not progressed:
+                break
+            pending = remaining
+
+    def _descendants_postorder(self, thread_id: str) -> tuple[str, ...]:
+        """Return known descendants deepest-first, rejecting corrupt cycles."""
+
+        ordered: list[str] = []
+        visited: set[str] = set()
+        visiting: set[str] = set()
+
+        def visit(parent_id: str) -> None:
+            if parent_id in visiting:
+                raise CodexAppServerError(
+                    "Codex child-thread graph contains a cycle before "
+                    f"runtime recycle: {parent_id}"
+                )
+            if parent_id in visited:
+                return
+            visiting.add(parent_id)
+            for child_id in sorted(self._children_by_thread.get(parent_id, ())):
+                visit(child_id)
+                ordered.append(child_id)
+            visiting.remove(parent_id)
+            visited.add(parent_id)
+
+        visit(thread_id)
+        # Shared descendants can appear under more than one observed parent.
+        # Keep the first deepest-first occurrence without weakening cycle
+        # detection or issuing duplicate unsubscribe RPCs.
+        return tuple(dict.fromkeys(ordered))
+
+    async def _unsubscribe_idle_descendants_before_recycle(
+        self,
+        thread_id: str,
+    ) -> None:
+        """Release proven-quiescent child writers before archiving a parent.
+
+        Native Codex keeps completed collaboration threads loaded so they can
+        receive a later follow-up.  Their rollout writers block an archive of
+        the root thread.  Unsubscribe only after both the native Goal and the
+        explicit thread status prove the child cannot run.  Any ambiguity or
+        concurrent activity aborts the parent recycle before its archive RPC.
+        """
+
+        for descendant_id in self._descendants_postorder(thread_id):
+            if self.has_active_thread(descendant_id):
+                raise CodexAppServerBusyError(
+                    f"Codex descendant thread {descendant_id} still has an "
+                    "active turn before parent runtime recycle"
+                )
+            descendant = await self._read_quiescent_thread_for_recycle(
+                descendant_id,
+                include_turns=False,
+            )
+            status = descendant.get("status")
+            status_type = (
+                status.get("type")
+                if isinstance(status, dict)
+                else None
+            )
+            if status_type == "notLoaded":
+                continue
+            await self.unsubscribe_thread(descendant_id)
 
     async def abandon_turn(
         self,

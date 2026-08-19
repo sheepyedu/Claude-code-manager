@@ -511,6 +511,31 @@ def _parse_sse_json(record: bytes) -> dict[str, Any] | None:
     return parsed
 
 
+def _remove_legacy_gpt_5_6_cache_retention(
+    payload: dict[str, Any],
+) -> bool:
+    """Drop the pre-5.6 cache-retention field from exact GPT-5.6 requests.
+
+    GPT-5.6 uses ``prompt_cache_options.ttl`` and rejects the deprecated
+    ``prompt_cache_retention`` field on model variants such as terra.  Codex
+    0.147 can still emit the legacy field for native sub-agent requests.  The
+    proof proxy already parses and re-serializes Responses bodies when it
+    repairs service tier, so it is the narrowest boundary that can make the
+    same compatibility repair without changing earlier-model semantics.
+    """
+
+    model = payload.get("model")
+    if not isinstance(model, str):
+        return False
+    normalized = model.strip().lower()
+    if normalized != "gpt-5.6" and not normalized.startswith("gpt-5.6-"):
+        return False
+    if "prompt_cache_retention" not in payload:
+        return False
+    payload.pop("prompt_cache_retention", None)
+    return True
+
+
 def _extract_request_identity(
     headers: dict[str, str],
     body: bytes,
@@ -529,6 +554,7 @@ def _extract_request_identity(
         raise CodexTierProofError("Invalid Codex Responses request JSON") from exc
     if not isinstance(payload, dict):
         raise CodexTierProofError("Invalid Codex Responses request")
+    body_changed = _remove_legacy_gpt_5_6_cache_retention(payload)
 
     metadata = payload.get("client_metadata")
     if not isinstance(metadata, dict):
@@ -644,6 +670,12 @@ def _extract_request_identity(
         # request construction. ``fast`` is the Codex UI/config spelling;
         # Responses API requests use the canonical ``priority`` wire value.
         payload["service_tier"] = CODEX_TIER_PRIORITY
+        body_changed = True
+        identity = replace(
+            identity,
+            requested_tier=CODEX_TIER_PRIORITY,
+        )
+    if body_changed:
         body = json.dumps(
             payload,
             ensure_ascii=False,
@@ -651,10 +683,6 @@ def _extract_request_identity(
         ).encode("utf-8")
         if len(body) > _MAX_REQUEST_BYTES:
             raise CodexTierProofError("Codex request body is too large")
-        identity = replace(
-            identity,
-            requested_tier=CODEX_TIER_PRIORITY,
-        )
     return identity, body
 
 
