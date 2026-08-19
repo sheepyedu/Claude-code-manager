@@ -401,6 +401,83 @@ async def test_gpt_5_6_proxy_removes_legacy_prompt_cache_retention(model):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "registered_model",
+    ["gpt-5.6-sol", "openai/gpt-5.6-terra"],
+)
+async def test_gpt_5_6_continuation_inherits_registered_root_model(
+    registered_model,
+):
+    seen = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, content=_sse(tier="default"))
+
+    proxy = await _running_proxy(handler)
+    proxy.set_thread_tier(
+        "thread-1",
+        "default",
+        model=registered_model,
+    )
+    body = _request_body(tier=None)
+    body.pop("model", None)
+    body["prompt_cache_retention"] = "24h"
+    try:
+        async with httpx.AsyncClient(trust_env=False) as client:
+            response = await client.post(
+                f"{proxy.local_base_url}/responses",
+                headers={"x-client-request-id": "thread-1"},
+                json=body,
+            )
+        assert response.status_code == 200
+        assert "model" not in seen["body"]
+        assert "prompt_cache_retention" not in seen["body"]
+    finally:
+        await proxy.close()
+
+
+@pytest.mark.asyncio
+async def test_gpt_5_6_child_continuation_inherits_exact_root_model_only():
+    seen = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, content=_sse(tier="default"))
+
+    proxy = await _running_proxy(handler)
+    proxy.set_thread_tier("root-56", "default", model="gpt-5.6-luna")
+    proxy.set_thread_tier("root-55", "default", model="gpt-5.5")
+    try:
+        async with httpx.AsyncClient(trust_env=False) as client:
+            for root, child, turn in (
+                ("root-56", "child-56", "turn-56"),
+                ("root-55", "child-55", "turn-55"),
+            ):
+                body = _request_body(
+                    thread_id=child,
+                    turn_id=turn,
+                    tier=None,
+                    parent_thread_id=root,
+                )
+                body.pop("model", None)
+                body["prompt_cache_retention"] = "24h"
+                response = await client.post(
+                    f"{proxy.local_base_url}/responses",
+                    headers={
+                        "x-client-request-id": child,
+                        "x-codex-parent-thread-id": root,
+                    },
+                    json=body,
+                )
+                assert response.status_code == 200
+        assert "prompt_cache_retention" not in seen[0]
+        assert seen[1]["prompt_cache_retention"] == "24h"
+    finally:
+        await proxy.close()
+
+
+@pytest.mark.asyncio
 async def test_earlier_model_proxy_preserves_prompt_cache_retention():
     seen = {}
 
@@ -415,6 +492,32 @@ async def test_earlier_model_proxy_preserves_prompt_cache_retention():
         "model": "gpt-5.5",
         "prompt_cache_retention": "24h",
     })
+    try:
+        async with httpx.AsyncClient(trust_env=False) as client:
+            response = await client.post(
+                f"{proxy.local_base_url}/responses",
+                headers={"x-client-request-id": "thread-1"},
+                json=body,
+            )
+        assert response.status_code == 200
+        assert seen["body"]["prompt_cache_retention"] == "24h"
+    finally:
+        await proxy.close()
+
+
+@pytest.mark.asyncio
+async def test_earlier_model_continuation_preserves_prompt_cache_retention():
+    seen = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, content=_sse(tier="default"))
+
+    proxy = await _running_proxy(handler)
+    proxy.set_thread_tier("thread-1", "default", model="gpt-5.5")
+    body = _request_body(tier=None)
+    body.pop("model", None)
+    body["prompt_cache_retention"] = "24h"
     try:
         async with httpx.AsyncClient(trust_env=False) as client:
             response = await client.post(
@@ -706,7 +809,11 @@ async def test_active_child_stream_blocks_root_tier_mutation():
         )
 
     proxy = await _running_proxy(handler)
-    proxy.set_thread_tier("root-standard", "default")
+    proxy.set_thread_tier(
+        "root-standard",
+        "default",
+        model="gpt-5.6-sol",
+    )
     proxy.register_thread_parent("child-standard", "root-standard")
     try:
         async with httpx.AsyncClient(trust_env=False) as client:
@@ -728,9 +835,19 @@ async def test_active_child_stream_blocks_root_tier_mutation():
             # Idempotently restating the same root tier is safe, but neither
             # the root nor a child may be reclassified while any descendant
             # request is still streaming.
-            proxy.set_thread_tier("root-standard", "default")
+            proxy.set_thread_tier(
+                "root-standard",
+                "default",
+                model="gpt-5.6-sol",
+            )
             with pytest.raises(CodexTierProofError, match="active request"):
                 proxy.set_thread_tier("root-standard", "priority")
+            with pytest.raises(CodexTierProofError, match="active request"):
+                proxy.set_thread_tier(
+                    "root-standard",
+                    "default",
+                    model="gpt-5.5",
+                )
             with pytest.raises(
                 CodexTierProofError,
                 match="independent tier",
@@ -741,7 +858,11 @@ async def test_active_child_stream_blocks_root_tier_mutation():
             response = await asyncio.wait_for(request, timeout=1.0)
         assert response.status_code == 200
         assert proxy._active_requests_by_root == {}
-        proxy.set_thread_tier("root-standard", "priority")
+        proxy.set_thread_tier(
+            "root-standard",
+            "priority",
+            model="gpt-5.5",
+        )
     finally:
         release_stream.set()
         await proxy.close()

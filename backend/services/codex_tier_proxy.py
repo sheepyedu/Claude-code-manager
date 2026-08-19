@@ -56,6 +56,7 @@ _REQUEST_HEADER_TIMEOUT = 10.0
 _REQUEST_BODY_TIMEOUT = 30.0
 _FIRST_EVENT_TIMEOUT = 60.0
 _SHUTDOWN_TIMEOUT = 5.0
+_UNSET_MODEL = object()
 
 _HOP_BY_HOP = frozenset({
     "connection",
@@ -148,6 +149,7 @@ class _RequestIdentity:
     parent_thread_id: str | None
     root_thread_id: str
     expected_tier: str
+    expected_model: str | None
     requested_tier: str
 
 
@@ -513,6 +515,8 @@ def _parse_sse_json(record: bytes) -> dict[str, Any] | None:
 
 def _remove_legacy_gpt_5_6_cache_retention(
     payload: dict[str, Any],
+    *,
+    inherited_model: str | None = None,
 ) -> bool:
     """Drop the pre-5.6 cache-retention field from exact GPT-5.6 requests.
 
@@ -525,9 +529,15 @@ def _remove_legacy_gpt_5_6_cache_retention(
     """
 
     model = payload.get("model")
+    if model is None:
+        model = inherited_model
     if not isinstance(model, str):
         return False
     normalized = model.strip().lower()
+    # Custom providers can namespace a canonical model id while preserving
+    # the Responses model family as the final path component.
+    if "/" in normalized:
+        normalized = normalized.rsplit("/", 1)[-1]
     if normalized != "gpt-5.6" and not normalized.startswith("gpt-5.6-"):
         return False
     if "prompt_cache_retention" not in payload:
@@ -539,7 +549,10 @@ def _remove_legacy_gpt_5_6_cache_retention(
 def _extract_request_identity(
     headers: dict[str, str],
     body: bytes,
-    expected_lineage: Callable[[str, str | None], tuple[str, str]],
+    expected_lineage: Callable[
+        [str, str | None],
+        tuple[str, str, str | None],
+    ],
 ) -> tuple[_RequestIdentity, bytes]:
     if headers.get("content-encoding", "identity").lower() not in {
         "",
@@ -554,7 +567,7 @@ def _extract_request_identity(
         raise CodexTierProofError("Invalid Codex Responses request JSON") from exc
     if not isinstance(payload, dict):
         raise CodexTierProofError("Invalid Codex Responses request")
-    body_changed = _remove_legacy_gpt_5_6_cache_retention(payload)
+    body_changed = False
 
     metadata = payload.get("client_metadata")
     if not isinstance(metadata, dict):
@@ -625,7 +638,7 @@ def _extract_request_identity(
     )
     assert thread_id is not None
     assert turn_id is not None
-    root_thread_id, expected_raw = expected_lineage(
+    root_thread_id, expected_raw, expected_model = expected_lineage(
         thread_id,
         parent_thread_id,
     )
@@ -634,6 +647,10 @@ def _extract_request_identity(
         field="root thread id",
     )
     expected = _validate_tier(expected_raw)
+    body_changed = _remove_legacy_gpt_5_6_cache_retention(
+        payload,
+        inherited_model=expected_model,
+    )
     requested_raw = payload.get("service_tier")
     if requested_raw in (None, CODEX_TIER_DEFAULT):
         requested = CODEX_TIER_DEFAULT
@@ -647,6 +664,7 @@ def _extract_request_identity(
         parent_thread_id=parent_thread_id,
         root_thread_id=root_thread_id,
         expected_tier=expected,
+        expected_model=expected_model,
         requested_tier=requested,
     )
     if requested not in _CODEX_TIERS:
@@ -720,6 +738,7 @@ class CodexActualTierProxy:
         self._handlers: set[asyncio.Task[Any]] = set()
         self._committed_writer_ids: set[int] = set()
         self._root_tiers: dict[str, str] = {}
+        self._root_models: dict[str, str] = {}
         self._parents: dict[str, str] = {}
         self._active_requests_by_root: dict[str, int] = {}
         self._waiters: dict[tuple[str, str], _ProofWaiter] = {}
@@ -816,24 +835,48 @@ class CodexActualTierProxy:
             )
         self._port = int(address[1])
 
-    def set_thread_tier(self, thread_id: str, tier: str) -> None:
+    def set_thread_tier(
+        self,
+        thread_id: str,
+        tier: str,
+        *,
+        model: str | None | object = _UNSET_MODEL,
+    ) -> None:
         thread = _validate_identifier(thread_id, field="thread id")
         requested = _validate_tier(tier)
+        requested_model: str | None | object = _UNSET_MODEL
+        if model is not _UNSET_MODEL:
+            requested_model = (
+                _validate_identifier(model, field="model")
+                if model is not None
+                else None
+            )
         if thread in self._parents:
             raise CodexTierProofError(
                 f"Cannot assign an independent tier to child thread {thread}"
             )
         current = self._root_tiers.get(thread)
+        current_model = self._root_models.get(thread)
         if (
-            current is not None
-            and current != requested
+            (
+                (current is not None and current != requested)
+                or (
+                    requested_model is not _UNSET_MODEL
+                    and current_model != requested_model
+                )
+            )
             and self._active_requests_by_root.get(thread, 0) > 0
         ):
             raise CodexTierProofError(
-                "Cannot change Codex service tier while the thread lineage "
+                "Cannot change Codex service tier or model while the thread lineage "
                 f"has {self._active_requests_by_root[thread]} active request(s)"
             )
         self._root_tiers[thread] = requested
+        if requested_model is not _UNSET_MODEL:
+            if requested_model is None:
+                self._root_models.pop(thread, None)
+            else:
+                self._root_models[thread] = requested_model
 
     def register_thread_parent(
         self,
@@ -868,7 +911,7 @@ class CodexActualTierProxy:
             root = thread
         elif thread in self._parents:
             try:
-                root, _tier = self._resolve_lineage(thread, None)
+                root, _tier, _model = self._resolve_lineage(thread, None)
             except CodexTierProofError:
                 root = None
         if (
@@ -879,13 +922,14 @@ class CodexActualTierProxy:
                 "Cannot remove Codex tier lineage while requests are active"
             )
         self._root_tiers.pop(thread, None)
+        self._root_models.pop(thread, None)
         self._parents.pop(thread, None)
 
     def _resolve_lineage(
         self,
         thread_id: str,
         parent_thread_id: str | None,
-    ) -> tuple[str, str]:
+    ) -> tuple[str, str, str | None]:
         if parent_thread_id is not None:
             existing = self._parents.get(thread_id)
             if existing is not None and existing != parent_thread_id:
@@ -912,7 +956,7 @@ class CodexActualTierProxy:
                     raise CodexTierProofError(
                         f"Codex thread {current} is both a root and child"
                     )
-                return current, direct
+                return current, direct, self._root_models.get(current)
             parent = (
                 parent_thread_id
                 if current == thread_id and parent_thread_id is not None
@@ -926,13 +970,14 @@ class CodexActualTierProxy:
         )
 
     def _begin_request(self, identity: _RequestIdentity) -> None:
-        root, expected = self._resolve_lineage(
+        root, expected, expected_model = self._resolve_lineage(
             identity.thread_id,
             identity.parent_thread_id,
         )
         if (
             root != identity.root_thread_id
             or expected != identity.expected_tier
+            or expected_model != identity.expected_model
         ):
             raise CodexTierProofError(
                 "Codex tier lineage changed during request admission"

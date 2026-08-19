@@ -6138,7 +6138,13 @@ class CodexAppServer:
                 status_type,
             )
             try:
-                await self.recycle_thread_runtime(thread_id)
+                terminal_snapshot = (
+                    await self._terminal_recycle_quiescence_snapshot(thread_id)
+                )
+                await self.recycle_thread_runtime(
+                    thread_id,
+                    quiescence_snapshot=terminal_snapshot,
+                )
                 require_managed_network_generation(
                     "during terminal thread recovery"
                 )
@@ -6389,6 +6395,7 @@ class CodexAppServer:
                 actual_tier_proxy.set_thread_tier(
                     str(thread_id),
                     service_tier,
+                    model=model,
                 )
             except CodexTierProofError as exc:
                 raise CodexServiceTierUnavailableError(
@@ -7591,6 +7598,104 @@ class CodexAppServer:
                 f"runtime recycle: {thread_id}"
             )
         return thread
+
+    async def _read_exact_system_error_thread(
+        self,
+        thread_id: str,
+    ) -> dict[str, Any]:
+        """Read the exact terminal thread required before blocked-Goal cleanup."""
+
+        response = await self._request(
+            "thread/read",
+            {"threadId": thread_id, "includeTurns": True},
+        )
+        thread = response.get("thread") if isinstance(response, dict) else None
+        if not isinstance(thread, dict) or thread.get("id") != thread_id:
+            raise CodexAppServerError(
+                "thread/read returned an invalid thread before terminal "
+                f"runtime recovery: {thread_id}"
+            )
+        status = thread.get("status")
+        status_type = status.get("type") if isinstance(status, dict) else None
+        if status_type != "systemError":
+            raise CodexThreadNotIdleError(
+                thread_id,
+                f"thread:{status_type or 'unknown'}",
+                operation="blocked Goal terminal recovery",
+            )
+        if not isinstance(thread.get("turns"), list):
+            raise CodexAppServerError(
+                "thread/read omitted persisted turns before terminal runtime "
+                f"recovery: {thread_id}"
+            )
+        return thread
+
+    async def _terminal_recycle_quiescence_snapshot(
+        self,
+        thread_id: str,
+    ) -> dict[str, Any]:
+        """Prove terminal quiescence and narrowly clear a stale blocked Goal.
+
+        A blocked Goal can be the durable remnant of the same failed native
+        turn that put the thread in ``systemError``. Clear it only while the
+        registry holds the exact resume reservation, after both the Goal and a
+        full ``thread/read`` prove that state. The mutation must return an
+        affirmative acknowledgement and both facts are read again before
+        archive/unarchive is allowed. Any race or uncertain response fails
+        closed without submitting model input.
+        """
+
+        goal = await self._read_thread_goal(thread_id)
+        thread = await self._read_exact_system_error_thread(thread_id)
+        if goal is None or goal.get("status") == "complete":
+            return {"goal": goal, "thread": thread}
+        goal_status = goal.get("status")
+        if goal_status != "blocked":
+            raise CodexThreadNotIdleError(
+                thread_id,
+                f"goal:{goal_status or 'unknown'}",
+                operation="terminal runtime recovery",
+            )
+        if goal.get("threadId") != thread_id:
+            raise CodexAppServerError(
+                "thread/goal/get returned a blocked Goal with invalid thread "
+                f"identity for {thread_id}"
+            )
+        if self.has_active_thread(thread_id):
+            raise CodexAppServerBusyError(
+                f"Codex thread {thread_id} acquired an active turn before "
+                "blocked Goal cleanup"
+            )
+
+        async def _clear_and_verify() -> dict[str, Any]:
+            response = await self._request(
+                "thread/goal/clear",
+                {"threadId": thread_id},
+            )
+            if (
+                not isinstance(response, dict)
+                or response.get("cleared") is not True
+            ):
+                raise CodexAppServerError(
+                    "thread/goal/clear did not affirm removal for "
+                    f"{thread_id}"
+                )
+            verified_goal = await self._read_thread_goal(thread_id)
+            if verified_goal is not None:
+                raise CodexThreadNotIdleError(
+                    thread_id,
+                    f"goal:{verified_goal.get('status') or 'unknown'}",
+                    operation="blocked Goal terminal recovery verification",
+                )
+            verified_thread = await self._read_exact_system_error_thread(
+                thread_id,
+            )
+            return {"goal": None, "thread": verified_thread}
+
+        # If caller cancellation races the mutation, settle the exact clear
+        # and its readback before propagating cancellation. Cancellation then
+        # stops before archive/resume, so no user message can be replayed.
+        return await _settle_registry_cleanup(_clear_and_verify())
 
     def _remember_persisted_child_relations(
         self,

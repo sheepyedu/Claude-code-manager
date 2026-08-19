@@ -3209,6 +3209,316 @@ async def test_start_turn_recycles_system_error_once_before_idle_admission():
 
 
 @pytest.mark.asyncio
+async def test_start_turn_clears_blocked_goal_after_exact_system_error_proof():
+    server = CodexAppServer("codex")
+    server._process = SimpleNamespace(pid=4321, returncode=None)
+    server.ensure_started = AsyncMock()
+    calls = []
+    resume_count = 0
+    goal_cleared = False
+
+    async def request(method, params, **_kwargs):
+        nonlocal resume_count, goal_cleared
+        calls.append((method, params))
+        if method == "thread/resume":
+            resume_count += 1
+            return {
+                "thread": {
+                    "id": "thread-blocked-system-error",
+                    "status": {
+                        "type": "systemError" if resume_count == 1 else "idle"
+                    },
+                }
+            }
+        if method == "thread/goal/get":
+            return {
+                "goal": None if goal_cleared else {
+                    "threadId": "thread-blocked-system-error",
+                    "status": "blocked",
+                },
+            }
+        if method == "thread/read":
+            return {
+                "thread": {
+                    "id": "thread-blocked-system-error",
+                    "status": {"type": "systemError"},
+                    "turns": [],
+                },
+            }
+        if method == "thread/goal/clear":
+            goal_cleared = True
+            return {"cleared": True}
+        if method == "thread/archive":
+            return {}
+        if method == "thread/unarchive":
+            return {"thread": {"id": "thread-blocked-system-error"}}
+        if method == "turn/start":
+            return {"turn": {"id": "turn-after-blocked-clear"}}
+        raise AssertionError(f"unexpected request: {method}")
+
+    server._request = AsyncMock(side_effect=request)
+    process, thread_id = await server.start_turn(
+        prompt="continue without replaying the failed turn",
+        cwd="/tmp",
+        model="gpt-5.6-sol",
+        effort="high",
+        resume_session_id="thread-blocked-system-error",
+        git_env=None,
+        task_id=300,
+    )
+
+    assert thread_id == "thread-blocked-system-error"
+    assert [method for method, _ in calls] == [
+        "thread/resume",
+        "thread/goal/get",
+        "thread/read",
+        "thread/goal/clear",
+        "thread/goal/get",
+        "thread/read",
+        "thread/archive",
+        "thread/unarchive",
+        "thread/resume",
+        "turn/start",
+    ]
+    server._handle_notification("turn/completed", {
+        "threadId": thread_id,
+        "turn": {"id": "turn-after-blocked-clear", "status": "completed"},
+    })
+    assert await process.wait() == 0
+
+
+@pytest.mark.asyncio
+async def test_start_turn_never_clears_blocked_goal_without_system_error_proof():
+    server = CodexAppServer("codex")
+    server._process = SimpleNamespace(pid=4321, returncode=None)
+    server.ensure_started = AsyncMock()
+    calls = []
+
+    async def request(method, params, **_kwargs):
+        calls.append((method, params))
+        if method == "thread/resume":
+            return {
+                "thread": {
+                    "id": "thread-blocked-active",
+                    "status": {"type": "systemError"},
+                }
+            }
+        if method == "thread/goal/get":
+            return {"goal": {
+                "threadId": "thread-blocked-active",
+                "status": "blocked",
+            }}
+        if method == "thread/read":
+            return {
+                "thread": {
+                    "id": "thread-blocked-active",
+                    "status": {"type": "active"},
+                    "turns": [],
+                },
+            }
+        raise AssertionError(f"unexpected request: {method}")
+
+    server._request = AsyncMock(side_effect=request)
+    with pytest.raises(CodexThreadTerminalStateError, match="runtime recycle failed"):
+        await server.start_turn(
+            prompt="must not execute",
+            cwd="/tmp",
+            model="gpt-5.6-sol",
+            effort="high",
+            resume_session_id="thread-blocked-active",
+            git_env=None,
+            task_id=300,
+        )
+
+    assert [method for method, _ in calls] == [
+        "thread/resume",
+        "thread/goal/get",
+        "thread/read",
+    ]
+    assert "thread/goal/clear" not in [method for method, _ in calls]
+    assert "thread/archive" not in [method for method, _ in calls]
+    assert "turn/start" not in [method for method, _ in calls]
+
+
+@pytest.mark.asyncio
+async def test_start_turn_never_clears_blocked_goal_with_different_thread_id():
+    server = CodexAppServer("codex")
+    server._process = SimpleNamespace(pid=4321, returncode=None)
+    server.ensure_started = AsyncMock()
+    calls = []
+
+    async def request(method, params, **_kwargs):
+        calls.append((method, params))
+        if method == "thread/resume":
+            return {
+                "thread": {
+                    "id": "thread-blocked-identity",
+                    "status": {"type": "systemError"},
+                }
+            }
+        if method == "thread/goal/get":
+            return {"goal": {
+                "threadId": "different-thread",
+                "status": "blocked",
+            }}
+        if method == "thread/read":
+            return {
+                "thread": {
+                    "id": "thread-blocked-identity",
+                    "status": {"type": "systemError"},
+                    "turns": [],
+                },
+            }
+        raise AssertionError(f"unexpected request: {method}")
+
+    server._request = AsyncMock(side_effect=request)
+    with pytest.raises(CodexThreadTerminalStateError, match="runtime recycle failed"):
+        await server.start_turn(
+            prompt="must not execute",
+            cwd="/tmp",
+            model="gpt-5.6-sol",
+            effort="high",
+            resume_session_id="thread-blocked-identity",
+            git_env=None,
+            task_id=300,
+        )
+
+    assert [method for method, _ in calls] == [
+        "thread/resume",
+        "thread/goal/get",
+        "thread/read",
+    ]
+    assert "thread/goal/clear" not in [method for method, _ in calls]
+    assert "thread/archive" not in [method for method, _ in calls]
+
+
+@pytest.mark.asyncio
+async def test_start_turn_fails_closed_when_blocked_goal_clear_ack_is_false():
+    server = CodexAppServer("codex")
+    server._process = SimpleNamespace(pid=4321, returncode=None)
+    server.ensure_started = AsyncMock()
+    calls = []
+
+    async def request(method, params, **_kwargs):
+        calls.append((method, params))
+        if method == "thread/resume":
+            return {
+                "thread": {
+                    "id": "thread-blocked-clear-race",
+                    "status": {"type": "systemError"},
+                }
+            }
+        if method == "thread/goal/get":
+            return {"goal": {
+                "threadId": "thread-blocked-clear-race",
+                "status": "blocked",
+            }}
+        if method == "thread/read":
+            return {
+                "thread": {
+                    "id": "thread-blocked-clear-race",
+                    "status": {"type": "systemError"},
+                    "turns": [],
+                },
+            }
+        if method == "thread/goal/clear":
+            return {"cleared": False}
+        raise AssertionError(f"unexpected request: {method}")
+
+    server._request = AsyncMock(side_effect=request)
+    with pytest.raises(CodexThreadTerminalStateError, match="runtime recycle failed"):
+        await server.start_turn(
+            prompt="must not execute",
+            cwd="/tmp",
+            model="gpt-5.6-sol",
+            effort="high",
+            resume_session_id="thread-blocked-clear-race",
+            git_env=None,
+            task_id=300,
+        )
+
+    assert [method for method, _ in calls] == [
+        "thread/resume",
+        "thread/goal/get",
+        "thread/read",
+        "thread/goal/clear",
+    ]
+    assert "thread/archive" not in [method for method, _ in calls]
+    assert "turn/start" not in [method for method, _ in calls]
+
+
+@pytest.mark.asyncio
+async def test_cancelled_blocked_goal_clear_settles_readback_without_replay():
+    server = CodexAppServer("codex")
+    server._process = SimpleNamespace(pid=4321, returncode=None)
+    server.ensure_started = AsyncMock()
+    calls = []
+    goal_cleared = False
+    clear_started = asyncio.Event()
+    release_clear = asyncio.Event()
+
+    async def request(method, params, **_kwargs):
+        nonlocal goal_cleared
+        calls.append((method, params))
+        if method == "thread/resume":
+            return {
+                "thread": {
+                    "id": "thread-blocked-clear-cancelled",
+                    "status": {"type": "systemError"},
+                }
+            }
+        if method == "thread/goal/get":
+            return {
+                "goal": None if goal_cleared else {
+                    "threadId": "thread-blocked-clear-cancelled",
+                    "status": "blocked",
+                },
+            }
+        if method == "thread/read":
+            return {
+                "thread": {
+                    "id": "thread-blocked-clear-cancelled",
+                    "status": {"type": "systemError"},
+                    "turns": [],
+                },
+            }
+        if method == "thread/goal/clear":
+            clear_started.set()
+            await release_clear.wait()
+            goal_cleared = True
+            return {"cleared": True}
+        raise AssertionError(f"unexpected request: {method}")
+
+    server._request = AsyncMock(side_effect=request)
+    launch = asyncio.create_task(server.start_turn(
+        prompt="must not execute after caller cancellation",
+        cwd="/tmp",
+        model="gpt-5.6-sol",
+        effort="high",
+        resume_session_id="thread-blocked-clear-cancelled",
+        git_env=None,
+        task_id=300,
+    ))
+    await clear_started.wait()
+    launch.cancel()
+    release_clear.set()
+
+    with pytest.raises(asyncio.CancelledError):
+        await launch
+
+    assert [method for method, _ in calls] == [
+        "thread/resume",
+        "thread/goal/get",
+        "thread/read",
+        "thread/goal/clear",
+        "thread/goal/get",
+        "thread/read",
+    ]
+    assert "thread/archive" not in [method for method, _ in calls]
+    assert "turn/start" not in [method for method, _ in calls]
+
+
+@pytest.mark.asyncio
 async def test_start_turn_stops_after_one_persistent_system_error_recycle():
     server = CodexAppServer("codex")
     server._process = SimpleNamespace(pid=4321, returncode=None)
@@ -5864,6 +6174,7 @@ async def test_fast_turn_uses_actual_priority_proof_when_thread_omits_tier():
     proxy.set_thread_tier.assert_called_once_with(
         "thread-fast-proof",
         "priority",
+        model="gpt-5.6-sol",
     )
     proxy.wait_for_request_acceptance.assert_awaited_once_with(
         "thread-fast-proof",
@@ -5933,6 +6244,7 @@ async def test_standard_turn_fences_request_without_requiring_actual_field():
     proxy.set_thread_tier.assert_called_once_with(
         "thread-standard-proof",
         "default",
+        model="gpt-5.6-sol",
     )
     proxy.wait_for_request_acceptance.assert_not_awaited()
 
