@@ -1150,3 +1150,11 @@ ocean/forest/rose 归入 Legacy 组。Header 顶栏导航重构为 AppShell（�
 - **解决**：吸收 Apex 双协议模型探测与私有运行目录投影，并补入 legacy migration 全量预检；旧 Codex-only endpoint 只有在现有 Claude/Codex 文件都安全时才原子收敛。保留本地 exact Apex 409 分类、一次性 provider-boundary permit、指数退避无限重试和 API-first/手动 preferred 路由。
 - **避免复发**：账号协议扩展必须同时验证模型目录、两类号池投影、旧运行目录迁移和删除占用扫描；迁移必须在第一次写入前验证所有既有受管文件，capacity 修复不得因账号类型扩展而放宽到非 Apex home。
 - **验证**：Apex/账号池定向矩阵 355 passed，capacity 高风险矩阵 125 passed，前端账号池 49 passed，TypeScript 通过。后端全量在既有 migration/isolation/API 测试失败和一个无超时长等待后于 44% 中止，已完成 `3028 passed, 3 skipped, 19 failed`；失败项均不涉及本次 Apex 文件，且其中 migration trigger/isolation 分歧已在本地基线记录。实现提交 `1e86f8ed`、`de1f9994`。
+
+## 2026-08-19 — GPT-5.6 continuation 字段与 blocked Goal 安全恢复
+
+- **问题**：Codex 0.147 的 GPT-5.6 continuation 可能省略 `model`，旧代理因此无法判断应删除上游不支持的 `prompt_cache_retention`；同一失败 turn 留下的 `systemError + goal:blocked` 又阻止 thread runtime recycle，Task 69 无法继续。
+- **解决**：actual-tier proxy 现在把 root 的冻结模型与 tier 一起登记，缺模型的 root/child 请求只按 exact lineage 继承；仅 canonical/provider-namespaced GPT-5.6 删除旧缓存字段，GPT-5.5 保持原样，活跃 lineage 禁止切换模型。终态恢复只在 exact reservation 内，以完整 `thread/read(includeTurns=true)`、Goal thread identity 和无 active turn 证明同一 `systemError` 后清理 blocked Goal；必须收到 `cleared=true` 并复读 Goal 已空、thread 仍为终态，才允许一次 archive/unarchive。取消竞态只结算 mutation/readback，随后传播取消，绝不发送 `turn/start`。
+- **避免复发**：请求兼容字段不能只依赖每次 wire body 自报模型，必须保存 root 的不可变 admission 配置并按 exact child lineage 解析；任何持久 Goal mutation 都要有 ACK 与 readback，状态、identity、取消或活跃 writer 漂移时 fail closed，不能用自动重放兜底。
+- **验证**：proxy + app-server 完整定向套件在空 `CODEX_HOME` 下 `356 passed, 3 skipped`；新增模型继承、跨 root 防串线、Goal identity/ACK/取消竞态用例通过。Python compile、TypeScript `tsc --noEmit` 和 `git diff --check` 通过。后端全量曾运行到约 44% 后因既有 migration/API 等 17 个失败及长等待人工中止，已完成 `3047 passed, 3 skipped`，未宣称全量绿灯。
+- **提交**：`de32aed8`。
