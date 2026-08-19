@@ -4,6 +4,12 @@
 
 ## 已完成功能
 
+### Codex GPT-5.6 缓存兼容与终态子线程安全回收（2026-08-19）
+
+- GPT-5.6 root/native sub-agent 的 Responses 出站请求不再携带会被模型拒绝的旧 `prompt_cache_retention`；修复只作用于 exact GPT-5.6 family，保留已有 `prompt_cache_options`，GPT-5.5 及更早请求保持原样（`828cfcb9`）。
+- `systemError` runtime recycle 现在先读取完整持久 turns，从 exact root 可达的 `subAgentActivity`/`collabAgentToolCall` 重建 descendant 树；每个 descendant 都重新检查 Goal 与 thread 状态，只有已证明 `idle/systemError` 的 writer 才按 deepest-first unsubscribe。active/paused/未知状态、缺失 turns、非法 identity 和无关 sender 均在 parent archive 前 fail closed，不自动重放原消息（`828cfcb9`）。
+- 隔离 resume 在同一 registry reservation 内复用完整 Goal + turns 证明，避免重复 RPC；普通终态恢复仍独立复验。定向回归 `347 passed, 3 skipped`；完整后端尝试运行到 `316 passed` 后因两项既有 Alembic SQLite downgrade trigger 失败而停止，这两项不涉及本次修改文件（`828cfcb9`）。
+
 ### 本地上游功能整合与 Codex 账号池在线策略（2026-08-17）
 
 - 先将 Claude host-style 启动、宿主 `PATH`/`rg`、共享 Codex transport 精确停止等未提交修复固化为 `d6e59d6c`；随后引入长 PTY 超时、timeout 终态保真、后台生命周期展示、`process_exit` 状态校正、时区时间戳和关闭自动更新提示（`92f9a776`、`e607e4d0`、`3adf6214`、`06a1550b`、`454b8c96`、`af1a6811`）。
