@@ -1158,3 +1158,11 @@ ocean/forest/rose 归入 Legacy 组。Header 顶栏导航重构为 AppShell（�
 - **避免复发**：请求兼容字段不能只依赖每次 wire body 自报模型，必须保存 root 的不可变 admission 配置并按 exact child lineage 解析；任何持久 Goal mutation 都要有 ACK 与 readback，状态、identity、取消或活跃 writer 漂移时 fail closed，不能用自动重放兜底。
 - **验证**：proxy + app-server 完整定向套件在空 `CODEX_HOME` 下 `356 passed, 3 skipped`；新增模型继承、跨 root 防串线、Goal identity/ACK/取消竞态用例通过。Python compile、TypeScript `tsc --noEmit` 和 `git diff --check` 通过。后端全量曾运行到约 44% 后因既有 migration/API 等 17 个失败及长等待人工中止，已完成 `3047 passed, 3 skipped`，未宣称全量绿灯。
 - **提交**：`de32aed8`。
+
+## 2026-08-20 — Task 93 Codex 子线程伪循环恢复
+
+- **问题**：Task 93 的一个已有回合在模型输出和工具执行后收到上游 `429`，安全策略没有重放该回合；下一条新消息恢复 `systemError` thread 时，从持久协作 items 重建子线程图，把 child→root 的 `sendInput` 通信 receiver 错当成 child ownership，和既有 root→child 层级组成伪循环，导致在 `turn/start` 前 fail closed。
+- **解决**：live 与 persisted collaboration 解析现在区分 spawn 层级边和 send/resume/close 通信目标；child 向 root 回传不再污染 descendant graph 或生命周期 metadata。旧版缺 `tool` 的记录只接受首次可达边，避免历史通信反向闭环；显式 `spawnAgent` 的真实环仍保持 fail closed。恢复仍逐个证明 descendant Goal/状态并 deepest-first unsubscribe，未放宽自动重放边界。
+- **避免复发**：协作协议里的 sender/receiver 是消息流向，不等于线程所有权；只有 spawn/sub-agent activity 能建立 hierarchy。修复恢复逻辑时必须同时覆盖合法 child→root 回传和恶意/损坏的显式 spawn cycle，不能为了通过旧 session 而忽略所有环。
+- **验证**：`backend/tests/test_codex_app_server.py` 全文件在空 `CODEX_HOME` 下 `317 passed, 3 skipped`；Python compile、TypeScript `tsc --noEmit` 与 `git diff --check` 通过。未自动重放 Task 93 的旧消息。
+- **提交**：`62ef7c58`。
