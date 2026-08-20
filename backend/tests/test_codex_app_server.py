@@ -7196,6 +7196,110 @@ async def test_recycle_thread_runtime_ignores_unreachable_persisted_relations():
 
 
 @pytest.mark.asyncio
+async def test_recycle_thread_runtime_ignores_child_message_back_to_root():
+    """A sendInput receiver is a message target, not a child graph edge."""
+
+    server = CodexAppServer("codex")
+    server.ensure_started = AsyncMock()
+    calls = []
+
+    async def request(method, params, **_kwargs):
+        calls.append((method, params))
+        if method == "thread/goal/get":
+            return {"goal": None}
+        if method == "thread/read":
+            if params["threadId"] == "thread-parent":
+                return {
+                    "thread": {
+                        "id": "thread-parent",
+                        "status": {"type": "systemError"},
+                        "turns": [{
+                            "items": [
+                                {
+                                    "type": "subAgentActivity",
+                                    "agentThreadId": "thread-child",
+                                },
+                                {
+                                    "type": "collabAgentToolCall",
+                                    "tool": "sendInput",
+                                    "senderThreadId": "thread-child",
+                                    "receiverThreadIds": ["thread-parent"],
+                                },
+                            ],
+                        }],
+                    },
+                }
+            return {
+                "thread": {
+                    "id": params["threadId"],
+                    "status": {"type": "idle"},
+                },
+            }
+        if method == "thread/unsubscribe":
+            return {"status": "unsubscribed"}
+        if method == "thread/archive":
+            return {}
+        if method == "thread/unarchive":
+            return {"thread": {"id": "thread-parent"}}
+        raise AssertionError(method)
+
+    server._request = AsyncMock(side_effect=request)
+    await server.recycle_thread_runtime("thread-parent")
+
+    assert server._children_by_thread == {
+        "thread-parent": {"thread-child"},
+    }
+    assert calls[-3:] == [
+        ("thread/unsubscribe", {"threadId": "thread-child"}),
+        ("thread/archive", {"threadId": "thread-parent"}),
+        ("thread/unarchive", {"threadId": "thread-parent"}),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_recycle_thread_runtime_rejects_explicit_spawn_cycle():
+    server = CodexAppServer("codex")
+    server.ensure_started = AsyncMock()
+    calls = []
+
+    async def request(method, params, **_kwargs):
+        calls.append((method, params))
+        if method == "thread/goal/get":
+            return {"goal": None}
+        if method == "thread/read":
+            return {
+                "thread": {
+                    "id": "thread-parent",
+                    "status": {"type": "systemError"},
+                    "turns": [{
+                        "items": [
+                            {
+                                "type": "subAgentActivity",
+                                "agentThreadId": "thread-child",
+                            },
+                            {
+                                "type": "collabAgentToolCall",
+                                "tool": "spawnAgent",
+                                "senderThreadId": "thread-child",
+                                "receiverThreadIds": ["thread-parent"],
+                            },
+                        ],
+                    }],
+                },
+            }
+        raise AssertionError(method)
+
+    server._request = AsyncMock(side_effect=request)
+    with pytest.raises(CodexAppServerError, match="graph contains a cycle"):
+        await server.recycle_thread_runtime("thread-parent")
+
+    assert not any(
+        method in {"thread/unsubscribe", "thread/archive", "thread/unarchive"}
+        for method, _ in calls
+    )
+
+
+@pytest.mark.asyncio
 async def test_recycle_thread_runtime_rejects_active_descendant_before_archive():
     server = CodexAppServer("codex")
     server.ensure_started = AsyncMock()
@@ -9317,6 +9421,17 @@ async def test_collab_agent_notifications_are_tool_items_not_terminal_noise():
             "turnId": "turn-1",
             "item": metadata_item,
         })
+    context = server._contexts_by_thread["thread-1"]
+    server._track_collaboration_item(context, "child-1", {
+        "type": "collabAgentToolCall",
+        "tool": "sendInput",
+        "status": "completed",
+        "senderThreadId": "child-1",
+        "receiverThreadIds": ["thread-1"],
+    })
+    assert server._children_by_thread == {"thread-1": {"child-1"}}
+    assert "thread-1" not in context.descendant_parent_thread_ids
+    assert "thread-1" not in context.descendant_lifecycle_details
     server._handle_notification("turn/completed", {
         "threadId": "thread-1",
         "turn": {"id": "turn-1", "status": "completed", "error": None},

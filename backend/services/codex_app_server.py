@@ -3478,9 +3478,39 @@ class CodexAppServer:
             "notFound",
             "not_found",
         }
+        # Collaboration tool calls have two different relationships.  A
+        # spawn creates a persistent child-thread edge; send/resume/close
+        # calls only deliver input to an already-known thread.  Treating the
+        # latter's receiver as a child makes the normal child -> root
+        # response path look like a graph cycle during runtime recovery.
+        creation_tools = {"spawnAgent", "spawn_agent"}
+        communication_tools = {
+            "sendInput",
+            "send_input",
+            "sendMessage",
+            "send_message",
+            "resumeAgent",
+            "resume_agent",
+            "closeAgent",
+            "close_agent",
+        }
         for raw_child_id in receiver_ids:
             child_id = str(raw_child_id)
-            self._record_child_relation(sender_id, child_id)
+            is_creation_edge = (
+                tool in creation_tools
+                or (not tool and sender_id == event_thread_id)
+            )
+            if child_id == context.thread_id and not is_creation_edge:
+                # A descendant reporting back to the root is collaboration
+                # traffic for the current adapter, not a descendant whose
+                # lifecycle or parent metadata should be rewritten.
+                continue
+            if (
+                is_creation_edge
+                and child_id != sender_id
+                and child_id != context.thread_id
+            ):
+                self._record_child_relation(sender_id, child_id)
             state = agent_states.get(child_id)
             agent_status = (
                 str(state.get("status") or "")
@@ -3511,7 +3541,7 @@ class CodexAppServer:
                 active = False
                 terminal_status = "cancelled"
             elif (
-                tool in {"spawnAgent", "sendInput", "resumeAgent"}
+                tool in creation_tools | communication_tools
                 and call_status != "failed"
             ):
                 active = True
@@ -7713,7 +7743,7 @@ class CodexAppServer:
                 f"recycle: {root_thread_id}"
             )
 
-        candidates: list[tuple[str, str]] = []
+        candidates: list[tuple[str, str, bool]] = []
         for turn in turns:
             if not isinstance(turn, dict):
                 continue
@@ -7736,6 +7766,7 @@ class CodexAppServer:
                             child_id,
                             field="child thread id",
                         ),
+                        True,
                     ))
                     continue
                 if item_type != "collabagenttoolcall":
@@ -7747,6 +7778,7 @@ class CodexAppServer:
                     parent_id,
                     field="parent thread id",
                 )
+                tool = str(item.get("tool") or "")
                 receiver_ids = (
                     item.get("receiverThreadIds")
                     if "receiverThreadIds" in item
@@ -7757,13 +7789,28 @@ class CodexAppServer:
                         "Persisted collaboration item has invalid receivers "
                         f"before runtime recycle: {root_thread_id}"
                     )
+                # Only spawn calls establish hierarchy.  sendInput,
+                # resumeAgent and closeAgent point at communication targets;
+                # a child legitimately sending to the root must not create a
+                # reverse root edge.  Keep accepting old tool-less root items
+                # because earlier Codex versions omitted the operation name.
+                if tool and tool not in {"spawnAgent", "spawn_agent"}:
+                    continue
                 for child_id in receiver_ids:
+                    child_id = _require_native_thread_id(
+                        child_id,
+                        field="child thread id",
+                    )
+                    explicit_hierarchy = tool in {
+                        "spawnAgent",
+                        "spawn_agent",
+                    }
+                    if child_id == root_thread_id and not explicit_hierarchy:
+                        continue
                     candidates.append((
                         parent_id,
-                        _require_native_thread_id(
-                            child_id,
-                            field="child thread id",
-                        ),
+                        child_id,
+                        explicit_hierarchy,
                     ))
 
         # Accept only edges reachable from this exact root.  A malformed or
@@ -7772,11 +7819,23 @@ class CodexAppServer:
         reachable = {root_thread_id}
         pending = list(candidates)
         while pending:
-            remaining: list[tuple[str, str]] = []
+            remaining: list[tuple[str, str, bool]] = []
             progressed = False
-            for parent_id, child_id in pending:
+            for parent_id, child_id, explicit_hierarchy in pending:
                 if parent_id not in reachable:
-                    remaining.append((parent_id, child_id))
+                    remaining.append((
+                        parent_id,
+                        child_id,
+                        explicit_hierarchy,
+                    ))
+                    continue
+                # A child already reachable from this root is not a new
+                # ownership edge.  Historical tool-less communication items
+                # may point from a descendant back to an ancestor; accepting
+                # that message direction as hierarchy would manufacture a
+                # cycle.  Shared descendants also need only one proven path
+                # for deepest-first unsubscribe.
+                if child_id in reachable and not explicit_hierarchy:
                     continue
                 self._record_child_relation(parent_id, child_id)
                 if child_id not in reachable:
