@@ -1173,3 +1173,10 @@ ocean/forest/rose 归入 Legacy 组。Header 顶栏导航重构为 AppShell（�
 - **解决**：从上游 `b5dcfd56` 专项回移 unrestricted Claude permission profile：direct/PTY 共用逐 Task 私有 settings、完整内置工具和 CCM MCP allow rules；设置与 MCP scope 由 exact direct process 或热 PTY Session 持有，只有原生进程死亡且 pool/owner 已释放后才回收。PTY stop、替换、取消和 shutdown 路径均保留 fail-closed 身份证明。
 - **避免复发**：关闭文件/网络隔离不等于可以省略权限 profile；`CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` 与显式 allow rules 必须同时保留。真实冒烟至少覆盖中文响应、Bash、`rg`、续聊和最终 PID 回收；不能只用 API 首 token 判断 Claude 可用。
 - **验证**：新增/专项回归 `44 + 16 + 18` 项通过，Dispatcher/Main/隔离组合 `446 passed`；完整 InstanceManager 在生产环境变量下为 `469 passed, 19 failed`，相比原分支基线 `453 passed, 20 failed` 无新增失败并修复管理员 Claude 权限用例。代码提交 `96083970`。
+
+## 2026-08-24 — Monitor 显式复用本机 OpenSSH 配置
+
+- **问题**：CCM Monitor 固定关闭直接网络并保护 `~/.ssh`，同时没有挂载 SSH broker；即使父 Task 能按现有 `~/.ssh/config` 使用系统 `ssh`，Monitor 也无法观察远端日志、进程或容器状态。
+- **解决**：为 `create_monitor` 新增默认关闭的 `direct_ssh`。只有本地、非 Shared、非 Worker 管理的 unrestricted `admin/super_admin` 回合可以显式开启；创建时冻结发起主体，并在 claim、provider admission 和最终启动边界复验账号仍 active、角色未变化。Claude/Codex 只读投影同 owner、非 symlink 且不可被 group/other 写入的现有 `~/.ssh`，清除 SSH agent/askpass 与 Manager/provider 凭据，保留系统 `ssh` 直连网络，同时禁止本机 SSH 文件和 workspace 写入。
+- **安全边界**：该路径不依赖 CCM SSH MCP。CCM 沙箱只能强制本机配置与密钥只读，不能强制远端 shell 只读；因此 UI、prompt 和文档均把能力限定为日志、进程、容器与文件元数据等观察操作，默认 Monitor 权限保持不变，主体降权、停用或 Task 迁移后 fail closed。
+- **验证**：direct SSH/API/MCP/Dispatcher/Codex/Claude/隔离专项矩阵 `581 passed, 3 skipped`；MonitorPanel `8 passed`，TypeScript `tsc --noEmit` 通过；Alembic 唯一 head `b18d4f6a2c90`，临时 SQLite `upgrade → downgrade → upgrade` 往返通过。后端全量为 `6725 passed, 4 skipped, 111 failed`，失败集中在仓库既有的历史 migration downgrade、生产 isolation 配置差异、update/systemd、Worker 与时间竞态测试，direct SSH 新增用例均通过。实现提交 `f1bb1920`。
