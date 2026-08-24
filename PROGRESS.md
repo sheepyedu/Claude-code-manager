@@ -1166,3 +1166,10 @@ ocean/forest/rose 归入 Legacy 组。Header 顶栏导航重构为 AppShell（�
 - **避免复发**：协作协议里的 sender/receiver 是消息流向，不等于线程所有权；只有 spawn/sub-agent activity 能建立 hierarchy。修复恢复逻辑时必须同时覆盖合法 child→root 回传和恶意/损坏的显式 spawn cycle，不能为了通过旧 session 而忽略所有环。
 - **验证**：`backend/tests/test_codex_app_server.py` 全文件在空 `CODEX_HOME` 下 `317 passed, 3 skipped`；Python compile、TypeScript `tsc --noEmit` 与 `git diff --check` 通过。未自动重放 Task 93 的旧消息。
 - **提交**：`62ef7c58`。
+
+## 2026-08-24 — Claude PTY 隐藏权限等待修复
+
+- **问题**：只读冒烟 Task 106 能正常调用 Claude API 并输出中文，但 `pwd`、`rg --version` 等 Bash 工具全部立即失败，原生 session 状态停在 `waitingFor: permission prompt`。线上已关闭 Task isolation，Claude 2.1.168 在 PTY 子进程环境清洗后仍可能把 effective permission mode 回退为 `default`，单独传 `--dangerously-skip-permissions` 不能阻止无界面的权限等待。
+- **解决**：从上游 `b5dcfd56` 专项回移 unrestricted Claude permission profile：direct/PTY 共用逐 Task 私有 settings、完整内置工具和 CCM MCP allow rules；设置与 MCP scope 由 exact direct process 或热 PTY Session 持有，只有原生进程死亡且 pool/owner 已释放后才回收。PTY stop、替换、取消和 shutdown 路径均保留 fail-closed 身份证明。
+- **避免复发**：关闭文件/网络隔离不等于可以省略权限 profile；`CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` 与显式 allow rules 必须同时保留。真实冒烟至少覆盖中文响应、Bash、`rg`、续聊和最终 PID 回收；不能只用 API 首 token 判断 Claude 可用。
+- **验证**：新增/专项回归 `44 + 16 + 18` 项通过，Dispatcher/Main/隔离组合 `446 passed`；完整 InstanceManager 在生产环境变量下为 `469 passed, 19 failed`，相比原分支基线 `453 passed, 20 failed` 无新增失败并修复管理员 Claude 权限用例。代码提交 `96083970`。
