@@ -538,6 +538,10 @@ Codex Fast 人工 smoke 使用隔离账号且会消耗额度：同一支持模�
 |------|---------|
 | `test_build_monitor_prompt` | prompt 构建包含描述和上下文 |
 | `test_build_monitor_prompt_no_context` | 无上下文时 prompt 正常 |
+| `test_build_monitor_agent_prompt_explains_direct_ssh_boundary` | direct SSH prompt 明示读取现有 config、只做远端观察且不改本机 SSH 状态 |
+| `test_claude_monitor_direct_ssh_launch_projects_read_only_ssh` | Claude Monitor 只读投影 `~/.ssh`、保留其他 Manager secret deny 并开放系统 SSH 网络 |
+| `test_codex_monitor_direct_ssh_launch_uses_read_only_network_profile` | Codex Monitor 以 read-only profile、显式 network 与 `~/.ssh` read override 启动 |
+| `test_direct_ssh_monitor_does_not_launch_after_admin_demotion` | 创建管理员被降权后，下一轮 claim 在任何 provider effect 前终止 |
 | `test_start_monitor_session` | 启动 monitor session 创建 asyncio task |
 | `test_lifecycle_max_checks_reached` | max_checks 耗尽 → completed |
 | `test_lifecycle_task_ended` | task 结束 → monitor 联动结束 |
@@ -911,6 +915,7 @@ Monitor 的调度、generation 栅栏和失败恢复已有聚焦自动化测试�
 | shutdown / stop / cleanup recovery cases | 正常关机只 interrupt turn 并保留 thread；用户终止在 DB 终态后删除；无法证明 turn 终止则保留 handle 并 fail closed；冷启动重试 terminal cleanup；claim 阶段的 provider 漂移或失效冻结配置也立即清理 |
 | account/task deletion fence cases | 新 Monitor 可从已失效父账号换到可用账号，已有 thread 绝不自动换号；持久或 in-flight owner 阻止原生/API Codex 账号删除，且 home maintenance 后再次核对关闭 precheck 竞态；cleanup evidence 和未提交 handle 阻止父 Task 被删除 |
 | `test_monitor_profile_is_read_only_and_disables_autonomous_features` | thread 与 turn 都为 read-only，network 关闭，multi-agent/fanout/memory/remote compaction 关闭，owner hook 先于 `turn/start` |
+| `test_monitor_direct_ssh_uses_read_only_raw_network_profile` / `test_monitor_direct_ssh_rejects_workspace_write` | direct SSH 仅允许 read-only Codex sandbox；`~/.ssh` 可读、workspace 只读、scratch 是唯一写路径，turn 重复声明网络开启且 managed proxy 关闭 |
 | `test_mcp_config.py` | required Monitor callback MCP 复用后端当前 Python 解释器且命令真实存在，兼容 Linux venv、Docker system Python 与 Windows `Scripts/python.exe` |
 | PR7B1 merge-time capability 回归（历史）/ `MonitorPanel.test.tsx` | PR7B1 未提前开放公开入口；已有内部 Codex Monitor 可从面板精确 Stop，终态 thread 删除失败会显示 durable error 并保留“Retry Codex cleanup”入口 |
 
@@ -938,6 +943,7 @@ Codex Monitor 只在以下条件同时满足时开放：主 MCP 开关有效、�
 4. 再创建一个较长间隔 Monitor，在 active turn 或 sleeping schedule 时点 Stop；状态必须停止且不再新增 check，共享 app-server 不应被终止。
 5. 若有 Worker Project，切换到该 Project 后 Monitor 应立即隐藏；直接构造 Worker/Shared `$monitor` 请求应在任何消息或 Monitor 行落库前返回 400。
 6. 可选恢复测试：让 Monitor 完成第一次 check 后进入 sleeping schedule，重启 CCM；下一次到期应复用持久化 Codex thread/history 并继续检查。
+7. direct SSH 测试：由 unrestricted 管理员明确要求主 Agent 调用 `create_monitor(..., direct_ssh=true)`，使用 `~/.ssh/config` 中只指向测试机的别名读取 `hostname`、`ps` 或日志；面板应显示 amber `direct SSH` 标记。确认本机 config/key/known_hosts mtime 不变，再将发起用户降权或停用，下一轮必须失败且不产生新 SSH 连接。不得在此步骤执行远端写入、signal、service restart 或容器变更。
 
 聚焦回归命令：
 
@@ -946,6 +952,9 @@ python -m pytest \
   backend/tests/test_monitor_models.py \
   backend/tests/test_api_monitor.py \
   backend/tests/test_monitor_dispatcher.py \
+  backend/tests/test_monitor_direct_ssh.py \
+  backend/tests/test_task_agent_isolation.py \
+  backend/tests/test_codex_app_server.py \
   backend/tests/test_mcp_config.py \
   backend/tests/test_stale_state_cleanup.py
 ```

@@ -8,6 +8,7 @@ class MonitorSessionCreate(BaseModel):
     interval: int = 120
     max_checks: int = 50
     model: str | None = None
+    direct_ssh: bool = False
 
     @field_validator("interval")
     @classmethod
@@ -35,6 +36,7 @@ class MonitorSessionResponse(BaseModel):
     max_checks: int
     model: str | None
     provider: str
+    direct_ssh: bool = False
     status: str
     checks_done: int
     last_summary: str | None

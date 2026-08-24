@@ -1326,6 +1326,7 @@ export interface MonitorSession {
   max_checks: number;
   model: string | null;
   provider: string;
+  direct_ssh?: boolean;
   status: string;
   checks_done: number;
   last_summary: string | null;

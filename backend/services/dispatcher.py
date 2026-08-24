@@ -15903,6 +15903,26 @@ Do NOT create a new PR. Push fixes to the existing branch."""
                     ms.last_error = "Monitor provider no longer matches its parent task"
                     await db.commit()
                     return None
+                from backend.services.monitor_direct_ssh import (
+                    MonitorDirectSSHError,
+                    revalidate_monitor_direct_ssh,
+                )
+
+                try:
+                    direct_ssh = await revalidate_monitor_direct_ssh(
+                        db,
+                        task=task,
+                        monitor_session=ms,
+                    )
+                except MonitorDirectSSHError as exc:
+                    ms.status = "failed"
+                    ms.completed_at = datetime.utcnow()
+                    ms.next_check_at = None
+                    ms.active_turn_generation = None
+                    ms.turn_started_at = None
+                    ms.last_error = str(exc)
+                    await db.commit()
+                    return None
                 task_cwd = task.last_cwd or task.target_repo or os.getcwd()
                 codex_model: str | None = None
                 codex_effort: str | None = None
@@ -15981,6 +16001,10 @@ Do NOT create a new PR. Push fixes to the existing branch."""
                     "task_incarnation_id": task.incarnation_id,
                     "generation": ms.active_turn_generation,
                     "provider": monitor_provider,
+                    "direct_ssh": direct_ssh,
+                    "initiating_user_id": ms.initiating_user_id,
+                    "initiating_user_role": ms.initiating_user_role,
+                    "execution_mode": ms.execution_mode,
                     "description": ms.description,
                     "context": ms.monitor_context,
                     "interval": ms.interval,
@@ -16215,7 +16239,7 @@ Do NOT create a new PR. Push fixes to the existing branch."""
                 *,
                 thread_id: str | None,
                 home: str | None,
-            ) -> tuple[tuple[str, ...], int, int]:
+            ) -> tuple[tuple[str, ...], tuple[str, ...], bool, int, int]:
                 """Lock Task -> Monitor for one exact launch generation."""
 
                 task_guard = await db.execute(
@@ -16270,6 +16294,11 @@ Do NOT create a new PR. Push fixes to the existing branch."""
                     task_id,
                     populate_existing=True,
                 )
+                current_monitor = await db.get(
+                    MonitorSession,
+                    monitor_session_id,
+                    populate_existing=True,
+                )
                 active_termination = (
                     await active_worker_task_termination_receipt(db, task_id)
                 )
@@ -16277,6 +16306,7 @@ Do NOT create a new PR. Push fixes to the existing branch."""
                     task_guard.rowcount != 1
                     or monitor_guard.rowcount != 1
                     or current_task is None
+                    or current_monitor is None
                     or has_pending_worker_routing(current_task)
                 ):
                     await db.rollback()
@@ -16293,6 +16323,20 @@ Do NOT create a new PR. Push fixes to the existing branch."""
                 from backend.services.task_ssh_access import (
                     task_ssh_protected_paths,
                 )
+                from backend.services.monitor_direct_ssh import (
+                    direct_ssh_filesystem_projection,
+                    revalidate_monitor_direct_ssh,
+                )
+
+                direct_ssh = await revalidate_monitor_direct_ssh(
+                    db,
+                    task=current_task,
+                    monitor_session=current_monitor,
+                )
+                if direct_ssh != bool(snapshot.get("direct_ssh", False)):
+                    raise RuntimeError(
+                        "Codex Monitor direct SSH policy changed before launch"
+                    )
 
                 protected_paths = await task_ssh_protected_paths(
                     db,
@@ -16301,8 +16345,15 @@ Do NOT create a new PR. Push fixes to the existing branch."""
                     extra_paths=(admitted_home,),
                     include_direct_git_credentials=True,
                 )
+                direct_ssh_read_paths: tuple[str, ...] = ()
+                if direct_ssh:
+                    protected_paths, direct_ssh_read_paths = (
+                        direct_ssh_filesystem_projection(protected_paths)
+                    )
                 return (
                     protected_paths,
+                    direct_ssh_read_paths,
+                    direct_ssh,
                     int(current_task.retry_count),
                     int(current_task.turn_generation),
                 )
@@ -16312,6 +16363,8 @@ Do NOT create a new PR. Push fixes to the existing branch."""
                 async with self.db_factory() as db:
                     (
                         protected_paths,
+                        direct_ssh_read_paths,
+                        direct_ssh,
                         task_retry_count,
                         task_turn_generation,
                     ) = await guard_current_generation(
@@ -16455,6 +16508,14 @@ Do NOT create a new PR. Push fixes to the existing branch."""
                                 "Codex Monitor turn reached admission without a "
                                 "durable exact owner"
                             )
+                        # start_turn performs fallible runtime and inventory
+                        # preflight after the first DB snapshot. Revalidate the
+                        # frozen administrator immediately before turn/start.
+                        await guard_current_generation(
+                            db,
+                            thread_id=thread_id,
+                            home=admitted_home,
+                        )
                         process = prepared_process
                         handle.process = prepared_process
 
@@ -16483,14 +16544,14 @@ Do NOT create a new PR. Push fixes to the existing branch."""
                         sandbox_mode="read-only",
                         disable_autonomous_features=True,
                         task_ssh_protected_paths=protected_paths,
+                        task_ssh_allowed_read_paths=direct_ssh_read_paths,
                         task_git_read_paths=task_git_read_paths,
                         task_git_boundary_fingerprint=(
                             task_git_boundary_fingerprint
                         ),
                         task_private_tmpdir=task_private_tmpdir,
-                        # Monitor is always a read-only observer and never
-                        # receives outbound network authority from its parent.
-                        task_ssh_disable_network=True,
+                        task_ssh_disable_network=not direct_ssh,
+                        task_direct_ssh=direct_ssh,
                         on_thread_started=bind_started_thread,
                         on_turn_prepared=publish_prepared_turn,
                     )
@@ -16679,6 +16740,7 @@ Do NOT create a new PR. Push fixes to the existing branch."""
             description=str(snapshot["description"]),
             context=(None if snapshot["context"] is None else str(snapshot["context"])),
             interval=int(snapshot["interval"]),
+            direct_ssh=bool(snapshot.get("direct_ssh", False)),
         )
         if provider == "codex":
             return await self._launch_codex_monitor_turn(
@@ -16751,6 +16813,11 @@ Do NOT create a new PR. Push fixes to the existing branch."""
                     task_id,
                     populate_existing=True,
                 )
+                current_monitor = await db.get(
+                    MonitorSession,
+                    monitor_session_id,
+                    populate_existing=True,
+                )
                 active_termination = (
                     await active_worker_task_termination_receipt(db, task_id)
                 )
@@ -16758,6 +16825,7 @@ Do NOT create a new PR. Push fixes to the existing branch."""
                     task_guard.rowcount != 1
                     or monitor_guard.rowcount != 1
                     or current_task is None
+                    or current_monitor is None
                     or has_pending_worker_routing(current_task)
                 ):
                     await db.rollback()
@@ -16769,6 +16837,19 @@ Do NOT create a new PR. Push fixes to the existing branch."""
                     raise RuntimeError(
                         "Claude Monitor launch admission changed or Task "
                         "routing synchronization is pending"
+                    )
+                from backend.services.monitor_direct_ssh import (
+                    revalidate_monitor_direct_ssh,
+                )
+
+                direct_ssh = await revalidate_monitor_direct_ssh(
+                    db,
+                    task=current_task,
+                    monitor_session=current_monitor,
+                )
+                if direct_ssh != bool(snapshot.get("direct_ssh", False)):
+                    raise RuntimeError(
+                        "Claude Monitor direct SSH policy changed before launch"
                     )
                 await db.commit()
 
@@ -16785,6 +16866,7 @@ Do NOT create a new PR. Push fixes to the existing branch."""
                 turn_generation=generation,
                 mcp_config_path=mcp_config_path,
                 interval_seconds=int(snapshot["interval"]),
+                direct_ssh=bool(snapshot.get("direct_ssh", False)),
             )
         handle = _MonitorTurnHandle(
             session_id=monitor_session_id,
@@ -17110,6 +17192,7 @@ Do NOT create a new PR. Push fixes to the existing branch."""
         turn_generation: int,
         mcp_config_path: Path,
         interval_seconds: int = 300,
+        direct_ssh: bool = False,
     ) -> asyncio.subprocess.Process:
         """Launch one short-lived Claude Monitor check turn.
 
@@ -17175,14 +17258,39 @@ Do NOT create a new PR. Push fixes to the existing branch."""
             task_ssh_protected_paths,
             task_ssh_runtime_policy,
         )
+        from backend.models.monitor_session import MonitorSession
+        from backend.services.monitor_direct_ssh import (
+            direct_ssh_filesystem_projection,
+            revalidate_monitor_direct_ssh,
+        )
 
         async with self.db_factory() as db:
             task = await db.get(Task, task_id)
             if task is None:
                 raise RuntimeError("Monitor parent Task no longer exists")
+            if direct_ssh:
+                monitor_session = await db.get(
+                    MonitorSession,
+                    monitor_session_id,
+                )
+                if (
+                    monitor_session is None
+                    or monitor_session.task_id != task_id
+                    or monitor_session.active_turn_generation != turn_generation
+                    or not await revalidate_monitor_direct_ssh(
+                        db,
+                        task=task,
+                        monitor_session=monitor_session,
+                    )
+                ):
+                    raise RuntimeError(
+                        "Monitor direct SSH policy changed before launch"
+                    )
             direct_network_disabled = (
-                await task_ssh_runtime_policy(db, task)
-            ).broker_only
+                False
+                if direct_ssh
+                else (await task_ssh_runtime_policy(db, task)).broker_only
+            )
             protected_paths = await task_ssh_protected_paths(
                 db,
                 task=task,
@@ -17190,6 +17298,11 @@ Do NOT create a new PR. Push fixes to the existing branch."""
                 extra_paths=(() if not config_dir else (config_dir,)),
                 include_direct_git_credentials=True,
             )
+            direct_ssh_read_paths: tuple[str, ...] = ()
+            if direct_ssh:
+                protected_paths, direct_ssh_read_paths = (
+                    direct_ssh_filesystem_projection(protected_paths)
+                )
         if settings.claude_task_isolation_enabled:
             isolation_path = generate_claude_aux_isolation_settings(
                 namespace="monitor",
@@ -17197,12 +17310,14 @@ Do NOT create a new PR. Push fixes to the existing branch."""
                 protected_paths=protected_paths,
                 turn_generation=turn_generation,
                 disable_direct_network=direct_network_disabled,
+                direct_ssh_read_paths=direct_ssh_read_paths,
             )
             await asyncio.to_thread(
                 validate_claude_task_isolation_settings,
                 isolation_path,
                 claude_binary=settings.claude_binary,
                 tools=CLAUDE_MONITOR_BUILTIN_TOOLS,
+                _expected_read_only_paths=direct_ssh_read_paths,
             )
             cmd.extend([
                 "--settings",
@@ -17223,6 +17338,29 @@ Do NOT create a new PR. Push fixes to the existing branch."""
             config_dir,
             model or settings.default_model,
         ):
+            if direct_ssh:
+                # Account roles can change while pool/runtime admission waits.
+                # Recheck at the final provider-effect boundary.
+                async with self.db_factory() as db:
+                    task = await db.get(Task, task_id)
+                    monitor_session = await db.get(
+                        MonitorSession,
+                        monitor_session_id,
+                    )
+                    if (
+                        task is None
+                        or monitor_session is None
+                        or monitor_session.active_turn_generation
+                        != turn_generation
+                        or not await revalidate_monitor_direct_ssh(
+                            db,
+                            task=task,
+                            monitor_session=monitor_session,
+                        )
+                    ):
+                        raise RuntimeError(
+                            "Monitor direct SSH principal changed before provider launch"
+                        )
             if config_dir:
                 if not hasattr(self, "_monitor_config_dirs"):
                     self._monitor_config_dirs = {}
@@ -17260,7 +17398,11 @@ Do NOT create a new PR. Push fixes to the existing branch."""
         return process
 
     def _build_monitor_agent_prompt(
-        self, description: str, context: str | None, interval: int = 300
+        self,
+        description: str,
+        context: str | None,
+        interval: int = 300,
+        direct_ssh: bool = False,
     ) -> str:
         """Build one read-only check turn for a scheduled Monitor."""
         parts = [
@@ -17273,6 +17415,15 @@ Do NOT create a new PR. Push fixes to the existing branch."""
             parts.append("")
             parts.append("## 上下文")
             parts.append(context)
+        if direct_ssh:
+            parts.extend((
+                "",
+                "## Direct SSH（用户已显式授权）",
+                "你可以读取本机现有 ~/.ssh/config，并通过系统 ssh 连接其中的主机。"
+                "仅执行状态查询、日志读取、进程/容器观察等非变更命令；严禁在远端"
+                "写文件、停止/启动服务、发送信号或执行其他改变状态的操作。不要修改"
+                "本机 SSH 配置、密钥或 known_hosts。",
+            ))
         parts.append("")
         parts.append(f"""\
 ## 你的 MCP 工具

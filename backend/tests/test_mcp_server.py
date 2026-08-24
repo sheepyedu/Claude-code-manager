@@ -4,6 +4,7 @@ import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
 import backend.mcp.ccm_skills_server as mcp_mod
+import backend.mcp.ccm_skills_http_server as http_mcp_mod
 
 
 @pytest.fixture(autouse=True)
@@ -40,12 +41,55 @@ async def test_create_monitor_success():
     mock_client.__aexit__ = AsyncMock(return_value=False)
 
     with patch("backend.mcp.ccm_skills_server.httpx.AsyncClient", return_value=mock_client):
-        result = await mcp_mod.create_monitor("build progress", "tail -f build.log", 60, 10)
+        result = await mcp_mod.create_monitor(
+            "build progress",
+            "tail -f build.log",
+            60,
+            10,
+            True,
+        )
 
     data = json.loads(result)
     assert data["success"] is True
     assert data["monitor_id"] == 7
     assert data["status"] == "created"
+    assert mock_client.post.await_args.kwargs["json"]["direct_ssh"] is True
+    assert "direct SSH" in data["message"]
+
+
+@pytest.mark.asyncio
+async def test_http_create_monitor_forwards_direct_ssh():
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {"id": 8}
+    mock_resp.raise_for_status = MagicMock()
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(return_value=mock_resp)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    old_task_id = http_mcp_mod._TASK_ID
+    old_api_base = http_mcp_mod._API_BASE
+    http_mcp_mod._TASK_ID = 42
+    http_mcp_mod._API_BASE = "http://localhost:9999"
+    try:
+        with patch(
+            "backend.mcp.ccm_skills_http_server.httpx.AsyncClient",
+            return_value=mock_client,
+        ):
+            result = await http_mcp_mod.create_monitor(
+                "remote build",
+                "host from ssh config",
+                60,
+                10,
+                True,
+            )
+    finally:
+        http_mcp_mod._TASK_ID = old_task_id
+        http_mcp_mod._API_BASE = old_api_base
+
+    data = json.loads(result)
+    assert data["success"] is True
+    assert mock_client.post.await_args.kwargs["json"]["direct_ssh"] is True
+    assert "direct SSH" in data["message"]
 
 
 @pytest.mark.asyncio

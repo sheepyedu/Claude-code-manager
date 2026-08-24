@@ -1167,6 +1167,124 @@ async def test_ordinary_task_uses_exact_managed_public_network_profile(
 
 
 @pytest.mark.asyncio
+async def test_monitor_direct_ssh_uses_read_only_raw_network_profile(
+    isolated_task_boundary,
+):
+    boundary = isolated_task_boundary(99301)
+    server = CodexAppServer("codex")
+    server._process = SimpleNamespace(pid=4321, returncode=None)
+    server._runtime_version = (0, 147, 0)
+    server.ensure_started = AsyncMock()
+    ssh_root = "/Users/operator/.ssh"
+    manager_secret = "/private/ccm/manager-secret"
+
+    async def request(method, params, **_kwargs):
+        if method == "config/read":
+            return _ambient_mcp_response()
+        if method == "skills/list":
+            return _empty_skills_response(boundary.cwd)
+        if method == "thread/start":
+            return _task_isolated_thread_response(
+                "thread-monitor-direct-ssh",
+                permission_profile=params["config"]["default_permissions"],
+                sandbox_type="readOnly",
+                network_access=True,
+            )
+        if method == "turn/start":
+            return {"turn": {"id": "turn-monitor-direct-ssh"}}
+        raise AssertionError(method)
+
+    server._request = AsyncMock(side_effect=request)
+    await server.start_turn(
+        prompt="observe the configured remote",
+        cwd=boundary.cwd,
+        model="gpt-5.6-sol",
+        effort="high",
+        resume_session_id=None,
+        git_env=None,
+        task_id=99301,
+        disable_project_config=True,
+        disable_user_mcp=True,
+        sandbox_mode="read-only",
+        task_ssh_protected_paths=(manager_secret,),
+        task_ssh_allowed_read_paths=(ssh_root,),
+        task_git_read_paths=boundary.git_read_paths,
+        task_git_boundary_fingerprint=boundary.git_fingerprint,
+        task_private_tmpdir=boundary.scratch,
+        task_direct_ssh=True,
+        disable_autonomous_features=True,
+    )
+
+    thread_call = next(
+        call for call in server._request.await_args_list
+        if call.args[0] == "thread/start"
+    )
+    turn_call = next(
+        call for call in server._request.await_args_list
+        if call.args[0] == "turn/start"
+    )
+    config = thread_call.args[1]["config"]
+    profile_id = config["default_permissions"]
+    assert profile_id.startswith("ccm_monitor_direct_ssh_v1_")
+    profile = config["permissions"][profile_id]
+    filesystem = profile["filesystem"]
+    assert filesystem[boundary.cwd] == "read"
+    assert filesystem[ssh_root] == "read"
+    assert filesystem[manager_secret] == "deny"
+    assert filesystem[str(boundary.scratch.path)] == "write"
+    assert {
+        path for path, mode in filesystem.items() if mode == "write"
+    } == {str(boundary.scratch.path)}
+    assert profile["network"]["enabled"] is True
+    assert profile["network"]["domains"] == {"*": "allow"}
+    assert profile["network"]["unix_sockets"] == {}
+    assert config["features"]["network_proxy"] is False
+    assert config["shell_environment_policy"]["set"]["HOME"] == str(
+        Path.home()
+    )
+    assert config["shell_environment_policy"]["set"]["SSH_AUTH_SOCK"] == ""
+    assert turn_call.args[1]["sandboxPolicy"] == {
+        "type": "readOnly",
+        "networkAccess": True,
+    }
+
+
+@pytest.mark.asyncio
+async def test_monitor_direct_ssh_rejects_workspace_write(
+    isolated_task_boundary,
+):
+    boundary = isolated_task_boundary(99302)
+    server = CodexAppServer("codex")
+    server.ensure_started = AsyncMock()
+
+    with pytest.raises(
+        CodexRequiredMcpPreTurnError,
+        match="requires a read-only Codex sandbox",
+    ):
+        await server.start_turn(
+            prompt="must not start",
+            cwd=boundary.cwd,
+            model="gpt-5.6-sol",
+            effort="high",
+            resume_session_id=None,
+            git_env=None,
+            task_id=99302,
+            disable_project_config=True,
+            disable_user_mcp=True,
+            sandbox_mode="workspace-write",
+            task_ssh_protected_paths=("/private/ccm/manager-secret",),
+            task_ssh_allowed_read_paths=("/Users/operator/.ssh",),
+            task_git_read_paths=boundary.git_read_paths,
+            task_git_boundary_fingerprint=boundary.git_fingerprint,
+            task_private_tmpdir=boundary.scratch,
+            task_direct_ssh=True,
+            disable_autonomous_features=True,
+        )
+
+    server.ensure_started.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_ordinary_task_managed_network_profile_id_is_unique_per_turn(
     isolated_task_boundary,
 ):

@@ -101,6 +101,14 @@ function MonitorSessionRow({ session, taskId, onStopped }: { session: MonitorSes
             <TypeChip agentType={session.agent_type} source={session.source} />
             <span className="text-sm text-gray-200 truncate">{session.description}</span>
             <StatusBadge status={session.status} />
+            {session.direct_ssh && (
+              <span
+                className="rounded border border-amber-700 bg-amber-950/50 px-1.5 py-0.5 text-[10px] text-amber-300"
+                title="This Monitor may read the Manager user's ~/.ssh and run direct SSH observation commands"
+              >
+                direct SSH
+              </span>
+            )}
           </div>
           <div className="text-xs text-gray-500 mt-0.5">
             {isNative

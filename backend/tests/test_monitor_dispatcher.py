@@ -7,7 +7,9 @@ turn to consume its generation through a callback before another check can run.
 import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime
+import json
 import os
+from pathlib import Path
 import signal
 import sys
 import pytest
@@ -25,6 +27,7 @@ from backend.database import Base
 from backend.models.project import Project
 from backend.models.task import Task
 from backend.models.team_share import TeamProjectShare
+from backend.models.user import User
 from backend.models.monitor_session import MonitorSession, MonitorCheck
 from backend.services.dispatcher import (
     AuxiliaryLaunchSupersededError,
@@ -391,6 +394,8 @@ async def _seed_codex_monitor(
     active_generation: int | None = None,
     thread_id: str | None = None,
     codex_home: str | None = None,
+    direct_ssh: bool = False,
+    initiating_user_id: int | None = None,
 ):
     async with db_factory() as db:
         task = Task(
@@ -428,6 +433,10 @@ async def _seed_codex_monitor(
             ),
             codex_thread_id=thread_id,
             codex_home=codex_home,
+            direct_ssh=direct_ssh,
+            initiating_user_id=(initiating_user_id if direct_ssh else None),
+            initiating_user_role=("super_admin" if direct_ssh else None),
+            execution_mode=("unrestricted" if direct_ssh else None),
         )
         db.add(session)
         await db.commit()
@@ -540,6 +549,105 @@ def test_build_monitor_agent_prompt_no_context(dispatcher):
     prompt = dispatcher._build_monitor_agent_prompt("test", None)
     assert "test" in prompt
     assert "上下文" not in prompt
+
+
+def test_build_monitor_agent_prompt_explains_direct_ssh_boundary(dispatcher):
+    prompt = dispatcher._build_monitor_agent_prompt(
+        "watch remote training",
+        None,
+        direct_ssh=True,
+    )
+    assert "~/.ssh/config" in prompt
+    assert "系统 ssh" in prompt
+    assert "严禁在远端" in prompt
+    assert "known_hosts" in prompt
+
+
+@pytest.mark.asyncio
+async def test_claude_monitor_direct_ssh_launch_projects_read_only_ssh(
+    dispatcher,
+    db_factory,
+    tmp_path,
+    monkeypatch,
+):
+    task_id, session_id = await _seed_task_and_monitor(db_factory)
+    async with db_factory() as db:
+        session = await db.get(MonitorSession, session_id)
+        session.direct_ssh = True
+        session.initiating_user_role = "super_admin"
+        session.execution_mode = "unrestricted"
+        session.turn_generation = 1
+        session.active_turn_generation = 1
+        session.turn_started_at = datetime.utcnow()
+        await db.commit()
+
+    ssh_root = Path.home() / ".ssh"
+    manager_secret = tmp_path / "manager-secret"
+    captured = {}
+    process = _fake_proc(returncode=None)
+    monkeypatch.setattr(settings, "auth_token", "monitor-test-token")
+    monkeypatch.setattr(settings, "claude_task_isolation_enabled", True)
+    monkeypatch.setattr(
+        settings,
+        "task_runtime_secret_dir",
+        str(tmp_path / "runtime"),
+    )
+
+    async def protected_paths(*_args, **_kwargs):
+        return (str(ssh_root), str(manager_secret))
+
+    def validate(path, **kwargs):
+        captured["settings_path"] = path
+        captured["validate_kwargs"] = kwargs
+
+    async def launch(**kwargs):
+        captured["launch"] = kwargs
+        dispatcher._monitor_processes[session_id] = process
+        return process
+
+    with (
+        patch(
+            "backend.services.task_ssh_access.task_ssh_protected_paths",
+            side_effect=protected_paths,
+        ),
+        patch(
+            "backend.services.task_agent_isolation."
+            "validate_claude_task_isolation_settings",
+            side_effect=validate,
+        ),
+        patch.object(
+            dispatcher,
+            "_launch_registered_aux_process",
+            side_effect=launch,
+        ),
+    ):
+        launched = await dispatcher._launch_monitor_agent(
+            prompt="observe remote state",
+            cwd=str(tmp_path),
+            model=None,
+            task_id=task_id,
+            monitor_session_id=session_id,
+            turn_generation=1,
+            mcp_config_path=tmp_path / "monitor.json",
+            direct_ssh=True,
+        )
+
+    assert launched is process
+    payload = json.loads(
+        captured["settings_path"].read_text(encoding="utf-8")
+    )
+    filesystem = payload["sandbox"]["filesystem"]
+    assert str(ssh_root) not in filesystem["denyRead"]
+    assert str(ssh_root) in filesystem["denyWrite"]
+    assert str(manager_secret) in filesystem["denyRead"]
+    assert payload["sandbox"]["network"]["allowedDomains"] == ["*"]
+    assert captured["validate_kwargs"]["_expected_read_only_paths"] == (
+        str(ssh_root),
+    )
+    command = captured["launch"]["cmd"]
+    assert command[command.index("--settings") + 1] == str(
+        captured["settings_path"]
+    )
 
 
 @pytest.mark.asyncio
@@ -2152,6 +2260,124 @@ async def test_codex_monitor_reuses_thread_with_read_only_generation_specs(
         assert session.codex_thread_id is None
         assert session.codex_home is None
         assert session.codex_cleanup_pending is False
+
+
+@pytest.mark.asyncio
+async def test_codex_monitor_direct_ssh_launch_uses_read_only_network_profile(
+    dispatcher,
+    db_factory,
+):
+    task_id, session_id = await _seed_codex_monitor(
+        db_factory,
+        max_checks=1,
+        direct_ssh=True,
+    )
+    home = "/tmp/codex-monitor-direct-ssh"
+    registry = MagicMock()
+    registry.abort_unclaimed_turn = AsyncMock()
+    registry.delete_thread = AsyncMock()
+    registry.recycle_thread_runtime = AsyncMock()
+    launch_kwargs = []
+
+    async def start_turn(**kwargs):
+        launch_kwargs.append(kwargs)
+        process = _fake_proc(returncode=0)
+
+        async def complete():
+            async with db_factory() as db:
+                await db.execute(
+                    update(MonitorSession)
+                    .where(MonitorSession.id == session_id)
+                    .values(
+                        status="completed",
+                        checks_done=1,
+                        completed_at=datetime.utcnow(),
+                        active_turn_generation=None,
+                        turn_started_at=None,
+                        next_check_at=None,
+                    )
+                )
+                await db.commit()
+            return 0
+
+        process.wait = AsyncMock(side_effect=complete)
+        return await _admit_mock_monitor_turn(
+            kwargs,
+            process,
+            "monitor-direct-ssh-thread",
+        )
+
+    registry.start_turn = AsyncMock(side_effect=start_turn)
+    dispatcher.instance_manager._ensure_codex_app_server_registry.return_value = (
+        registry
+    )
+
+    @asynccontextmanager
+    async def home_guard(_home):
+        yield home
+
+    dispatcher.instance_manager.codex_home_app_server_guard = home_guard
+    await dispatcher._monitor_session_lifecycle(session_id)
+
+    assert len(launch_kwargs) == 1
+    kwargs = launch_kwargs[0]
+    assert kwargs["sandbox_mode"] == "read-only"
+    assert kwargs["task_direct_ssh"] is True
+    assert kwargs["task_ssh_disable_network"] is False
+    assert str(Path.home() / ".ssh") in kwargs[
+        "task_ssh_allowed_read_paths"
+    ]
+    assert str(Path.home() / ".ssh") not in kwargs[
+        "task_ssh_protected_paths"
+    ]
+    assert "~/.ssh/config" in kwargs["prompt"]
+    assert "严禁在远端" in kwargs["prompt"]
+    registry.abort_unclaimed_turn.assert_not_awaited()
+    registry.delete_thread.assert_awaited_once_with(
+        home,
+        "monitor-direct-ssh-thread",
+    )
+
+
+@pytest.mark.asyncio
+async def test_direct_ssh_monitor_does_not_launch_after_admin_demotion(
+    dispatcher,
+    db_factory,
+):
+    async with db_factory() as db:
+        user = User(
+            email="monitor-demoted@example.com",
+            name="Monitor Admin",
+            password_hash="x",
+            role="super_admin",
+            is_active=True,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        user_id = user.id
+    _, session_id = await _seed_codex_monitor(
+        db_factory,
+        direct_ssh=True,
+        initiating_user_id=user_id,
+    )
+    async with db_factory() as db:
+        user = await db.get(User, user_id)
+        user.role = "member"
+        await db.commit()
+
+    registry = MagicMock()
+    registry.start_turn = AsyncMock()
+    dispatcher.instance_manager._ensure_codex_app_server_registry.return_value = (
+        registry
+    )
+    await dispatcher._monitor_session_lifecycle(session_id)
+
+    registry.start_turn.assert_not_awaited()
+    async with db_factory() as db:
+        session = await db.get(MonitorSession, session_id)
+        assert session.status == "failed"
+        assert "role changed" in session.last_error
 
 
 @pytest.mark.asyncio

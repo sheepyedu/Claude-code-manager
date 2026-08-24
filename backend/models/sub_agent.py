@@ -12,13 +12,23 @@
 """
 
 from datetime import datetime
-from sqlalchemy import Boolean, Integer, String, Text, DateTime
+from sqlalchemy import Boolean, CheckConstraint, Integer, String, Text, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, synonym
 from backend.database import Base
 
 
 class SubAgentSession(Base):
     __tablename__ = "sub_agent_sessions"
+    __table_args__ = (
+        CheckConstraint(
+            "(direct_ssh AND agent_type = 'monitor' AND source = 'ccm' AND "
+            "initiating_user_role IN ('admin', 'super_admin') AND "
+            "execution_mode = 'unrestricted') OR (NOT direct_ssh AND "
+            "initiating_user_id IS NULL AND initiating_user_role IS NULL AND "
+            "execution_mode IS NULL)",
+            name="ck_sub_agent_monitor_direct_ssh_principal",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     task_id: Mapped[int] = mapped_column(Integer, index=True)
@@ -39,6 +49,12 @@ class SubAgentSession(Base):
     # process. ``provider`` is frozen when the session is admitted so restart
     # recovery never guesses which runner owns an existing row.
     provider: Mapped[str] = mapped_column(String(20), default="claude")
+    # Explicit high-risk Monitor capability. It is accepted only from an
+    # unrestricted administrator turn and revalidated before every check.
+    direct_ssh: Mapped[bool] = mapped_column(Boolean, default=False)
+    initiating_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    initiating_user_role: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    execution_mode: Mapped[str | None] = mapped_column(String(20), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="running")
     checks_done: Mapped[int] = mapped_column(Integer, default=0)
     last_summary: Mapped[str | None] = mapped_column(Text, nullable=True)

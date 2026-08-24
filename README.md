@@ -31,7 +31,7 @@ Web 端调度和管理多个 Claude Code 实例并行工作。灵感来自胡渊
 
 ### 智能能力
 - **Skills 系统** — 创建 Task 时可为 Claude/Codex 勾选普通 Skills 与 User Skills；统一 task context 由 Claude system-prompt 文件、Codex app-server 的 schema-backed turn text 或等价 `codex exec` adapter 注入。本地、非共享、非 Worker 管理的 Codex Task 在主 MCP capability 已确认时也可使用 Monitor；Worker/Shared Task 继续 fail closed。`CODEX_MAIN_MCP_ENABLED=false` 会关闭 Codex 普通/User/Monitor Skills，但不影响独立的 Sub-Agent。开头的 `$command` 会在本地、Worker 和 Shared chat 写入消息前按任务的精确运行范围统一校验。远程 Worker 首次领取任务时会在同一任务锁内固定最新 Skill 配置；领取后的活跃执行不允许中途改写 Skills
-- **Monitor Sub-Agent** — Claude 及 capability 已确认的本地 Codex Task 可自主创建持久监控子 Agent；子 Agent 拥有独立 MCP 工具（report_status / mark_complete / get_context），按数据库调度的短回合自主检查并向系统汇报
+- **Monitor Sub-Agent** — Claude 及 capability 已确认的本地 Codex Task 可自主创建持久监控子 Agent；子 Agent 拥有独立 MCP 工具（report_status / mark_complete / get_context），按数据库调度的短回合自主检查并向系统汇报。默认无 SSH；unrestricted 管理员明确要求观察远端时，主 Agent 可用 `create_monitor(..., direct_ssh=true)` 让 Monitor 只读挂载 Manager 用户现有的 `~/.ssh` 并调用系统 `ssh`
 - **原生子 Agent 镜像（PTY 模式）** — 模型用内置 Agent/Task/Monitor 工具开的子 agent 会被 PTY 层观测并自动注册进子 agent 体系（类别 native-agent / native-monitor），统一展示和管理
 
 ### 交互与对话
@@ -465,6 +465,8 @@ cd frontend && npm run build && cd ..  # 4. 重建前端
 3. 点击任务的 **Chat** 按钮，可以对已完成的任务继续追问
 4. 启用 Monitor 的任务中，Agent 可自主创建持久监控子 Agent，Task 列表显示活跃子 Agent 数量
 5. 可在任务卡片菜单添加一个关注标签，或直接点击任务卡片/Chat 顶栏中的标签修改；清空并保存即可移除
+
+远端任务监控沿用 Manager 用户已经配置好的 OpenSSH 主机别名。用户必须明确要求使用 direct SSH，主 Agent 才能把 `direct_ssh=true` 传给 `create_monitor`；普通 Monitor 的网络和 `~/.ssh` 权限保持不变。该能力仅接受本地、非共享、非 Worker 管理的 unrestricted 管理员回合，创建时冻结发起主体并在每轮启动前复验。Monitor 不能修改本机 SSH 配置、密钥或 `known_hosts`，但 CCM 的本机沙箱无法强制远端 shell 命令只读，因此只应用于日志、进程、容器和文件元数据等观察操作。
 
 ### Interactive Plans
 

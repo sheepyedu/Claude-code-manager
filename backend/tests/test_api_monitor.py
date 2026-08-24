@@ -103,6 +103,38 @@ async def test_create_monitor_session(client, session_factory):
 
 
 @pytest.mark.asyncio
+async def test_create_direct_ssh_monitor_freezes_admin_principal(
+    client,
+    session_factory,
+):
+    task_id = await _create_task_with_monitor(client, session_factory)
+    mock_dispatcher = MagicMock()
+    mock_dispatcher.start_monitor_session = MagicMock()
+    mock_dispatcher.broadcaster = MagicMock()
+    mock_dispatcher.broadcaster.broadcast = AsyncMock()
+
+    with patch("backend.main.dispatcher", mock_dispatcher):
+        response = await client.post(
+            f"/api/tasks/{task_id}/monitor-sessions",
+            json={
+                "description": "observe remote training",
+                "interval": 60,
+                "max_checks": 3,
+                "direct_ssh": True,
+            },
+        )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["direct_ssh"] is True
+    async with session_factory() as db:
+        session = await db.get(MonitorSession, response.json()["id"])
+        assert session.direct_ssh is True
+        assert session.initiating_user_id is None
+        assert session.initiating_user_role == "super_admin"
+        assert session.execution_mode == "unrestricted"
+
+
+@pytest.mark.asyncio
 async def test_cancelled_monitor_create_still_admits_committed_row(
     client,
     session_factory,
@@ -552,6 +584,49 @@ async def test_worker_claude_monitor_create_still_routes_to_worker(
 
     assert result == {"proxied": True}
     proxy.proxy_to_worker.assert_awaited_once()
+    dispatcher.start_monitor_session.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_worker_claude_direct_ssh_monitor_rejects_before_proxy(
+    client,
+    session_factory,
+):
+    from backend.api.monitor import create_monitor_session
+    from backend.schemas.monitor_session import MonitorSessionCreate
+
+    task_id = await _create_task_with_monitor(client, session_factory)
+    async with session_factory() as db:
+        await db.execute(
+            update(Task)
+            .where(Task.id == task_id)
+            .values(worker_id=801, provider="claude")
+        )
+        await db.commit()
+
+    proxy = MagicMock()
+    proxy.proxy_to_worker = AsyncMock(return_value={"proxied": True})
+    dispatcher = MagicMock()
+    dispatcher.start_monitor_session = MagicMock()
+    async with session_factory() as db:
+        with (
+            patch("backend.main.worker_proxy", proxy),
+            patch("backend.main.dispatcher", dispatcher),
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await create_monitor_session(
+                    task_id,
+                    MonitorSessionCreate(
+                        description="must stay local",
+                        direct_ssh=True,
+                    ),
+                    _admin_request(),
+                    db,
+                )
+
+    assert exc.value.status_code == 409
+    assert "local Manager" in exc.value.detail
+    proxy.proxy_to_worker.assert_not_awaited()
     dispatcher.start_monitor_session.assert_not_called()
 
 

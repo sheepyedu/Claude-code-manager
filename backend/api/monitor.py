@@ -242,6 +242,11 @@ async def create_monitor_session(
         task = scoped_task
     await require_task_control(request, task, db)
     expected_incarnation_id = task.incarnation_id
+    if body.direct_ssh and task.worker_id is not None:
+        raise HTTPException(
+            409,
+            "Monitor direct SSH is available only on the local Manager",
+        )
     # Codex Worker and shared Tasks must fail before a proxy/network side
     # effect. Claude Worker routing remains unchanged.
     _require_monitor_capability(task)
@@ -304,6 +309,11 @@ async def create_monitor_session(
                     )
                 _require_monitor_capability(task)
                 if task.worker_id is not None:
+                    if body.direct_ssh:
+                        raise HTTPException(
+                            409,
+                            "Monitor direct SSH is available only on the local Manager",
+                        )
                     if internal_task_incarnation_id(request, task_id) is not None:
                         raise HTTPException(
                             409,
@@ -336,6 +346,32 @@ async def create_monitor_session(
             if task is None:
                 raise HTTPException(409, "Task incarnation changed")
             _require_monitor_capability(task)
+            direct_ssh_principal = None
+            if body.direct_ssh:
+                from backend.api.deps import (
+                    get_current_user_id,
+                    get_current_user_role,
+                )
+                from backend.services.monitor_direct_ssh import (
+                    MonitorDirectSSHError,
+                    capture_monitor_direct_ssh_principal,
+                )
+
+                try:
+                    direct_ssh_principal = (
+                        await capture_monitor_direct_ssh_principal(
+                            db,
+                            task,
+                            internal_request=(
+                                internal_task_incarnation_id(request, task_id)
+                                is not None
+                            ),
+                            request_user_id=get_current_user_id(request),
+                            request_user_role=get_current_user_role(request),
+                        )
+                    )
+                except MonitorDirectSSHError as exc:
+                    raise HTTPException(403, str(exc)) from exc
             relay_generation = _task_relay_generation(task)
             skills = task.enabled_skills or {}
             if not skills.get("monitor"):
@@ -374,6 +410,22 @@ async def create_monitor_session(
                 max_checks=body.max_checks,
                 model=body.model,
                 provider=(task.provider or "claude").lower(),
+                direct_ssh=body.direct_ssh,
+                initiating_user_id=(
+                    direct_ssh_principal.user_id
+                    if direct_ssh_principal is not None
+                    else None
+                ),
+                initiating_user_role=(
+                    direct_ssh_principal.role
+                    if direct_ssh_principal is not None
+                    else None
+                ),
+                execution_mode=(
+                    direct_ssh_principal.execution_mode
+                    if direct_ssh_principal is not None
+                    else None
+                ),
                 next_check_at=datetime.utcnow(),
             )
             db.add(ms)

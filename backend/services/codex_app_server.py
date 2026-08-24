@@ -273,6 +273,9 @@ _TASK_SSH_PERMISSION_PROFILE_PREFIX = "ccm_task_ssh_isolated_v1_"
 _TASK_MANAGED_NETWORK_PERMISSION_PROFILE_PREFIX = (
     "ccm_task_managed_network_v1_"
 )
+_MONITOR_DIRECT_SSH_PERMISSION_PROFILE_PREFIX = (
+    "ccm_monitor_direct_ssh_v1_"
+)
 _CODEX_APP_SERVER_USER_AGENT_RE = re.compile(
     r"\Aclaude_code_manager/([0-9]+)\.([0-9]+)\.([0-9]+) "
     r"\("
@@ -984,6 +987,7 @@ def _task_ssh_permission_config(
     private_tmpdir: str,
     disable_network: bool,
     managed_network_proxy: bool,
+    direct_ssh: bool = False,
     sandbox_mode: str,
     runtime_read_paths: Sequence[str] = (),
 ) -> dict[str, Any]:
@@ -1046,7 +1050,7 @@ def _task_ssh_permission_config(
         path = os.path.abspath(os.path.expanduser(str(value)))
         if path == "/" or path in filesystem and filesystem[path] == "deny":
             raise ValueError(
-                "Task Git credential read override conflicts with a deny path"
+                "Task credential read override conflicts with a deny path"
             )
         # Codex permission profiles use longest-path matching. Keeping the
         # denied parent alongside this exact file read entry prevents ambient
@@ -1073,16 +1077,23 @@ def _task_ssh_permission_config(
     if scratch == "/" or scratch == workspace:
         raise ValueError("Task scratch write path must be an exact external leaf")
     filesystem[scratch] = "write"
-    if disable_network == managed_network_proxy:
+    if sum(bool(value) for value in (
+        disable_network,
+        managed_network_proxy,
+        direct_ssh,
+    )) != 1:
         raise ValueError(
             "Task isolation must select exactly one network boundary"
         )
     network: dict[str, Any]
-    if managed_network_proxy:
-        # Codex's managed proxy gives the sandbox public egress without
-        # exposing host loopback, AF_UNIX, UDP, SOCKS, or deployment-level
-        # upstream proxies. Keep every option explicit because omitted
-        # NetworkToml fields inherit permissive runtime defaults.
+    if managed_network_proxy or direct_ssh:
+        # Managed Tasks enable Codex's public network proxy; direct-SSH
+        # Monitors deliberately keep that feature off so the system ssh
+        # client can open its own TCP connection. Both paths still use the
+        # exact NetworkToml shape below. The default-deny filesystem profile
+        # is what prevents AF_UNIX from rediscovering Manager/provider sockets;
+        # keep every network option explicit because omissions inherit runtime
+        # defaults.
         network = {
             "enabled": True,
             "enable_socks5": False,
@@ -1116,6 +1127,7 @@ def _audit_task_isolation_permission_config(
     private_tmpdir: str,
     disable_network: bool,
     managed_network_proxy: bool,
+    direct_ssh: bool,
     sandbox_mode: str,
     runtime_read_paths: Sequence[str] = (),
 ) -> None:
@@ -1129,6 +1141,7 @@ def _audit_task_isolation_permission_config(
         private_tmpdir=private_tmpdir,
         disable_network=disable_network,
         managed_network_proxy=managed_network_proxy,
+        direct_ssh=direct_ssh,
         sandbox_mode=sandbox_mode,
         runtime_read_paths=runtime_read_paths,
     )
@@ -1472,6 +1485,7 @@ def _audit_task_ssh_thread_response(
     permission_profile_id: str,
     disable_network: bool,
     managed_network_proxy: bool,
+    direct_ssh: bool,
     sandbox_mode: str,
     cwd: str,
 ) -> None:
@@ -1491,9 +1505,13 @@ def _audit_task_ssh_thread_response(
         "workspace-write": "workspaceWrite",
         "read-only": "readOnly",
     }.get(sandbox_mode)
-    if disable_network == managed_network_proxy:
+    if sum(bool(value) for value in (
+        disable_network,
+        managed_network_proxy,
+        direct_ssh,
+    )) != 1:
         raise ValueError("Task response audit lost its network boundary")
-    expected_network = managed_network_proxy
+    expected_network = managed_network_proxy or direct_ssh
     if (
         not isinstance(sandbox, dict)
         or sandbox.get("type") != expected_type
@@ -4685,6 +4703,7 @@ class CodexAppServer:
         task_private_tmpdir: PrivateTaskTempDir | None = None,
         task_ssh_disable_network: bool = False,
         task_managed_network_proxy: bool = False,
+        task_direct_ssh: bool = False,
         disable_autonomous_features: bool = False,
         network_isolated: bool = False,
         output_schema: dict[str, Any] | None = None,
@@ -4701,6 +4720,10 @@ class CodexAppServer:
         managed_runtime_prestarted = False
         managed_network_process: asyncio.subprocess.Process | None = None
         isolated_process: asyncio.subprocess.Process | None = None
+        if task_managed_network_proxy and task_direct_ssh:
+            raise CodexRequiredMcpPreTurnError(
+                "Codex Task cannot combine managed public networking with direct SSH"
+            )
         if task_managed_network_proxy:
             # ``initialize`` is the version proof for this exact transport
             # generation. Complete it before constructing the network profile;
@@ -4848,10 +4871,18 @@ class CodexAppServer:
                     raise CodexRequiredMcpPreTurnError(
                         "Codex Task cannot enable and disable network together"
                     )
-            elif sandbox_mode == "workspace-write" and not task_ssh_disable_network:
+            elif (
+                sandbox_mode == "workspace-write"
+                and not task_ssh_disable_network
+                and not task_direct_ssh
+            ):
                 raise CodexRequiredMcpPreTurnError(
                     "Codex Task isolation requires either managed public "
                     "network or complete network denial"
+                )
+            if task_direct_ssh and sandbox_mode != "read-only":
+                raise CodexRequiredMcpPreTurnError(
+                    "Monitor direct SSH requires a read-only Codex sandbox"
                 )
             protected = {
                 os.path.abspath(os.path.expanduser(str(path)))
@@ -4863,7 +4894,7 @@ class CodexAppServer:
             }
             if "/" in allowed or protected & allowed:
                 raise CodexRequiredMcpPreTurnError(
-                    "Task Git credential read overrides must be exact and "
+                    "Task credential read overrides must be exact and "
                     "must not duplicate deny entries"
                 )
             from backend.services.task_agent_isolation import (
@@ -4895,7 +4926,11 @@ class CodexAppServer:
                     "Codex Task isolation requires a private generation TMPDIR"
                 )
             task_private_tmpdir.assert_valid()
-        elif task_ssh_disable_network or task_managed_network_proxy:
+        elif (
+            task_ssh_disable_network
+            or task_managed_network_proxy
+            or task_direct_ssh
+        ):
             raise CodexRequiredMcpPreTurnError(
                 "Task network isolation requires protected filesystem paths"
             )
@@ -4979,9 +5014,13 @@ class CodexAppServer:
         )
         task_permission_profile = (
             f"{(
-                _TASK_MANAGED_NETWORK_PERMISSION_PROFILE_PREFIX
-                if task_managed_network_proxy
-                else _TASK_SSH_PERMISSION_PROFILE_PREFIX
+                _MONITOR_DIRECT_SSH_PERMISSION_PROFILE_PREFIX
+                if task_direct_ssh
+                else (
+                    _TASK_MANAGED_NETWORK_PERMISSION_PROFILE_PREFIX
+                    if task_managed_network_proxy
+                    else _TASK_SSH_PERMISSION_PROFILE_PREFIX
+                )
             )}{uuid.uuid4().hex}"
             if task_ssh_protected_paths
             else None
@@ -5044,6 +5083,7 @@ class CodexAppServer:
                         private_tmpdir=str(task_private_tmpdir.path),
                         disable_network=task_ssh_disable_network,
                         managed_network_proxy=task_managed_network_proxy,
+                        direct_ssh=task_direct_ssh,
                         sandbox_mode=sandbox_mode,
                         runtime_read_paths=self._runtime_read_paths,
                     )
@@ -5151,6 +5191,7 @@ class CodexAppServer:
                 task_private_tmpdir=task_private_tmpdir,
                 task_ssh_disable_network=task_ssh_disable_network,
                 task_managed_network_proxy=task_managed_network_proxy,
+                task_direct_ssh=task_direct_ssh,
                 disable_autonomous_features=disable_autonomous_features,
                 network_isolated=network_isolated,
                 output_schema=output_schema,
@@ -5369,6 +5410,7 @@ class CodexAppServer:
                 private_tmpdir=str(task_private_tmpdir.path),
                 disable_network=task_ssh_disable_network,
                 managed_network_proxy=task_managed_network_proxy,
+                direct_ssh=task_direct_ssh,
                 sandbox_mode=sandbox_mode,
                 runtime_read_paths=self._runtime_read_paths,
             )
@@ -5381,6 +5423,7 @@ class CodexAppServer:
                 private_tmpdir=str(task_private_tmpdir.path),
                 disable_network=task_ssh_disable_network,
                 managed_network_proxy=task_managed_network_proxy,
+                direct_ssh=task_direct_ssh,
                 sandbox_mode=sandbox_mode,
                 runtime_read_paths=self._runtime_read_paths,
             )
@@ -5986,6 +6029,7 @@ class CodexAppServer:
                 private_tmpdir=str(task_private_tmpdir.path),
                 disable_network=task_ssh_disable_network,
                 managed_network_proxy=task_managed_network_proxy,
+                direct_ssh=task_direct_ssh,
                 sandbox_mode=sandbox_mode,
                 runtime_read_paths=self._runtime_read_paths,
             )
@@ -6251,6 +6295,7 @@ class CodexAppServer:
                     permission_profile_id=str(task_permission_profile),
                     disable_network=task_ssh_disable_network,
                     managed_network_proxy=task_managed_network_proxy,
+                    direct_ssh=task_direct_ssh,
                     sandbox_mode=sandbox_mode,
                     cwd=cwd,
                 )
@@ -6583,7 +6628,7 @@ class CodexAppServer:
             # widening a Monitor turn after thread admission.
             turn_params["sandboxPolicy"] = {
                 "type": "readOnly",
-                "networkAccess": False,
+                "networkAccess": task_direct_ssh,
             }
         elif (
             sandbox_mode == "workspace-write"

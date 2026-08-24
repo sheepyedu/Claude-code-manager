@@ -170,8 +170,14 @@ async def create_monitor(
     context: str = "",
     interval: int = 120,
     max_checks: int = 50,
+    direct_ssh: bool = False,
 ) -> str:
-    """启动一个后台 Monitor 子 session。"""
+    """启动一个后台 Monitor 子 session。
+
+    ``direct_ssh`` 仅用于用户明确要求 Monitor 读取 Manager 现有
+    ``~/.ssh/config`` 并通过系统 SSH 观察远端的场景。它要求当前来源是
+    unrestricted 管理员回合；CCM 不能在远端强制命令只读。
+    """
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -183,6 +189,7 @@ async def create_monitor(
                     "monitor_context": context,
                     "interval": interval,
                     "max_checks": max_checks,
+                    "direct_ssh": direct_ssh,
                 },
             )
             response.raise_for_status()
@@ -194,6 +201,7 @@ async def create_monitor(
             "message": (
                 f"Monitor #{data['id']} 已启动，每 {interval} 秒检查一次，"
                 f"最多 {max_checks} 次。"
+                + (" 已显式启用 direct SSH。" if direct_ssh else "")
             ),
         }, ensure_ascii=False)
     except Exception as exc:
@@ -227,6 +235,7 @@ async def check_monitors() -> str:
                 "checks_done": session["checks_done"],
                 "max_checks": session["max_checks"],
                 "last_summary": session.get("last_summary"),
+                "direct_ssh": bool(session.get("direct_ssh", False)),
             } for session in sessions],
         }, ensure_ascii=False)
     except Exception as exc:

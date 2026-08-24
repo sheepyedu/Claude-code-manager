@@ -773,6 +773,59 @@ def test_claude_aux_isolation_has_no_main_task_hooks_and_can_close_network(
     assert "Agent" not in CLAUDE_SUB_AGENT_BUILTIN_TOOLS
 
 
+def test_claude_monitor_direct_ssh_projection_is_read_only(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        settings,
+        "task_runtime_secret_dir",
+        str(tmp_path / "runtime"),
+    )
+    ssh_root = tmp_path / ".ssh"
+    ssh_root.mkdir()
+    manager_secret = tmp_path / "manager-secret"
+    path = generate_claude_aux_isolation_settings(
+        namespace="monitor",
+        identifier=81,
+        protected_paths=[str(manager_secret)],
+        turn_generation=4,
+        disable_direct_network=False,
+        direct_ssh_read_paths=[str(ssh_root)],
+    )
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    filesystem = payload["sandbox"]["filesystem"]
+
+    assert str(ssh_root) not in filesystem["denyRead"]
+    assert str(ssh_root) in filesystem["denyWrite"]
+    assert str(manager_secret) in filesystem["denyRead"]
+    assert str(manager_secret) in filesystem["denyWrite"]
+    assert payload["sandbox"]["network"]["allowedDomains"] == ["*"]
+
+    monkeypatch.setattr(
+        "backend.services.task_agent_isolation.shutil.which",
+        lambda name: f"/usr/bin/{name}",
+    )
+    monkeypatch.setattr(
+        "backend.services.task_agent_isolation.require_claude_apply_seccomp",
+        lambda _binary: Path("/opt/sandbox-runtime/x64/apply-seccomp"),
+    )
+    results = iter((
+        _sandbox_loading_canary_result(),
+        SimpleNamespace(returncode=0, stdout="", stderr=""),
+    ))
+    monkeypatch.setattr(
+        "backend.services.task_agent_isolation.subprocess.run",
+        lambda *_args, **_kwargs: next(results),
+    )
+    validate_claude_task_isolation_settings(
+        path,
+        claude_binary="claude",
+        tools=CLAUDE_MONITOR_BUILTIN_TOOLS,
+        _expected_read_only_paths=(str(ssh_root),),
+    )
+
+
 def test_claude_task_isolation_denies_credentials_and_direct_ssh_network(
     tmp_path,
     monkeypatch,

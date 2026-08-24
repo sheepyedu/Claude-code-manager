@@ -72,6 +72,7 @@ describe('MonitorPanel codex annotation', () => {
       max_checks: 10,
       model: 'gpt-5.6-sol',
       provider: 'codex',
+      direct_ssh: true,
       status: 'running',
       checks_done: 0,
       last_summary: null,
@@ -93,6 +94,7 @@ describe('MonitorPanel codex annotation', () => {
         sessions={[session]}
       />,
     );
+    expect(screen.getByText('direct SSH')).toBeInTheDocument();
     await userEvent.click(screen.getByTitle('Stop monitor'));
 
     expect(api.deleteMonitorSession).toHaveBeenCalledWith(1, 7);

@@ -461,6 +461,7 @@ async def create_monitor(
     context: str = "",
     interval: int = 120,
     max_checks: int = 50,
+    direct_ssh: bool = False,
 ) -> str:
     """启动一个后台监控子 session。不阻塞当前对话。
 
@@ -472,6 +473,9 @@ async def create_monitor(
         context: 额外上下文（如日志路径、进程名、PID、如何判断完成）
         interval: 检查间隔秒数（默认 120）
         max_checks: 最大检查次数（默认 50，达到后自动停止）
+        direct_ssh: 是否允许读取本机 ~/.ssh 并通过系统 ssh 直接观察远端。
+            仅 unrestricted 管理员回合可用；远端命令无法由 CCM 强制只读，
+            因此只在用户明确要求使用既有 SSH config 时设为 true。
     """
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -483,6 +487,7 @@ async def create_monitor(
                     "monitor_context": context,
                     "interval": interval,
                     "max_checks": max_checks,
+                    "direct_ssh": direct_ssh,
                 },
             )
             resp.raise_for_status()
@@ -491,7 +496,11 @@ async def create_monitor(
                 "success": True,
                 "monitor_id": data["id"],
                 "status": "created",
-                "message": f"Monitor #{data['id']} 已启动，每 {interval} 秒检查一次，最多 {max_checks} 次。",
+                "message": (
+                    f"Monitor #{data['id']} 已启动，每 {interval} 秒检查一次，"
+                    f"最多 {max_checks} 次。"
+                    + (" 已显式启用 direct SSH。" if direct_ssh else "")
+                ),
             }, ensure_ascii=False)
     except Exception as e:
         return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False)
@@ -520,6 +529,7 @@ async def check_monitors() -> str:
                     "checks_done": s["checks_done"],
                     "max_checks": s["max_checks"],
                     "last_summary": s.get("last_summary"),
+                    "direct_ssh": bool(s.get("direct_ssh", False)),
                 })
             return json.dumps({"success": True, "monitors": summary}, ensure_ascii=False)
     except Exception as e:

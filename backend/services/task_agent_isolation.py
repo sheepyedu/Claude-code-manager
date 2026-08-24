@@ -1367,6 +1367,7 @@ def _generate_claude_isolation_settings(
     include_mcp_tools: bool = True,
     read_only_deny_paths: Iterable[str] = (),
     read_only_allow_paths: Iterable[str] = (),
+    read_only_paths: Iterable[str] = (),
     allowed_write_paths: Iterable[str] | None = None,
 ) -> Path:
     from backend.config import settings
@@ -1391,6 +1392,10 @@ def _generate_claude_isolation_settings(
         read_only_allow_paths,
         label="read-only allow projection",
     )
+    read_only_write_denies = _canonical_exact_filesystem_paths(
+        read_only_paths,
+        label="read-only path projection",
+    )
     write_overrides = (
         None
         if allowed_write_paths is None
@@ -1399,8 +1404,12 @@ def _generate_claude_isolation_settings(
             label="write allow projection",
         )
     )
-    write_denies = tuple(sorted({*credential_paths, *read_only_denies}))
-    read_denies = write_denies
+    write_denies = tuple(sorted({
+        *credential_paths,
+        *read_only_denies,
+        *read_only_write_denies,
+    }))
+    read_denies = tuple(sorted({*credential_paths, *read_only_denies}))
     read_overrides = tuple(sorted({
         *credential_read_overrides,
         *read_only_overrides,
@@ -1656,13 +1665,14 @@ def generate_claude_aux_isolation_settings(
     protected_paths: Iterable[str],
     turn_generation: int | None = None,
     disable_direct_network: bool = False,
+    direct_ssh_read_paths: Iterable[str] = (),
 ) -> Path:
     """Write exact settings for a Monitor or Sub-Agent Claude child.
 
     Auxiliary children use their own scoped MCP callback and never inherit the
-    main Task's AskUser/SSH hooks.  A parent Task with managed SSH grants also
-    disables direct child networking, so the grant cannot be bypassed through
-    an independently launched child.
+    main Task's AskUser/SSH hooks. ``direct_ssh_read_paths`` is reserved for an
+    explicitly admitted administrator Monitor; those paths remain locally
+    read-only even though the system SSH client may consume their contents.
     """
 
     if namespace not in {"monitor", "sub-agent"}:
@@ -1681,6 +1691,7 @@ def generate_claude_aux_isolation_settings(
         ssh_capabilities=(),
         disable_direct_network=disable_direct_network,
         include_task_hooks=False,
+        read_only_paths=direct_ssh_read_paths,
         builtin_tools=(
             CLAUDE_MONITOR_BUILTIN_TOOLS
             if namespace == "monitor"
@@ -1849,6 +1860,7 @@ def _validate_claude_security_contract(
     expected_tools: tuple[str, ...],
     include_mcp_tools: bool = True,
     expected_read_only_denies: tuple[str, ...] = (),
+    expected_read_only_paths: tuple[str, ...] = (),
     expected_allow_read: tuple[str, ...] | None = None,
     expected_allow_write: tuple[str, ...] | None = None,
     require_network_disabled: bool = False,
@@ -1948,11 +1960,18 @@ def _validate_claude_security_contract(
         expected_read_only_denies,
         label="validated read-only deny projection",
     )
+    read_only_paths = _canonical_exact_filesystem_paths(
+        expected_read_only_paths,
+        label="validated read-only path projection",
+    )
+    expected_write_denies = sorted({*paths, *read_only_paths}) if isinstance(
+        paths, list
+    ) else []
     if (
         not isinstance(paths, list)
         or not paths
         or paths != sorted(set(paths))
-        or filesystem["denyWrite"] != paths
+        or filesystem["denyWrite"] != expected_write_denies
         or not isinstance(filesystem["allowRead"], list)
         or filesystem["allowRead"] != sorted(set(filesystem["allowRead"]))
         or any(
@@ -2241,6 +2260,7 @@ def validate_claude_task_isolation_settings(
     timeout_seconds: float = 5.0,
     include_mcp_tools: bool = True,
     _expected_read_only_denies: tuple[str, ...] = (),
+    _expected_read_only_paths: tuple[str, ...] = (),
     _expected_allow_read: tuple[str, ...] | None = None,
     _expected_allow_write: tuple[str, ...] | None = None,
     _require_network_disabled: bool = False,
@@ -2261,6 +2281,7 @@ def validate_claude_task_isolation_settings(
         expected_tools=selected_tools,
         include_mcp_tools=include_mcp_tools,
         expected_read_only_denies=_expected_read_only_denies,
+        expected_read_only_paths=_expected_read_only_paths,
         expected_allow_read=_expected_allow_read,
         expected_allow_write=_expected_allow_write,
         require_network_disabled=_require_network_disabled,
