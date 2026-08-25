@@ -34,9 +34,11 @@ cd frontend && npx tsc --noEmit
 | 测试 | 验证内容 |
 |------|---------|
 | `test_protected_paths_cover_all_git_credential_sources` | 已存在的 repo `.git/credentials` 继续进入 deny 列表；不存在的叶子路径不生成 Bubblewrap 挂载，父 `.git` deny 保持不变 |
-| `test_codex_app_server.py::test_task_ssh_profile_collapses_only_redundant_nested_denies` | 父目录已 deny 时折叠冗余子 deny，避免 Bubblewrap 在只读父挂载中创建子挂载点；若中间 workspace 已重新开放则保留子 deny，精确只读例外仍可覆盖父 deny |
+| `test_codex_app_server.py::test_task_ssh_profile_collapses_only_redundant_nested_denies` | 父目录已 deny 时折叠冗余子 deny，避免 Bubblewrap 在只读父挂载中创建子挂载点；若中间 workspace 已重新开放则保留子 deny，精确只读例外仍可覆盖父 deny；Codex runtime 以 exact release 目录只读挂载，保证 sandbox 内 re-exec 可遍历父路径 |
+| `test_task_ssh_profile_rejects_runtime_projection_with_extra_sibling` | runtime release 目录只允许投影 `codex` 与可选 `codex-code-mode-host`，出现额外 sibling 时在 admission 前 fail closed |
 | `test_codex_runtime_read_paths_resolves_official_npm_launcher` | 官方 npm `codex.js` 经 manifest、平台依赖和 owner 校验后只投影原生 `codex` 与 `codex-code-mode-host`，app-server 不再因 package-relative optional dependency 丢失而退出 |
 | `test_codex_runtime_read_paths_rejects_unknown_node_launcher` | 未经证明的同名 Node launcher 不会扩大为 `node_modules` 目录读取权限，而是 fail closed |
+| `test_real_codex_delivery_permission_profile_blocks_host_reads`（需 `CCM_RUN_REAL_CODEX_SANDBOX_TESTS=1`） | 使用真实 Codex 0.147 app-server 执行 sandbox shell，证明 exact runtime release 目录可 re-exec，同时 workspace 外文件与宿主凭据环境仍不可见；不发送模型请求 |
 
 #### `test_tmp_space_manager.py` — `/tmp` 压力保护
 

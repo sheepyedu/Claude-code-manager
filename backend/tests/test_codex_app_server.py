@@ -36,6 +36,7 @@ from backend.services.codex_app_server import (
     _TurnContext,
     _APP_SERVER_STREAM_LIMIT,
     _audit_isolated_request_config,
+    _codex_runtime_projection_read_roots,
     _codex_runtime_read_paths,
     _format_process_exit,
     _harden_ambient_shell_environment_policy,
@@ -578,7 +579,12 @@ def test_task_ssh_profile_collapses_only_redundant_nested_denies(tmp_path):
     api_accounts = ccm_home / "api-accounts"
     workspace_credential = workspace / ".git" / "credentials"
     workspace_secret = workspace / "secrets" / "token"
-    codex_runtime = ccm_home / "packages" / "standalone" / "bin" / "codex"
+    codex_runtime = (
+        ccm_home
+        / "codex-runtime"
+        / ("a" * 32)
+        / "codex"
+    )
     codex_runtime.parent.mkdir(parents=True)
     codex_runtime.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     codex_runtime.chmod(0o755)
@@ -604,7 +610,8 @@ def test_task_ssh_profile_collapses_only_redundant_nested_denies(tmp_path):
     assert filesystem[str(workspace)] == "write"
     assert filesystem[str(workspace / ".git")] == "deny"
     assert filesystem[str(ccm_home)] == "deny"
-    assert filesystem[str(codex_runtime)] == "read"
+    assert filesystem[str(codex_runtime.parent)] == "read"
+    assert str(codex_runtime) not in filesystem
     assert str(api_accounts) not in filesystem
     assert str(workspace_credential) not in filesystem
     # The writable workspace is the nearest boundary, so this deny is not
@@ -626,6 +633,39 @@ def test_task_ssh_profile_collapses_only_redundant_nested_denies(tmp_path):
     assert filesystem_with_read_override[str(ccm_home)] == "deny"
     assert str(api_accounts) not in filesystem_with_read_override
     assert filesystem_with_read_override[str(selected_credential)] == "read"
+
+
+def test_task_ssh_profile_rejects_runtime_projection_with_extra_sibling(
+    tmp_path,
+):
+    workspace = tmp_path / "workspace"
+    scratch = tmp_path / "scratch"
+    runtime_dir = tmp_path / "codex-runtime" / ("b" * 32)
+    runtime_dir.mkdir(parents=True)
+    codex_runtime = runtime_dir / "codex"
+    codex_runtime.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    codex_runtime.chmod(0o755)
+    (runtime_dir / "unexpected-helper").write_text(
+        "must not enter the sandbox\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Codex runtime projection directory is not exact",
+    ):
+        _task_ssh_permission_config(
+            cwd=str(workspace),
+            protected_paths=(),
+            allowed_read_paths=(),
+            git_read_paths=(),
+            private_tmpdir=str(scratch),
+            disable_network=False,
+            managed_network_proxy=False,
+            direct_ssh=True,
+            sandbox_mode="read-only",
+            runtime_read_paths=(str(codex_runtime),),
+        )
 
 
 def test_codex_runtime_read_paths_projects_allow_listed_release_files(tmp_path):
@@ -4601,6 +4641,9 @@ async def test_real_codex_managed_public_network_extended_boundary(
         codex_executable = str(native_source)
     runtime_read_paths = _codex_runtime_read_paths(codex_executable)
     assert runtime_read_paths
+    runtime_read_roots = _codex_runtime_projection_read_roots(
+        runtime_read_paths
+    )
     source_denied_parent = next(
         (
             parent
@@ -4667,7 +4710,7 @@ async def test_real_codex_managed_public_network_extended_boundary(
                         if source_denied_parent is not None
                         else {}
                     ),
-                    **{path: "read" for path in runtime_read_paths},
+                    **{path: "read" for path in runtime_read_roots},
                 },
                 "network": network,
             },
@@ -4726,7 +4769,10 @@ async def test_real_codex_managed_public_network_extended_boundary(
                 if source_denied_parent is not None
                 else []
             ),
-            f'{json.dumps(runtime_path)} = "read"',
+            *(
+                f'{json.dumps(runtime_root)} = "read"'
+                for runtime_root in runtime_read_roots
+            ),
             "",
             f"[permissions.{profile}.network]",
             "enabled = true",
@@ -4778,7 +4824,7 @@ async def test_real_codex_managed_public_network_extended_boundary(
         codex_executable,
         codex_home=codex_home,
     )
-    assert server.binary == runtime_path
+    assert server.binary == runtime_read_paths[0]
 
     async def execute(command: list[str]) -> dict:
         completed = await asyncio.to_thread(
@@ -5015,8 +5061,17 @@ async def test_real_codex_delivery_permission_profile_blocks_host_reads(
         encoding="utf-8",
     )
     codex_executable = shutil.which("codex") or "codex"
+    native_override = os.environ.get("CCM_REAL_CODEX_NATIVE_BINARY")
+    if native_override:
+        native_source = Path(native_override).resolve(strict=True)
+        if not native_source.is_file():
+            pytest.fail("CCM_REAL_CODEX_NATIVE_BINARY is not a regular file")
+        codex_executable = str(native_source)
     runtime_read_paths = _codex_runtime_read_paths(codex_executable)
     assert runtime_read_paths
+    runtime_read_roots = _codex_runtime_projection_read_roots(
+        runtime_read_paths
+    )
     profile = "ccm_delivery_workspace_v1"
     monkeypatch.setenv("GH_TOKEN", "must-not-enter-delivery-shell")
     monkeypatch.setenv("GITHUB_TOKEN", "must-not-enter-delivery-shell")
@@ -5030,7 +5085,7 @@ async def test_real_codex_delivery_permission_profile_blocks_host_reads(
                     ":root": "deny",
                     ":minimal": "read",
                     str(workspace.resolve()): "write",
-                    **{path: "read" for path in runtime_read_paths},
+                    **{path: "read" for path in runtime_read_roots},
                 },
                 "network": {
                     "enabled": False,
@@ -5056,7 +5111,10 @@ async def test_real_codex_delivery_permission_profile_blocks_host_reads(
             '":root" = "deny"',
             '":minimal" = "read"',
             f'{json.dumps(str(workspace.resolve()))} = "write"',
-            f'{json.dumps(runtime_path)} = "read"',
+            *(
+                f'{json.dumps(runtime_root)} = "read"'
+                for runtime_root in runtime_read_roots
+            ),
             "",
             f"[permissions.{profile}.network]",
             "enabled = false",
@@ -5118,7 +5176,7 @@ async def test_real_codex_delivery_permission_profile_blocks_host_reads(
                 "timeoutMs": 5_000,
             },
         )
-        assert env_result["exitCode"] == 0
+        assert env_result["exitCode"] == 0, env_result
         assert "GH_TOKEN=" not in env_result["stdout"]
         assert "GITHUB_TOKEN=" not in env_result["stdout"]
         assert "SSH_AUTH_SOCK=" not in env_result["stdout"]

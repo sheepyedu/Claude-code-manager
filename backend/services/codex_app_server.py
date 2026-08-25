@@ -975,7 +975,83 @@ def _codex_runtime_read_paths(
             or not os.path.samefile(source, projection)
         ):
             return ()
+    try:
+        projected_names = {projection.name for _, _, projection in projections}
+        directory_entries = {entry.name for entry in release_dir.iterdir()}
+    except OSError:
+        return ()
+    if directory_entries != projected_names:
+        # The permission profile re-opens this directory as one read-only
+        # bwrap mount so the re-exec path remains traversable below :root=deny.
+        # Never admit an unrelated sibling into that mount.
+        return ()
     return tuple(str(projection) for _, _, projection in projections)
+
+
+def _codex_runtime_projection_read_roots(
+    runtime_read_paths: Sequence[str],
+) -> tuple[str, ...]:
+    """Validate one exact content-addressed runtime directory for bwrap."""
+
+    if not runtime_read_paths:
+        return ()
+    effective_uid = os.geteuid() if hasattr(os, "geteuid") else None
+    paths: list[Path] = []
+    for value in runtime_read_paths:
+        path = Path(os.path.abspath(os.path.expanduser(str(value))))
+        try:
+            info = path.lstat()
+            resolved = path.resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            raise ValueError(
+                "Codex runtime projection is not an executable file"
+            ) from exc
+        if (
+            path == Path("/")
+            or resolved != path
+            or not stat.S_ISREG(info.st_mode)
+            or (effective_uid is not None and info.st_uid != effective_uid)
+            or not os.access(path, os.X_OK)
+        ):
+            raise ValueError(
+                "Codex runtime projection is not an executable file"
+            )
+        paths.append(path)
+
+    parents = {path.parent for path in paths}
+    expected_names = {"codex.exe" if os.name == "nt" else "codex"}
+    helper_name = (
+        "codex-code-mode-host.exe"
+        if os.name == "nt"
+        else "codex-code-mode-host"
+    )
+    supplied_names = {path.name for path in paths}
+    if (
+        len(paths) != len(supplied_names)
+        or len(parents) != 1
+        or not expected_names.issubset(supplied_names)
+        or not supplied_names.issubset(expected_names | {helper_name})
+    ):
+        raise ValueError("Codex runtime projection directory is not exact")
+
+    parent = next(iter(parents))
+    try:
+        parent_info = parent.lstat()
+        resolved_parent = parent.resolve(strict=True)
+        directory_entries = {entry.name for entry in parent.iterdir()}
+    except (OSError, RuntimeError) as exc:
+        raise ValueError(
+            "Codex runtime projection directory is not exact"
+        ) from exc
+    if (
+        resolved_parent != parent
+        or not stat.S_ISDIR(parent_info.st_mode)
+        or (effective_uid is not None and parent_info.st_uid != effective_uid)
+        or re.fullmatch(r"[0-9a-f]{32}", parent.name) is None
+        or directory_entries != supplied_names
+    ):
+        raise ValueError("Codex runtime projection directory is not exact")
+    return (str(parent),)
 
 
 def _task_ssh_permission_config(
@@ -1056,17 +1132,11 @@ def _task_ssh_permission_config(
         # denied parent alongside this exact file read entry prevents ambient
         # siblings or later-created credentials from becoming visible.
         filesystem[path] = "read"
-    for value in runtime_read_paths:
-        path = os.path.abspath(os.path.expanduser(str(value)))
-        if (
-            path == "/"
-            or not os.path.isfile(path)
-            or not os.access(path, os.X_OK)
-        ):
-            raise ValueError("Codex runtime projection is not an executable file")
+    for path in _codex_runtime_projection_read_roots(runtime_read_paths):
         # Codex 0.147 re-execs its canonical standalone binary for shell
-        # commands. The binary commonly lives below a protected CODEX_HOME,
-        # so reopen only this exact file after installing the parent deny.
+        # commands.  A file-only bwrap mount below :root=deny leaves its 0700
+        # parents untraversable and execvp reports ENOENT. Re-open the exact,
+        # content-addressed directory after proving it has no extra siblings.
         filesystem[path] = "read"
     for value in git_read_paths:
         path = os.path.abspath(os.path.expanduser(str(value)))
@@ -1185,14 +1255,7 @@ def _network_isolated_permission_config(
         if path == "/":
             raise ValueError("Delivery linked Git read path cannot be root")
         filesystem[path] = "read"
-    for value in runtime_read_paths:
-        path = os.path.abspath(os.path.expanduser(str(value)))
-        if (
-            path == "/"
-            or not os.path.isfile(path)
-            or not os.access(path, os.X_OK)
-        ):
-            raise ValueError("Codex runtime projection is not an executable file")
+    for path in _codex_runtime_projection_read_roots(runtime_read_paths):
         filesystem[path] = "read"
     if scratch in {"/", workspace}:
         raise ValueError("Delivery scratch path must be an external leaf")
