@@ -30,6 +30,11 @@ from typing import Any
 
 import httpx
 
+from backend.services.codex_models import (
+    FAST_CODEX_SERVICE_TIER,
+    supported_codex_service_tiers,
+)
+
 logger = logging.getLogger(__name__)
 
 CLAUDE_BASE_URL = "https://console.cloudrouter.online"
@@ -58,8 +63,8 @@ LEGACY_APEX_CODEX_ONLY_ENDPOINTS = {
     "usage_url": APEX_USAGE_URL,
 }
 # Keep this aligned with the Codex CLI version pinned by scripts/setup.sh and
-# WorkerProvisioner.  Apex exposes the native Codex model catalog endpoint,
-# which requires the caller version in order to filter compatible models.
+# WorkerProvisioner. Apex may return either the native Codex catalog or its
+# OpenAI-compatible model list; keep the version query for native deployments.
 APEX_CODEX_CLIENT_VERSION = "0.147.0"
 API_PROVIDER_CLOUDROUTER = "cloudrouter"
 API_PROVIDER_APEX = "apex"
@@ -146,6 +151,7 @@ MAX_CLEANUP_CODE_BYTES = 64
 MAX_CLEANUP_REASON_BYTES = 512
 SERVICE_TIER_SOURCE_NONE = "none"
 SERVICE_TIER_SOURCE_UPSTREAM = "upstream"
+SERVICE_TIER_SOURCE_APEX_RUNTIME = "apex_runtime"
 DEFAULT_HTTP_TIMEOUT = httpx.Timeout(15.0, connect=10.0)
 DEFAULT_QUOTA_CACHE_TTL = 60.0
 CLAUDE_SKIP_DANGEROUS_PROMPT = "skipDangerousModePermissionPrompt"
@@ -857,6 +863,19 @@ def _normalise_apex_models(payload: Any) -> dict[str, Any]:
         result[provider].append(model_id)
         if provider == "codex":
             tier_ids = _normalise_model_item_service_tiers(item)
+            if not native_shape:
+                # Apex's OpenAI-compatible catalog lists models but omits the
+                # Codex-native service_tiers field. Use the intersection with
+                # CCM's shipped Fast allowlist only as routing-candidate
+                # evidence; the exact turn must still prove that its priority
+                # Responses request was accepted before model output is
+                # published.
+                tier_ids = (
+                    [FAST_CODEX_SERVICE_TIER]
+                    if FAST_CODEX_SERVICE_TIER
+                    in supported_codex_service_tiers(model_id)
+                    else []
+                )
             if tier_ids:
                 service_tiers[model_id] = tier_ids
     for models in result.values():
@@ -866,6 +885,8 @@ def _normalise_apex_models(payload: Any) -> dict[str, Any]:
     # This internal probe field is split into a top-level metadata field before
     # persistence; it never changes the public ``models`` shape.
     result["service_tiers"] = service_tiers
+    if not native_shape:
+        result["service_tiers_source"] = SERVICE_TIER_SOURCE_APEX_RUNTIME
     return result
 
 
@@ -938,6 +959,26 @@ def _split_model_probe(
         unsafe_metadata=False,
     )
     return models, service_tiers
+
+
+def _service_tier_source_from_probe(
+    value: dict[str, Any],
+    *,
+    api_provider: str,
+) -> str:
+    source = value.get("service_tiers_source")
+    if source is not None:
+        if (
+            source != SERVICE_TIER_SOURCE_APEX_RUNTIME
+            or api_provider != API_PROVIDER_APEX
+        ):
+            raise CloudRouterUpstreamError("invalid_models_response")
+        return source
+    return (
+        SERVICE_TIER_SOURCE_UPSTREAM
+        if "service_tiers" in value
+        else SERVICE_TIER_SOURCE_NONE
+    )
 
 
 def _decimal(value: Any) -> Decimal | None:
@@ -1850,7 +1891,32 @@ class CloudRouterAccountStore:
                 path / "codex",
                 normalised_models["codex"],
             )
-        elif api_provider != API_PROVIDER_APEX:
+        elif api_provider == API_PROVIDER_APEX:
+            service_tier_source = data.get("service_tiers_source")
+            if service_tier_source == SERVICE_TIER_SOURCE_NONE:
+                if service_tiers:
+                    raise CloudRouterUnsafePathError(
+                        f"Inconsistent service tier metadata: {account_id}"
+                    )
+            elif service_tier_source == SERVICE_TIER_SOURCE_APEX_RUNTIME:
+                if any(
+                    tier != FAST_CODEX_SERVICE_TIER
+                    or FAST_CODEX_SERVICE_TIER
+                    not in supported_codex_service_tiers(model)
+                    for model, tiers in service_tiers.items()
+                    for tier in tiers
+                ):
+                    raise CloudRouterUnsafePathError(
+                        f"Invalid Apex runtime tier candidates: {account_id}"
+                    )
+            elif service_tier_source not in (
+                None,
+                SERVICE_TIER_SOURCE_UPSTREAM,
+            ):
+                raise CloudRouterUnsafePathError(
+                    f"Invalid service tier source metadata: {account_id}"
+                )
+        else:
             service_tier_source = data.get("service_tiers_source")
             if service_tier_source is None:
                 # Generic API metadata predating source provenance could only
@@ -2587,10 +2653,9 @@ class CloudRouterAccountStore:
     ) -> dict[str, Any]:
         current = _now()
         provider = normalize_api_provider(api_provider)
-        service_tiers_source = (
-            SERVICE_TIER_SOURCE_UPSTREAM
-            if "service_tiers" in models
-            else SERVICE_TIER_SOURCE_NONE
+        service_tiers_source = _service_tier_source_from_probe(
+            models,
+            api_provider=provider,
         )
         provider_models, service_tiers = _split_model_probe(models)
         return {
@@ -2736,10 +2801,9 @@ class CloudRouterAccountStore:
                     metadata_path, maximum=MAX_METADATA_BYTES,
                 ).decode("utf-8"),
             )
-            service_tiers_source = (
-                SERVICE_TIER_SOURCE_UPSTREAM
-                if "service_tiers" in models
-                else SERVICE_TIER_SOURCE_NONE
+            service_tiers_source = _service_tier_source_from_probe(
+                models,
+                api_provider=account.api_provider,
             )
             provider_models, service_tiers = _split_model_probe(models)
             data["models"] = provider_models

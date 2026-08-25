@@ -1509,6 +1509,42 @@ async def test_apex_model_probe_accepts_openai_compatible_response(
         "claude": ["claude-opus-4-8"],
         "codex": ["gpt-5.4"],
         "service_tiers": {"gpt-5.4": ["priority"]},
+        "service_tiers_source": "apex_runtime",
+    }
+
+
+@pytest.mark.asyncio
+async def test_apex_openai_catalog_uses_only_static_fast_candidates(
+    tmp_path, monkeypatch,
+):
+    store = CloudRouterAccountStore(tmp_path / "accounts")
+    monkeypatch.setattr(
+        store,
+        "_request_json",
+        AsyncMock(return_value={
+            "object": "list",
+            "data": [
+                {"id": "gpt-5.6-sol"},
+                {"id": "gpt-5.4-mini"},
+                {"id": "gpt-provider-specific"},
+            ],
+        }),
+    )
+
+    models = await store.probe_models(
+        "lck-test-secret",
+        api_provider="apex",
+    )
+
+    assert models == {
+        "claude": [],
+        "codex": [
+            "gpt-5.4-mini",
+            "gpt-5.6-sol",
+            "gpt-provider-specific",
+        ],
+        "service_tiers": {"gpt-5.6-sol": ["priority"]},
+        "service_tiers_source": "apex_runtime",
     }
 
 
@@ -1620,6 +1656,41 @@ async def test_apex_service_tiers_are_persisted_and_reloaded(
     }
     public = store.reload()[0].public_dict()
     assert public["service_tiers"] == {"gpt-5.4": ["priority"]}
+
+
+@pytest.mark.asyncio
+async def test_apex_runtime_fast_candidates_preserve_provenance(
+    tmp_path, monkeypatch,
+):
+    store = CloudRouterAccountStore(tmp_path / "accounts")
+    probe = AsyncMock(return_value={
+        "claude": [],
+        "codex": ["gpt-5.6-sol", "gpt-5.4-mini"],
+        "service_tiers": {"gpt-5.6-sol": ["priority"]},
+        "service_tiers_source": "apex_runtime",
+    })
+    monkeypatch.setattr(store, "probe_models", probe)
+
+    account = await store.add_account(
+        "Apex runtime Fast",
+        "lck-test-secret",
+        api_provider="apex",
+    )
+
+    metadata_path = account.root / "account.json"
+    metadata = json.loads(metadata_path.read_text())
+    assert metadata["service_tiers_source"] == "apex_runtime"
+    assert account.supports_service_tier(
+        "codex", "gpt-5.6-sol", "priority",
+    )
+    assert not account.supports_service_tier(
+        "codex", "gpt-5.4-mini", "priority",
+    )
+
+    refreshed = await store.refresh_account(account.id)
+    refreshed_metadata = json.loads(metadata_path.read_text())
+    assert refreshed_metadata["service_tiers_source"] == "apex_runtime"
+    assert refreshed.service_tiers == {"gpt-5.6-sol": ["priority"]}
 
 
 @pytest.mark.asyncio

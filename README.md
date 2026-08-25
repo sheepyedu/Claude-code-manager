@@ -45,7 +45,7 @@ Web 端调度和管理多个 Claude Code 实例并行工作。灵感来自胡渊
 - **语音输入** — 通过 OpenAI Whisper API 语音转文字创建任务
 
 ### 可靠性
-- **Claude / Codex 统一账号路由** — 原生账号与 CloudRouter、ApexRouter、APIBest API Key 共用账号池、模型/Service Tier 兼容性检查和 session 迁移。ApexRouter 同一把 Key 会按模型目录同时进入 Claude 与 Codex 号池，旧 Codex-only 账号在完整预检后安全迁移。Claude API Key 只投影给模型主进程，Bash、hooks 与 MCP 子进程仍会清除凭据。API 网关只有在自己的模型目录显式广告 Fast 时才参与选择；CCM 验证实际发出的 Responses 请求携带 `service_tier=priority`，但不会把响应中的信息性 `auto/default` 误判成失败。手动「优先账号」最高；自动模式下已有对话保持绑定账号，新会话优先兼容且可用的 API、再回退原生额度选择。两池都显示真正提交后的「最近使用」，API 候选失败不会误改徽标
+- **Claude / Codex 统一账号路由** — 原生账号与 CloudRouter、ApexRouter、APIBest API Key 共用账号池、模型/Service Tier 兼容性检查和 session 迁移。ApexRouter 同一把 Key 会按模型目录同时进入 Claude 与 Codex 号池，旧 Codex-only 账号在完整预检后安全迁移。Claude API Key 只投影给模型主进程，Bash、hooks 与 MCP 子进程仍会清除凭据。CloudRouter/APIBest 只有在自己的模型目录显式广告 Fast 时才参与选择；Apex 的 OpenAI-compatible 目录不提供 tier 字段，因此只把“目录中实际存在且位于 CCM Fast allowlist”的模型标为运行时待验证候选。所有 API Fast turn 都必须由 CCM 验证实际 Responses 请求携带 `service_tier=priority` 且被上游成功接受；响应中的 `auto/default` 仅作遥测。手动「优先账号」最高；自动模式下已有对话保持绑定账号，新会话优先兼容且可用的 API、再回退原生额度选择。两池都显示真正提交后的「最近使用」，API 候选失败不会误改徽标
 - **API 账号安全删除** — CloudRouter/ApexRouter/APIBest 账号先停用新任务，再等待活跃任务和会话释放后删除 Key 与运行配置；忙碌时保留“待清理”状态供重试，不会强杀任务，并保留 Claude projects 与 Codex sessions
 - **APIBest 渠道** — 可在 API 账号中直接添加 APIBest Key，同时发现 Claude/Codex 模型。CCM 先经 `/v1/models` 验证 Key，空目录时再读公开 `/api/pricing`，兼容可选 `service_tiers`；Codex 使用 Responses API，该渠道当前不展示额度
 - **Claude API PTY 认证** — 受管网关 Key 以无交互 Bearer token 投影给 Claude 主进程，不受 CLI `.claude.json` 中 API-key 批准/拒绝状态影响；凭据仍不会进入 Bash、hooks 或 MCP 子进程
