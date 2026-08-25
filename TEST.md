@@ -915,7 +915,7 @@ Monitor 的调度、generation 栅栏和失败恢复已有聚焦自动化测试�
 | shutdown / stop / cleanup recovery cases | 正常关机只 interrupt turn 并保留 thread；用户终止在 DB 终态后删除；无法证明 turn 终止则保留 handle 并 fail closed；冷启动重试 terminal cleanup；claim 阶段的 provider 漂移或失效冻结配置也立即清理 |
 | account/task deletion fence cases | 新 Monitor 可从已失效父账号换到可用账号，已有 thread 绝不自动换号；持久或 in-flight owner 阻止原生/API Codex 账号删除，且 home maintenance 后再次核对关闭 precheck 竞态；cleanup evidence 和未提交 handle 阻止父 Task 被删除 |
 | `test_monitor_profile_is_read_only_and_disables_autonomous_features` | thread 与 turn 都为 read-only，network 关闭，multi-agent/fanout/memory/remote compaction 关闭，owner hook 先于 `turn/start` |
-| `test_monitor_direct_ssh_uses_read_only_raw_network_profile` / `test_monitor_direct_ssh_rejects_workspace_write` | direct SSH 仅允许 read-only Codex sandbox；`~/.ssh` 可读、workspace 只读、scratch 是唯一写路径，turn 重复声明网络开启且 managed proxy 关闭 |
+| `test_monitor_direct_ssh_uses_read_only_raw_network_profile` / `test_monitor_direct_ssh_rejects_workspace_write_in_thread_response` / `test_monitor_direct_ssh_rejects_workspace_write` | direct SSH 请求 read-only Codex sandbox；Codex 0.147 可因唯一私有 scratch 写规则把 thread 粗粒度报告为 `workspaceWrite`，此时只有 exact generation scratch 可写才准入，workspace 或任意额外 writable root 均在 `turn/start` 前拒绝；`~/.ssh` 仍只读、turn 重复声明网络开启且 managed proxy 关闭 |
 | `test_mcp_config.py` | required Monitor callback MCP 复用后端当前 Python 解释器且命令真实存在，兼容 Linux venv、Docker system Python 与 Windows `Scripts/python.exe` |
 | PR7B1 merge-time capability 回归（历史）/ `MonitorPanel.test.tsx` | PR7B1 未提前开放公开入口；已有内部 Codex Monitor 可从面板精确 Stop，终态 thread 删除失败会显示 durable error 并保留“Retry Codex cleanup”入口 |
 

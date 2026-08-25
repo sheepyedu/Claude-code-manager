@@ -1483,6 +1483,7 @@ def _audit_task_ssh_thread_response(
     response: Any,
     *,
     permission_profile_id: str,
+    private_tmpdir: str,
     disable_network: bool,
     managed_network_proxy: bool,
     direct_ssh: bool,
@@ -1501,7 +1502,7 @@ def _audit_task_ssh_thread_response(
     ):
         raise ValueError("Task isolation profile was not selected")
     sandbox = response.get("sandbox")
-    expected_type = {
+    requested_type = {
         "workspace-write": "workspaceWrite",
         "read-only": "readOnly",
     }.get(sandbox_mode)
@@ -1512,12 +1513,36 @@ def _audit_task_ssh_thread_response(
     )) != 1:
         raise ValueError("Task response audit lost its network boundary")
     expected_network = managed_network_proxy or direct_ssh
-    if (
-        not isinstance(sandbox, dict)
-        or sandbox.get("type") != expected_type
-        or sandbox.get("networkAccess") is not expected_network
+    if not isinstance(sandbox, dict) or (
+        sandbox.get("networkAccess") is not expected_network
     ):
         raise ValueError("Task isolation resolved an unexpected sandbox policy")
+    resolved_type = sandbox.get("type")
+    if resolved_type != requested_type:
+        # Codex 0.147 derives this coarse label from the selected permission
+        # profile. Every Task profile grants its inode-fenced private TMPDIR one
+        # exact write rule, so a read-only workspace is reported as
+        # workspaceWrite. Accept that representation only when the response
+        # proves the scratch leaf is the sole writable root.
+        writable_roots = sandbox.get("writableRoots")
+        scratch = os.path.abspath(os.path.expanduser(private_tmpdir))
+        if (
+            sandbox_mode != "read-only"
+            or resolved_type != "workspaceWrite"
+            or not isinstance(writable_roots, list)
+            or len(writable_roots) != 1
+            or not isinstance(writable_roots[0], str)
+            or not os.path.isabs(writable_roots[0])
+            or os.path.abspath(writable_roots[0]) != scratch
+        ):
+            raise ValueError(
+                "Task isolation resolved an unexpected sandbox policy"
+            )
+    elif sandbox_mode == "read-only" and sandbox.get("writableRoots") not in (
+        None,
+        [],
+    ):
+        raise ValueError("Task read-only sandbox reported writable roots")
     sources = response.get("instructionSources")
     if not isinstance(sources, list):
         raise ValueError("Task isolation did not report instruction sources")
@@ -6293,6 +6318,7 @@ class CodexAppServer:
                 _audit_task_ssh_thread_response(
                     response,
                     permission_profile_id=str(task_permission_profile),
+                    private_tmpdir=str(task_private_tmpdir.path),
                     disable_network=task_ssh_disable_network,
                     managed_network_proxy=task_managed_network_proxy,
                     direct_ssh=task_direct_ssh,

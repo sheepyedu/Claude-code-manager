@@ -1184,12 +1184,20 @@ async def test_monitor_direct_ssh_uses_read_only_raw_network_profile(
         if method == "skills/list":
             return _empty_skills_response(boundary.cwd)
         if method == "thread/start":
-            return _task_isolated_thread_response(
+            response = _task_isolated_thread_response(
                 "thread-monitor-direct-ssh",
                 permission_profile=params["config"]["default_permissions"],
-                sandbox_type="readOnly",
+                # Codex 0.147 reports the exact private TMPDIR write grant as
+                # workspaceWrite even though the requested workspace remains
+                # read-only.  The writable-roots proof is the security
+                # boundary, not the coarse sandbox type label.
+                sandbox_type="workspaceWrite",
                 network_access=True,
             )
+            response["sandbox"]["writableRoots"] = [
+                str(boundary.scratch.path),
+            ]
+            return response
         if method == "turn/start":
             return {"turn": {"id": "turn-monitor-direct-ssh"}}
         raise AssertionError(method)
@@ -1247,6 +1255,66 @@ async def test_monitor_direct_ssh_uses_read_only_raw_network_profile(
         "type": "readOnly",
         "networkAccess": True,
     }
+
+
+@pytest.mark.asyncio
+async def test_monitor_direct_ssh_rejects_workspace_write_in_thread_response(
+    isolated_task_boundary,
+):
+    boundary = isolated_task_boundary(99303)
+    server = CodexAppServer("codex")
+    server._process = SimpleNamespace(pid=4321, returncode=None)
+    server._runtime_version = (0, 147, 0)
+    server.ensure_started = AsyncMock()
+
+    async def request(method, params, **_kwargs):
+        if method == "config/read":
+            return _ambient_mcp_response()
+        if method == "skills/list":
+            return _empty_skills_response(boundary.cwd)
+        if method == "thread/start":
+            response = _task_isolated_thread_response(
+                "thread-monitor-direct-ssh-widened",
+                permission_profile=params["config"]["default_permissions"],
+                sandbox_type="workspaceWrite",
+                network_access=True,
+            )
+            response["sandbox"]["writableRoots"] = [
+                str(boundary.scratch.path),
+                boundary.cwd,
+            ]
+            return response
+        raise AssertionError(method)
+
+    server._request = AsyncMock(side_effect=request)
+    with pytest.raises(
+        CodexRequiredMcpPreTurnError,
+        match="Task isolation profile was not proven",
+    ):
+        await server.start_turn(
+            prompt="must not write the workspace",
+            cwd=boundary.cwd,
+            model="gpt-5.6-sol",
+            effort="high",
+            resume_session_id=None,
+            git_env=None,
+            task_id=99303,
+            disable_project_config=True,
+            disable_user_mcp=True,
+            sandbox_mode="read-only",
+            task_ssh_protected_paths=("/private/ccm/manager-secret",),
+            task_ssh_allowed_read_paths=("/Users/operator/.ssh",),
+            task_git_read_paths=boundary.git_read_paths,
+            task_git_boundary_fingerprint=boundary.git_fingerprint,
+            task_private_tmpdir=boundary.scratch,
+            task_direct_ssh=True,
+            disable_autonomous_features=True,
+        )
+
+    assert not any(
+        call.args[0] == "turn/start"
+        for call in server._request.await_args_list
+    )
 
 
 @pytest.mark.asyncio
