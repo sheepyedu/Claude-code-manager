@@ -1180,3 +1180,9 @@ ocean/forest/rose 归入 Legacy 组。Header 顶栏导航重构为 AppShell（�
 - **解决**：为 `create_monitor` 新增默认关闭的 `direct_ssh`。只有本地、非 Shared、非 Worker 管理的 unrestricted `admin/super_admin` 回合可以显式开启；创建时冻结发起主体，并在 claim、provider admission 和最终启动边界复验账号仍 active、角色未变化。Claude/Codex 只读投影同 owner、非 symlink 且不可被 group/other 写入的现有 `~/.ssh`，清除 SSH agent/askpass 与 Manager/provider 凭据，保留系统 `ssh` 直连网络，同时禁止本机 SSH 文件和 workspace 写入。
 - **安全边界**：该路径不依赖 CCM SSH MCP。CCM 沙箱只能强制本机配置与密钥只读，不能强制远端 shell 只读；因此 UI、prompt 和文档均把能力限定为日志、进程、容器与文件元数据等观察操作，默认 Monitor 权限保持不变，主体降权、停用或 Task 迁移后 fail closed。
 - **验证**：direct SSH/API/MCP/Dispatcher/Codex/Claude/隔离专项矩阵 `581 passed, 3 skipped`；MonitorPanel `8 passed`，TypeScript `tsc --noEmit` 通过；Alembic 唯一 head `b18d4f6a2c90`，临时 SQLite `upgrade → downgrade → upgrade` 往返通过。后端全量为 `6725 passed, 4 skipped, 111 failed`，失败集中在仓库既有的历史 migration downgrade、生产 isolation 配置差异、update/systemd、Worker 与时间竞态测试，direct SSH 新增用例均通过。实现提交 `f1bb1920`。
+
+## 2026-08-25 — Apex OpenAI 目录缺失 Fast tier 的准入恢复
+
+- **问题**：Task 70 冻结为 `gpt-5.6-sol + priority`，但新建的 `apex-6` 从 Apex OpenAI-compatible `/v1/models` 得到模型 ID 时没有 `service_tiers` 字段，CCM 将空 tier map 持久化，导致续聊在任何 provider 请求前误判为“无 Fast 账号”。旧 Apex 账号曾保存 priority 候选，因此行为不一致。
+- **解决**：Apex `data[].id` 目录只把“上游实际列出的 Codex 模型 ∩ CCM 静态 Fast allowlist”持久化为 `service_tiers_source=apex_runtime`；mini 和未知模型保持 Standard-only。Apex native `models[].slug` 若显式携带 tier 仍按上游声明，CloudRouter/APIBest 规则不变。`apex_runtime` 只恢复候选准入，exact turn 仍须由 loopback proxy 证明发出的 Responses 请求携带 priority 并成功收到 `response.created`；`auto/default` 响应 tier 只记遥测，不宣称实际调度档位。
+- **验证**：真实 `apex-6` `/v1/models` 经新解析得到 `gpt-5.6-sol -> priority`、来源 `apex_runtime`；此前最小 priority 请求已获 HTTP 200 与 `response.created`。账号目录、CodexPool、tier proxy、app-server 和 Dispatcher 矩阵在空测试 `CODEX_HOME` 下 `939 passed, 3 skipped`；Python compile 与 `git diff --check` 通过。实现提交 `077fd67f`。
