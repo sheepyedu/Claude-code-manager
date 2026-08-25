@@ -1186,3 +1186,10 @@ ocean/forest/rose 归入 Legacy 组。Header 顶栏导航重构为 AppShell（�
 - **问题**：Task 70 冻结为 `gpt-5.6-sol + priority`，但新建的 `apex-6` 从 Apex OpenAI-compatible `/v1/models` 得到模型 ID 时没有 `service_tiers` 字段，CCM 将空 tier map 持久化，导致续聊在任何 provider 请求前误判为“无 Fast 账号”。旧 Apex 账号曾保存 priority 候选，因此行为不一致。
 - **解决**：Apex `data[].id` 目录只把“上游实际列出的 Codex 模型 ∩ CCM 静态 Fast allowlist”持久化为 `service_tiers_source=apex_runtime`；mini 和未知模型保持 Standard-only。Apex native `models[].slug` 若显式携带 tier 仍按上游声明，CloudRouter/APIBest 规则不变。`apex_runtime` 只恢复候选准入，exact turn 仍须由 loopback proxy 证明发出的 Responses 请求携带 priority 并成功收到 `response.created`；`auto/default` 响应 tier 只记遥测，不宣称实际调度档位。
 - **验证**：真实 `apex-6` `/v1/models` 经新解析得到 `gpt-5.6-sol -> priority`、来源 `apex_runtime`；此前最小 priority 请求已获 HTTP 200 与 `response.created`。账号目录、CodexPool、tier proxy、app-server 和 Dispatcher 矩阵在空测试 `CODEX_HOME` 下 `939 passed, 3 skipped`；Python compile 与 `git diff --check` 通过。实现提交 `077fd67f`。
+
+## 2026-08-25 — Codex Monitor direct SSH 首轮准入修复
+
+- **问题**：真实 direct-SSH Monitor #774/#775 都在 `checks_done=0` 连续三次失败，尚未执行 SSH。CCM 请求了 read-only workspace，但权限 profile 仍为 generation 私有 `TMPDIR` 保留唯一写规则；Codex 0.147 因此在 `thread/start` 中粗粒度报告 `sandbox.type=workspaceWrite`、`writableRoots=[private scratch]`。旧审计和单测硬编码期待 `readOnly`，在模型输入前误拒绝了安全且精确的实际响应。
+- **解决**：继续要求调用方使用 read-only 模式、exact request-local permission profile 和期望网络状态；仅当 `workspaceWrite` 的唯一绝对 writable root 与本轮 inode-fenced 私有 scratch 完全一致时接受该响应。workspace、普通 `/tmp` 或任何第二写路径仍在 `turn/start` 前 fail closed。回归测试改用真实 Codex 0.147 响应，并新增 workspace 扩权反例。
+- **避免复发**：provider admission 测试必须至少捕获一次当前 pin runtime 的真实脱敏响应形状；不能用手写的理想化 sandbox 标签代替协议证据。粗粒度 mode 与细粒度 writable roots 冲突时，以 exact roots 作准入证明，同时保留负向扩权测试。
+- **验证**：无模型真实 admission probe 返回 `workspaceWrite + networkAccess=true + [private scratch]` 并通过新审计，随后主动阻断 `turn/start` 且删除空 thread；Codex app-server 在空 `CODEX_HOME` 下 `320 passed, 3 skipped`，direct SSH/隔离/API/MCP 专项分别 `7/45/38/17 passed`，Python compile 与 `git diff --check` 通过。实现提交 `1db77916`。
