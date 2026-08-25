@@ -1193,3 +1193,10 @@ ocean/forest/rose 归入 Legacy 组。Header 顶栏导航重构为 AppShell（�
 - **解决**：继续要求调用方使用 read-only 模式、exact request-local permission profile 和期望网络状态；仅当 `workspaceWrite` 的唯一绝对 writable root 与本轮 inode-fenced 私有 scratch 完全一致时接受该响应。workspace、普通 `/tmp` 或任何第二写路径仍在 `turn/start` 前 fail closed。回归测试改用真实 Codex 0.147 响应，并新增 workspace 扩权反例。
 - **避免复发**：provider admission 测试必须至少捕获一次当前 pin runtime 的真实脱敏响应形状；不能用手写的理想化 sandbox 标签代替协议证据。粗粒度 mode 与细粒度 writable roots 冲突时，以 exact roots 作准入证明，同时保留负向扩权测试。
 - **验证**：无模型真实 admission probe 返回 `workspaceWrite + networkAccess=true + [private scratch]` 并通过新审计，随后主动阻断 `turn/start` 且删除空 thread；Codex app-server 在空 `CODEX_HOME` 下 `320 passed, 3 skipped`，direct SSH/隔离/API/MCP 专项分别 `7/45/38/17 passed`，Python compile 与 `git diff --check` 通过。实现提交 `1db77916`。
+
+## 2026-08-25 — Codex Monitor direct SSH runtime re-exec 修复
+
+- **问题**：准入修复后，独立 CCM 的 direct-SSH Monitor 已能创建 thread、进入模型并调用 shell，但 Codex 0.147 在 bwrap 内重新执行 projected standalone binary 时返回 `execvp .../codex: No such file or directory`，SSH 尚未发生。CCM 虽逐文件开放了 `codex` 与 `codex-code-mode-host`，其 `0700` release 父目录仍位于 `:root=deny` 下，内核因不可遍历父路径返回 `ENOENT`。
+- **解决**：runtime projection 继续只接受同 owner、非 symlink、内容寻址的 native executable；permission profile 改为只读开放内容精确等于 `codex` 与可选 `codex-code-mode-host` 的单一 32-hex release 目录，使 bwrap 可遍历 re-exec 路径。目录出现额外 sibling、文件/目录 identity 或 owner 漂移时 fail closed，仍不开放 runtime 根目录、`node_modules` 或其他宿主路径。Task SSH 与 network-isolated Delivery 共用同一校验器。
+- **避免复发**：Monitor E2E 必须同时证明 thread admission、模型工具调用、sandbox shell re-exec 和最终 SSH 远端值，`checks_done` 或模型 summary 不能替代工具执行证据。真实 sandbox 测试必须实际执行命令并断言 workspace 外读取与宿主凭据环境仍被拒绝；测试自身的未定义 runtime 变量也已修正。
+- **验证**：先用旧实现得到两个精确失败回归；修复后 app-server/direct SSH/Task isolation/Monitor API/MCP 在空 `CODEX_HOME` 下分别为 `321 passed, 3 skipped`、`7/45/38/17 passed`。无模型真实 Codex 0.147 app-server+bwrap 测试成功执行 shell，同时阻止 workspace 外 secret 和 `GH_TOKEN/GITHUB_TOKEN/SSH_AUTH_SOCK`；实现提交 `70fe94aa`。生产用户 `/tmp` tmpfs 已达到 per-user quota（约 6.0 GiB），因此生产重启后的 `ssh a100-via-tianhe` Monitor E2E 必须先恢复该环境容量，不能把 quota 失败误归因于 runtime projection。
