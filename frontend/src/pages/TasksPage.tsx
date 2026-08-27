@@ -17,6 +17,7 @@ import { TeamShareModal } from '../components/TeamShareModal';
 import { getTaskStatusLabel } from '../components/Tasks/taskStatus';
 
 const PAGE_SIZE = 20;
+const CATALOG_REFRESH_INTERVAL_MS = 30_000;
 
 function isDeliveryOwnedTask(task: Task): boolean {
   return task.mode === 'delivery_loop' || task.delivery_run_id != null;
@@ -39,7 +40,6 @@ interface TasksPageProps {
 
 export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [, setAllTasks] = useState<Task[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(1);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -77,7 +77,6 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
     const patchList = (list: Task[]): Task[] => list.map(patchTask);
 
     setTasks(patchList);
-    setAllTasks(patchList);
     setSearchResults((current) => current ? patchList(current) : current);
     setChatTask((current) => current ? patchTask(current) : current);
   }, [setSearchResults]);
@@ -233,7 +232,6 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
       };
 
       setTasks(patchList);
-      setAllTasks(patchList);
       setSearchResults((prev) => (prev ? patchList(prev) : prev));
       setChatTask((prev) => (prev ? patchTask(prev) : prev));
       if (event === 'status_change') {
@@ -253,17 +251,35 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const statusFilterParam = statusFilters.length > 0 ? statusFilters.join(',') : undefined;
+  const taskRefreshGeneration = useRef(0);
+  const catalogRefreshGeneration = useRef(0);
 
-  const refresh = useCallback(async () => {
+  const refreshCatalog = useCallback(async () => {
+    const generation = ++catalogRefreshGeneration.current;
     try {
-      const offset = (page - 1) * PAGE_SIZE;
-      const [filtered, count, all, projs, tags] = await Promise.all([
-        api.listTasks(statusFilterParam, false, projectFilter, starredFilter || undefined, PAGE_SIZE, offset, showArchived, unreadFilter || undefined),
-        api.countTasks(statusFilterParam, false, projectFilter, starredFilter || undefined, showArchived, unreadFilter || undefined),
-        api.listTasks(undefined, false, undefined, undefined, PAGE_SIZE, 0, showArchived),
+      const [projs, tags] = await Promise.all([
         api.listProjects(),
         api.listTags(),
       ]);
+      if (generation !== catalogRefreshGeneration.current) return;
+      setProjects(projs);
+      setTagItems(tags);
+    } catch (e) {
+      if (generation === catalogRefreshGeneration.current) {
+        console.error('Failed to load task filters:', e);
+      }
+    }
+  }, []);
+
+  const refresh = useCallback(async () => {
+    const generation = ++taskRefreshGeneration.current;
+    try {
+      const offset = (page - 1) * PAGE_SIZE;
+      const [filtered, count] = await Promise.all([
+        api.listTasks(statusFilterParam, false, projectFilter, starredFilter || undefined, PAGE_SIZE, offset, showArchived, unreadFilter || undefined),
+        api.countTasks(statusFilterParam, false, projectFilter, starredFilter || undefined, showArchived, unreadFilter || undefined),
+      ]);
+      if (generation !== taskRefreshGeneration.current) return;
       // When chat is open, freeze sidebar order: update task data in place and
       // append genuinely-new tasks at the end, but NEVER drop a task just because
       // it fell off page-1. With 20/page over hundreds of tasks, an active task
@@ -285,27 +301,28 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
         setTasks(filtered);
       }
       setTotalCount(count.total);
-      setAllTasks(all);
-      setProjects(projs);
-      setTagItems(tags);
       // Resolve chatTaskId from URL on first load, or update open chatTask.
       // chatTaskId comes from URL hash — null after onBack.
       // chatTaskRef tracks the currently open chat — used to refresh its data.
       const currentChatTaskId = chatTaskIdRef.current;
       if (currentChatTaskId) {
-        const pool = [...filtered, ...all];
-        let found = pool.find((t) => t.id === currentChatTaskId);
+        let found = filtered.find((t) => t.id === currentChatTaskId);
         if (!found) {
           try { found = await api.getTask(currentChatTaskId); } catch { /* task may not exist */ }
         }
-        if (found) setChatTaskWrapped(found);
+        if (
+          found
+          && generation === taskRefreshGeneration.current
+        ) setChatTaskWrapped(found);
       } else if (chatTaskRef.current) {
         // Chat is open but not from URL (e.g. clicked from list) — refresh its data
-        const found = [...filtered, ...all].find((t) => t.id === chatTaskRef.current!.id);
+        const found = filtered.find((t) => t.id === chatTaskRef.current!.id);
         if (found) setChatTask(found);
       }
     } catch (e) {
-      console.error('Failed to load tasks:', e);
+      if (generation === taskRefreshGeneration.current) {
+        console.error('Failed to load tasks:', e);
+      }
     }
   }, [statusFilterParam, showArchived, projectFilter, starredFilter, unreadFilter, page, setChatTaskWrapped]);
 
@@ -314,19 +331,25 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
   useEffect(() => {
     refresh();
     const interval = setInterval(refresh, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      taskRefreshGeneration.current += 1;
+    };
   }, [refresh]);
 
-  // Reset to page 1 when filters change
-  const prevFilter = useRef({ statusFilterParam, showArchived, projectFilter, starredFilter, unreadFilter });
   useEffect(() => {
-    const prev = prevFilter.current;
-    if (prev.statusFilterParam !== statusFilterParam || prev.showArchived !== showArchived || prev.projectFilter !== projectFilter || prev.starredFilter !== starredFilter || prev.unreadFilter !== unreadFilter) {
-      setPage(1);
-      skipFreezeOnce.current = true;
-      prevFilter.current = { statusFilterParam, showArchived, projectFilter, starredFilter, unreadFilter };
-    }
-  }, [statusFilterParam, showArchived, projectFilter, starredFilter, unreadFilter]);
+    void refreshCatalog();
+    const interval = setInterval(refreshCatalog, CATALOG_REFRESH_INTERVAL_MS);
+    return () => {
+      clearInterval(interval);
+      catalogRefreshGeneration.current += 1;
+    };
+  }, [refreshCatalog]);
+
+  const prepareFilterChange = useCallback(() => {
+    skipFreezeOnce.current = true;
+    setPage(1);
+  }, []);
 
   const statusOptions = ['pending', 'in_progress', 'executing', 'waiting_capability', 'delivery_waiting', 'plan_review', 'completed', 'superseded', 'failed'];
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
@@ -399,7 +422,6 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
   const reorderRefresh = useCallback((optimistic?: Task[]) => {
     if (optimistic) {
       setTasks((current) => mergeVisibleTaskOrder(current, optimistic));
-      setAllTasks((current) => mergeVisibleTaskOrder(current, optimistic));
       setSearchResults((current) => current ? optimistic : current);
       return;
     }
@@ -444,7 +466,10 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
                 return (
                   <button
                     key={f}
-                    onClick={() => setStatusFilters(checked ? statusFilters.filter(s => s !== f) : [...statusFilters, f])}
+                    onClick={() => {
+                      prepareFilterChange();
+                      setStatusFilters(checked ? statusFilters.filter(s => s !== f) : [...statusFilters, f]);
+                    }}
                     className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors ${
                       checked ? 'bg-indigo-600/20 text-indigo-300' : 'text-gray-300 hover:bg-gray-800'
                     }`}
@@ -463,7 +488,10 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
               {/* Toggle filters */}
               <div className="px-3 py-1 text-[10px] text-gray-500 uppercase tracking-wider">Filters</div>
               <button
-                onClick={() => setStarredFilter(!starredFilter)}
+                onClick={() => {
+                  prepareFilterChange();
+                  setStarredFilter(!starredFilter);
+                }}
                 className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors ${
                   starredFilter ? 'bg-yellow-600/20 text-yellow-300' : 'text-gray-300 hover:bg-gray-800'
                 }`}
@@ -474,7 +502,10 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
                 ★ Starred
               </button>
               <button
-                onClick={() => setUnreadFilter(!unreadFilter)}
+                onClick={() => {
+                  prepareFilterChange();
+                  setUnreadFilter(!unreadFilter);
+                }}
                 className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors ${
                   unreadFilter ? 'bg-indigo-600/20 text-indigo-300' : 'text-gray-300 hover:bg-gray-800'
                 }`}
@@ -485,7 +516,10 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
                 Unread
               </button>
               <button
-                onClick={() => setShowArchived(!showArchived)}
+                onClick={() => {
+                  prepareFilterChange();
+                  setShowArchived(!showArchived);
+                }}
                 className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors ${
                   showArchived ? 'bg-amber-600/20 text-amber-300' : 'text-gray-300 hover:bg-gray-800'
                 }`}
@@ -508,6 +542,7 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
                       <button
                         key={tag}
                         onClick={() => {
+                          prepareFilterChange();
                           const next = active ? tagFilters.filter((t) => t !== tag) : [...tagFilters, tag];
                           setTagFilters(next);
                           if (next.length > 0 && projectFilter !== undefined) {
@@ -537,7 +572,14 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
                 <>
                   <div className="border-t border-gray-700 my-1" />
                   <button
-                    onClick={() => { setStatusFilters([]); setStarredFilter(false); setUnreadFilter(false); setShowArchived(false); setTagFilters([]); }}
+                    onClick={() => {
+                      prepareFilterChange();
+                      setStatusFilters([]);
+                      setStarredFilter(false);
+                      setUnreadFilter(false);
+                      setShowArchived(false);
+                      setTagFilters([]);
+                    }}
                     className="w-full px-3 py-1.5 text-xs text-red-400 hover:bg-gray-800 text-left"
                   >
                     Clear all filters
@@ -592,7 +634,10 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
         <ProjectSelect
           projects={tagFilteredProjects}
           value={projectFilter}
-          onChange={(v) => setProjectFilter(v ? Number(v) : undefined)}
+          onChange={(v) => {
+            prepareFilterChange();
+            setProjectFilter(v ? Number(v) : undefined);
+          }}
           placeholder="Projects"
           tagColorMap={tagColorMap}
         />

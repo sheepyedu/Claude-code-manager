@@ -128,7 +128,13 @@ vi.mock('../components/Chat/LoopChatView', () => ({
   LoopChatView: () => null,
 }));
 vi.mock('../components/ProjectSelect', () => ({
-  ProjectSelect: () => <button type="button">Projects</button>,
+  ProjectSelect: ({ onChange }: { onChange: (value: string) => void }) => (
+    <>
+      <button type="button">Projects</button>
+      <button type="button" onClick={() => onChange('42')}>Select project 42</button>
+      <button type="button" onClick={() => onChange('43')}>Select project 43</button>
+    </>
+  ),
 }));
 vi.mock('../components/Tasks/TaskBadges', () => ({
   PluginsBadge: ({ task }: { task: { id: number } }) => (
@@ -210,6 +216,8 @@ describe('TasksPage realtime reconciliation', () => {
     await waitFor(() => {
       expect(api.countTasks).toHaveBeenCalledTimes(2);
     });
+    expect(api.listProjects).toHaveBeenCalledTimes(1);
+    expect(api.listTags).toHaveBeenCalledTimes(1);
 
     act(() => {
       capturedGlobalWs?.({
@@ -227,6 +235,85 @@ describe('TasksPage realtime reconciliation', () => {
       await Promise.resolve();
     });
     expect(api.countTasks).toHaveBeenCalledTimes(2);
+  });
+
+  it('switches projects from page two with one page-zero request and no catalog reload', async () => {
+    vi.mocked(api.countTasks).mockResolvedValue({ total: 41 });
+
+    render(
+      <TasksPage
+        chatTaskId={null}
+        onChatTaskChange={vi.fn()}
+      />,
+    );
+
+    await screen.findByText('1 / 3');
+    const pagination = screen.getByText('(41 tasks)').parentElement?.parentElement;
+    expect(pagination).not.toBeNull();
+    const paginationButtons = within(pagination as HTMLElement).getAllByRole('button');
+    await userEvent.click(paginationButtons[1]);
+    await screen.findByText('2 / 3');
+
+    vi.mocked(api.listTasks).mockClear();
+    vi.mocked(api.countTasks).mockClear();
+    await userEvent.click(screen.getByRole('button', { name: 'Select project 42' }));
+
+    await waitFor(() => {
+      expect(api.listTasks).toHaveBeenCalledWith(
+        undefined,
+        false,
+        42,
+        undefined,
+        20,
+        0,
+        false,
+        undefined,
+      );
+    });
+    expect(vi.mocked(api.listTasks).mock.calls.filter((call) => call[2] === 42)).toHaveLength(1);
+    expect(api.countTasks).toHaveBeenCalledTimes(1);
+    expect(api.listProjects).toHaveBeenCalledTimes(1);
+    expect(api.listTags).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a slower response from the previously selected project', async () => {
+    render(
+      <TasksPage
+        chatTaskId={null}
+        onChatTaskChange={vi.fn()}
+      />,
+    );
+    await screen.findByText('7:pending:false');
+
+    let resolveProject42!: (tasks: typeof task[]) => void;
+    let resolveProject43!: (tasks: typeof task[]) => void;
+    const project42 = new Promise<typeof task[]>((resolve) => { resolveProject42 = resolve; });
+    const project43 = new Promise<typeof task[]>((resolve) => { resolveProject43 = resolve; });
+    vi.mocked(api.listTasks).mockImplementation((
+      _status,
+      _includeArchived,
+      projectId,
+    ) => {
+      if (projectId === 42) return project42 as never;
+      if (projectId === 43) return project43 as never;
+      return Promise.resolve([task]) as never;
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Select project 42' }));
+    await waitFor(() => expect(vi.mocked(api.listTasks).mock.calls.some((call) => call[2] === 42)).toBe(true));
+    await userEvent.click(screen.getByRole('button', { name: 'Select project 43' }));
+    await waitFor(() => expect(vi.mocked(api.listTasks).mock.calls.some((call) => call[2] === 43)).toBe(true));
+
+    await act(async () => {
+      resolveProject43([{ ...task, id: 43, project_id: 43 }]);
+    });
+    expect(await screen.findByText('43:pending:false')).toBeInTheDocument();
+
+    await act(async () => {
+      resolveProject42([{ ...task, id: 42, project_id: 42 }]);
+    });
+    expect(screen.getByText('43:pending:false')).toBeInTheDocument();
+    expect(screen.queryByText('42:pending:false')).not.toBeInTheDocument();
   });
 
   it('applies Plan stage changes without waiting for polling', async () => {
