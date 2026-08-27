@@ -1221,6 +1221,18 @@ curl -X POST http://localhost:8000/api/github/webhook \
 
 ### 前端测试
 
+Tasks 项目筛选性能回归：
+
+```bash
+cd frontend && npx vitest run src/pages/TasksPage.test.tsx
+```
+
+| 用例 | 覆盖内容 |
+|------|----------|
+| `refreshes counts/filter membership...` | Task 状态刷新只更新分页/count，不重复请求 Projects/Tags 目录 |
+| `switches projects from page two...` | 从非第一页切换 Project 时只发一次 offset=0 查询，不先请求旧页，也不刷新目录 |
+| `ignores a slower response...` | 连续切换 Project 后，前一个项目的晚到响应不会覆盖当前列表 |
+
 Markdown 数学公式回归：
 
 | 文件 | 覆盖内容 |

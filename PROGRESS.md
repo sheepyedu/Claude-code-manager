@@ -1207,3 +1207,11 @@ ocean/forest/rose 归入 Legacy 组。Header 顶栏导航重构为 AppShell（�
 - **解决**：Task-isolated read-only turn 只使用已审计的 named profile，不再在 `turn/start` 重发 legacy selector。Claude/Codex direct-SSH 每个 generation 都物化同 owner、非 symlink、目录和文件均 `0500`、固定内容且单链接的私有 `ssh` wrapper；wrapper 强制执行 `/usr/bin/ssh -F ~/.ssh/config`，其目录只读投影并置于 `PATH` 首位，因此外层与嵌套 ProxyCommand 共用用户配置。Codex wrapper 放入本轮 inode-fenced scratch，Claude wrapper 绑定精确子进程证据，只有进程已证明回收后才删除；payload、owner、mode、目录 sibling 或投影漂移均 fail closed。
 - **避免复发**：Monitor SSH E2E 必须实际进入 provider sandbox、执行 shell、经过所有 ProxyCommand 层并核对本机 SSH tree 未变化；不能用 thread admission、模型 summary 或外层 `ssh -F` 代替嵌套链路证据。远端 host-key 漂移必须继续交给 OpenSSH 拒绝，不能为通过冒烟自动修改 `known_hosts` 或关闭校验。
 - **验证**：受影响矩阵在空 `CODEX_HOME` 下 `431 passed, 3 skipped`，Python compile 与 `git diff --check` 通过。真实 Codex 0.147 app-server+bwrap 探针已消除 runtime `ENOENT` 和系统 SSH 配置权限错误，并经嵌套 ProxyCommand 到达 `a100-via-tianhe` 跳板；最终仅被用户确认的远端 host-key 漂移拒绝。探针前后 `~/.ssh` 元数据指纹同为 `91d4fd469c36238644845db969807548840706c82f44f1698264d69f307c694b`。实现提交 `fb6bb071`。
+
+## 2026-08-27 — Tasks 项目筛选请求收敛
+
+- **问题**：Tasks 页每次 Project/状态切换和每 5 秒轮询都同时请求当前分页、count、额外未筛选页、Projects 和 Tags；从非第一页切换筛选时，filter effect 还会先按旧 offset 请求一次再回第一页。快速连续切换没有代次门禁，旧项目的慢响应可能覆盖新选择。
+- **解决**：Task 分页刷新收敛为当前列表与 count 两个必要请求；Projects/Tags 改为独立 30 秒目录刷新。所有服务端筛选事件在同一 React batch 中回到第一页，并以 request generation 丢弃旧刷新结果；打开的 Chat 不在当前分页时按 id 精确读取，不再为所有页面常驻拉一份未筛选列表。
+- **避免复发**：高频轮询不得夹带低变化目录或为偶发 fallback 常驻请求额外列表；筛选与页码必须作为一个查询身份变更，所有异步响应都需验证仍是最新 generation 后才能提交 UI。
+- **验证**：修复前新增用例稳定复现目录重复拉取和 Project 双请求；修复后 `TasksPage.test.tsx` 为 `11 passed`，TypeScript 通过。前端全量 `783 passed / 1 failed`，唯一失败为既有 ChatView `process_exit` 时序用例，单独复跑通过。
+- **提交**：`cc483a62`。
