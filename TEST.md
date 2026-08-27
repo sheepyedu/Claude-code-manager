@@ -540,9 +540,10 @@ Codex Fast 人工 smoke 使用隔离账号且会消耗额度：同一支持模�
 |------|---------|
 | `test_build_monitor_prompt` | prompt 构建包含描述和上下文 |
 | `test_build_monitor_prompt_no_context` | 无上下文时 prompt 正常 |
-| `test_build_monitor_agent_prompt_explains_direct_ssh_boundary` | direct SSH prompt 明示读取现有 config、只做远端观察且不改本机 SSH 状态 |
-| `test_claude_monitor_direct_ssh_launch_projects_read_only_ssh` | Claude Monitor 只读投影 `~/.ssh`、保留其他 Manager secret deny 并开放系统 SSH 网络 |
-| `test_codex_monitor_direct_ssh_launch_uses_read_only_network_profile` | Codex Monitor 以 read-only profile、显式 network 与 `~/.ssh` read override 启动 |
+| `test_build_monitor_agent_prompt_explains_direct_ssh_boundary` | direct SSH prompt 明示现有 config、CCM wrapper/嵌套 ProxyCommand 边界、只做远端观察且不改本机 SSH 状态 |
+| `test_claude_monitor_direct_ssh_launch_projects_read_only_ssh` | Claude Monitor 只读投影 `~/.ssh` 与 generation 私有 wrapper、将 wrapper 置于 `PATH` 首位、保留其他 Manager secret deny，并在进程回收后删除 wrapper |
+| `test_codex_monitor_direct_ssh_launch_uses_read_only_network_profile` | Codex Monitor 以 read-only profile、显式 network、`~/.ssh` 与私有 wrapper read override 启动 |
+| `test_direct_ssh_wrapper_is_generation_private_and_exact` / `test_direct_ssh_wrapper_rejects_payload_change` | wrapper 按 generation 隔离，目录/文件同 owner、非 symlink、`0500`、单链接且固定为 `/usr/bin/ssh -F ~/.ssh/config`；内容漂移 fail closed |
 | `test_direct_ssh_monitor_does_not_launch_after_admin_demotion` | 创建管理员被降权后，下一轮 claim 在任何 provider effect 前终止 |
 | `test_start_monitor_session` | 启动 monitor session 创建 asyncio task |
 | `test_lifecycle_max_checks_reached` | max_checks 耗尽 → completed |
@@ -917,7 +918,7 @@ Monitor 的调度、generation 栅栏和失败恢复已有聚焦自动化测试�
 | shutdown / stop / cleanup recovery cases | 正常关机只 interrupt turn 并保留 thread；用户终止在 DB 终态后删除；无法证明 turn 终止则保留 handle 并 fail closed；冷启动重试 terminal cleanup；claim 阶段的 provider 漂移或失效冻结配置也立即清理 |
 | account/task deletion fence cases | 新 Monitor 可从已失效父账号换到可用账号，已有 thread 绝不自动换号；持久或 in-flight owner 阻止原生/API Codex 账号删除，且 home maintenance 后再次核对关闭 precheck 竞态；cleanup evidence 和未提交 handle 阻止父 Task 被删除 |
 | `test_monitor_profile_is_read_only_and_disables_autonomous_features` | thread 与 turn 都为 read-only，network 关闭，multi-agent/fanout/memory/remote compaction 关闭，owner hook 先于 `turn/start` |
-| `test_monitor_direct_ssh_uses_read_only_raw_network_profile` / `test_monitor_direct_ssh_rejects_workspace_write_in_thread_response` / `test_monitor_direct_ssh_rejects_workspace_write` | direct SSH 请求 read-only Codex sandbox；Codex 0.147 可因唯一私有 scratch 写规则把 thread 粗粒度报告为 `workspaceWrite`，此时只有 exact generation scratch 可写才准入，workspace 或任意额外 writable root 均在 `turn/start` 前拒绝；`~/.ssh` 仍只读、turn 重复声明网络开启且 managed proxy 关闭 |
+| `test_monitor_direct_ssh_uses_read_only_raw_network_profile` / `test_monitor_direct_ssh_rejects_workspace_write_in_thread_response` / `test_monitor_direct_ssh_rejects_workspace_write` | direct SSH 请求 read-only Codex sandbox；Codex 0.147 可因唯一私有 scratch 写规则把 thread 粗粒度报告为 `workspaceWrite`，此时只有 exact generation scratch 可写才准入，workspace 或任意额外 writable root 均在 `turn/start` 前拒绝；`~/.ssh` 与 wrapper 仍只读，wrapper 位于 shell `PATH` 首位；named profile 已在 `thread/start` 证明后，`turn/start` 不再重发会覆盖它的 legacy `sandboxPolicy` |
 | `test_mcp_config.py` | required Monitor callback MCP 复用后端当前 Python 解释器且命令真实存在，兼容 Linux venv、Docker system Python 与 Windows `Scripts/python.exe` |
 | PR7B1 merge-time capability 回归（历史）/ `MonitorPanel.test.tsx` | PR7B1 未提前开放公开入口；已有内部 Codex Monitor 可从面板精确 Stop，终态 thread 删除失败会显示 durable error 并保留“Retry Codex cleanup”入口 |
 

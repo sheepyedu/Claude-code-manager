@@ -1,5 +1,7 @@
 import json
+import os
 from pathlib import Path
+import stat
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -12,7 +14,12 @@ from backend.services.monitor_direct_ssh import (
     MonitorDirectSSHError,
     capture_monitor_direct_ssh_principal,
     direct_ssh_filesystem_projection,
+    materialize_monitor_direct_ssh_wrapper,
     revalidate_monitor_direct_ssh,
+    validate_monitor_direct_ssh_wrapper,
+)
+from backend.services.task_runtime_secrets import (
+    create_private_runtime_temp_dir,
 )
 
 
@@ -216,6 +223,58 @@ def test_direct_ssh_projection_rejects_symlinked_ssh_root(
 
     with pytest.raises(MonitorDirectSSHError, match="non-symlink"):
         direct_ssh_filesystem_projection((str(home / ".ssh"),))
+
+
+def test_direct_ssh_wrapper_is_generation_private_and_exact():
+    runtimes = [
+        create_private_runtime_temp_dir(
+            runtime_namespace="monitor-ssh",
+            owner_id=71,
+            generation_components={"turn": generation},
+        )
+        for generation in (1, 2)
+    ]
+    try:
+        directories = [
+            materialize_monitor_direct_ssh_wrapper(runtime)
+            for runtime in runtimes
+        ]
+        assert directories[0] != directories[1]
+        for directory in directories:
+            wrapper = validate_monitor_direct_ssh_wrapper(directory) / "ssh"
+            directory_info = directory.lstat()
+            wrapper_info = wrapper.lstat()
+            assert not directory.is_symlink()
+            assert not wrapper.is_symlink()
+            assert directory_info.st_uid == os.geteuid()
+            assert wrapper_info.st_uid == os.geteuid()
+            assert stat.S_IMODE(directory_info.st_mode) == 0o500
+            assert stat.S_IMODE(wrapper_info.st_mode) == 0o500
+            assert wrapper_info.st_nlink == 1
+            payload = wrapper.read_text(encoding="utf-8")
+            assert payload.startswith("#!/bin/sh\nexec /usr/bin/ssh -F ")
+            assert str(Path.home() / ".ssh" / "config") in payload
+    finally:
+        for runtime in runtimes:
+            runtime.cleanup()
+
+
+def test_direct_ssh_wrapper_rejects_payload_change():
+    runtime = create_private_runtime_temp_dir(
+        runtime_namespace="monitor-ssh",
+        owner_id=72,
+        generation_components={"turn": 1},
+    )
+    try:
+        directory = materialize_monitor_direct_ssh_wrapper(runtime)
+        wrapper = directory / "ssh"
+        wrapper.chmod(0o700)
+        wrapper.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        wrapper.chmod(0o500)
+        with pytest.raises(MonitorDirectSSHError, match="payload"):
+            validate_monitor_direct_ssh_wrapper(directory)
+    finally:
+        runtime.cleanup()
 
 
 @pytest.mark.asyncio

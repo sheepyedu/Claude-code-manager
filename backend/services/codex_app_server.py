@@ -4792,6 +4792,7 @@ class CodexAppServer:
         task_ssh_disable_network: bool = False,
         task_managed_network_proxy: bool = False,
         task_direct_ssh: bool = False,
+        task_direct_ssh_wrapper_dir: str | None = None,
         disable_autonomous_features: bool = False,
         network_isolated: bool = False,
         output_schema: dict[str, Any] | None = None,
@@ -4985,6 +4986,31 @@ class CodexAppServer:
                     "Task credential read overrides must be exact and "
                     "must not duplicate deny entries"
                 )
+            if task_direct_ssh:
+                from backend.services.monitor_direct_ssh import (
+                    validate_monitor_direct_ssh_wrapper,
+                )
+
+                if task_direct_ssh_wrapper_dir is None:
+                    raise CodexRequiredMcpPreTurnError(
+                        "Monitor direct SSH requires a generation-private wrapper"
+                    )
+                try:
+                    wrapper_dir = validate_monitor_direct_ssh_wrapper(
+                        task_direct_ssh_wrapper_dir
+                    )
+                except Exception as exc:
+                    raise CodexRequiredMcpPreTurnError(
+                        "Monitor direct SSH wrapper could not be proven"
+                    ) from exc
+                if str(wrapper_dir) not in allowed:
+                    raise CodexRequiredMcpPreTurnError(
+                        "Monitor direct SSH wrapper is outside its read-only projection"
+                    )
+            elif task_direct_ssh_wrapper_dir is not None:
+                raise CodexRequiredMcpPreTurnError(
+                    "Direct SSH wrapper cannot be used by an ordinary Task"
+                )
             from backend.services.task_agent_isolation import (
                 discover_linked_worktree_git_read_boundary,
             )
@@ -5018,6 +5044,7 @@ class CodexAppServer:
             task_ssh_disable_network
             or task_managed_network_proxy
             or task_direct_ssh
+            or task_direct_ssh_wrapper_dir is not None
         ):
             raise CodexRequiredMcpPreTurnError(
                 "Task network isolation requires protected filesystem paths"
@@ -5145,6 +5172,26 @@ class CodexAppServer:
                 raise CodexRequiredMcpPreTurnError(
                     "Codex Task scratch boundary changed " + stage
                 ) from exc
+            if task_direct_ssh:
+                from backend.services.monitor_direct_ssh import (
+                    validate_monitor_direct_ssh_wrapper,
+                )
+
+                try:
+                    current_wrapper = validate_monitor_direct_ssh_wrapper(
+                        task_direct_ssh_wrapper_dir or ""
+                    )
+                except Exception as exc:
+                    raise CodexRequiredMcpPreTurnError(
+                        "Monitor direct SSH wrapper changed " + stage
+                    ) from exc
+                if str(current_wrapper) not in {
+                    os.path.abspath(os.path.expanduser(str(path)))
+                    for path in task_ssh_allowed_read_paths
+                }:
+                    raise CodexRequiredMcpPreTurnError(
+                        "Monitor direct SSH wrapper projection changed " + stage
+                    )
             profile_id = (
                 tool_free_permission_profile
                 if restricted_tools
@@ -6055,6 +6102,12 @@ class CodexAppServer:
                     # boundary even if model code unsets this convenience.
                     "GIT_OPTIONAL_LOCKS": "0",
                 })
+                if task_direct_ssh:
+                    assert task_direct_ssh_wrapper_dir is not None
+                    shell_environment["PATH"] = os.pathsep.join((
+                        task_direct_ssh_wrapper_dir,
+                        core_shell_environment["PATH"],
+                    ))
                 if task_ssh_disable_network:
                     shell_environment["CCM_TASK_SSH_GUARD"] = "1"
             elif network_isolated:
@@ -6711,10 +6764,15 @@ class CodexAppServer:
             # The audited thread profile remains active for this first turn.
             turn_params["environments"] = []
             turn_params["runtimeWorkspaceRoots"] = []
-        elif sandbox_mode == "read-only":
-            # Repeat the policy at turn/start.  This is a schema-backed field
-            # and prevents a resumed thread's sticky/default settings from
-            # widening a Monitor turn after thread admission.
+        elif sandbox_mode == "read-only" and not task_ssh_protected_paths:
+            # Repeat the built-in policy only for ordinary read-only turns.
+            # Task-isolated turns already selected and proved their exact
+            # request-local named profile at thread admission. Re-sending the
+            # legacy readOnly selector here makes Codex 0.147 prepend a
+            # root-read baseline to that profile. Its later root-deny entry
+            # then wins while the process launcher has already mistaken the
+            # Codex helper for readable, so the outer bwrap omits the helper
+            # mount and fails before the requested command can start.
             turn_params["sandboxPolicy"] = {
                 "type": "readOnly",
                 "networkAccess": task_direct_ssh,

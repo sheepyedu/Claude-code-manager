@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import stat
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +22,15 @@ from backend.models.log_entry import LogEntry
 from backend.models.task import Task
 from backend.models.user import User
 from backend.services.skill_context import is_worker_managed_task_metadata
+from backend.services.task_runtime_secrets import (
+    PrivateRuntimeTempDir,
+    TaskRuntimeSecretError,
+)
+
+
+_DIRECT_SSH_BIN_DIR = "ssh-bin"
+_DIRECT_SSH_WRAPPER = "ssh"
+_SYSTEM_SSH = "/usr/bin/ssh"
 
 
 class MonitorDirectSSHError(ValueError):
@@ -32,6 +42,142 @@ class MonitorDirectSSHPrincipal:
     user_id: int | None
     role: str
     execution_mode: str
+
+
+def _direct_ssh_wrapper_payload() -> bytes:
+    config_path = Path.home() / ".ssh" / "config"
+    return (
+        "#!/bin/sh\n"
+        f"exec {_SYSTEM_SSH} -F {shlex.quote(str(config_path))} \"$@\"\n"
+    ).encode("utf-8")
+
+
+def validate_monitor_direct_ssh_wrapper(path: str | os.PathLike[str]) -> Path:
+    """Prove one exact owner-only wrapper directory and immutable payload."""
+
+    directory = Path(os.path.abspath(os.fspath(path)))
+    wrapper = directory / _DIRECT_SSH_WRAPPER
+    try:
+        directory_info = directory.lstat()
+        wrapper_info = wrapper.lstat()
+        entries = {entry.name for entry in directory.iterdir()}
+        system_ssh_info = Path(_SYSTEM_SSH).lstat()
+    except OSError as exc:
+        raise MonitorDirectSSHError(
+            "Monitor direct SSH wrapper is unavailable"
+        ) from exc
+    effective_uid = os.geteuid() if hasattr(os, "geteuid") else None
+    if (
+        stat.S_ISLNK(directory_info.st_mode)
+        or not stat.S_ISDIR(directory_info.st_mode)
+        or (effective_uid is not None and directory_info.st_uid != effective_uid)
+        or stat.S_IMODE(directory_info.st_mode) != 0o500
+        or entries != {_DIRECT_SSH_WRAPPER}
+        or stat.S_ISLNK(wrapper_info.st_mode)
+        or not stat.S_ISREG(wrapper_info.st_mode)
+        or (effective_uid is not None and wrapper_info.st_uid != effective_uid)
+        or wrapper_info.st_nlink != 1
+        or stat.S_IMODE(wrapper_info.st_mode) != 0o500
+        or stat.S_ISLNK(system_ssh_info.st_mode)
+        or not stat.S_ISREG(system_ssh_info.st_mode)
+        or not os.access(_SYSTEM_SSH, os.X_OK)
+    ):
+        raise MonitorDirectSSHError(
+            "Monitor direct SSH wrapper is not an exact private executable"
+        )
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    descriptor = os.open(wrapper, flags)
+    try:
+        opened = os.fstat(descriptor)
+        if (
+            opened.st_dev != wrapper_info.st_dev
+            or opened.st_ino != wrapper_info.st_ino
+        ):
+            raise MonitorDirectSSHError(
+                "Monitor direct SSH wrapper changed while opening"
+            )
+        payload = bytearray()
+        while True:
+            chunk = os.read(descriptor, 4096)
+            if not chunk:
+                break
+            payload.extend(chunk)
+            if len(payload) > 4096:
+                raise MonitorDirectSSHError(
+                    "Monitor direct SSH wrapper payload is invalid"
+                )
+    finally:
+        os.close(descriptor)
+    if bytes(payload) != _direct_ssh_wrapper_payload():
+        raise MonitorDirectSSHError(
+            "Monitor direct SSH wrapper payload is invalid"
+        )
+    return directory
+
+
+def materialize_monitor_direct_ssh_wrapper(
+    runtime: PrivateRuntimeTempDir,
+) -> Path:
+    """Create a generation-private ``ssh`` that ignores system SSH config.
+
+    OpenSSH rejects root-owned system snippets after the provider enters its
+    unprivileged user namespace.  Prepending this directory to ``PATH`` also
+    makes a nested ``ProxyCommand ssh ...`` use the same explicit user config.
+    The complete directory is projected read-only into the provider sandbox.
+    """
+
+    runtime.assert_valid()
+    directory = runtime.path / _DIRECT_SSH_BIN_DIR
+    try:
+        os.mkdir(directory, 0o700)
+        directory_flags = (
+            os.O_RDONLY
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_DIRECTORY", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+        )
+        directory_fd = os.open(directory, directory_flags)
+        try:
+            file_flags = (
+                os.O_WRONLY
+                | os.O_CREAT
+                | os.O_EXCL
+                | getattr(os, "O_CLOEXEC", 0)
+                | getattr(os, "O_NOFOLLOW", 0)
+            )
+            descriptor = os.open(
+                _DIRECT_SSH_WRAPPER,
+                file_flags,
+                0o500,
+                dir_fd=directory_fd,
+            )
+            try:
+                os.fchmod(descriptor, 0o500)
+                view = memoryview(_direct_ssh_wrapper_payload())
+                while view:
+                    written = os.write(descriptor, view)
+                    if written <= 0:
+                        raise OSError("short Monitor direct SSH wrapper write")
+                    view = view[written:]
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            os.fchmod(directory_fd, 0o500)
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+        runtime.assert_valid()
+        return validate_monitor_direct_ssh_wrapper(directory)
+    except BaseException as exc:
+        if isinstance(exc, (MonitorDirectSSHError, TaskRuntimeSecretError)):
+            raise
+        raise MonitorDirectSSHError(
+            "Monitor direct SSH wrapper could not be materialized"
+        ) from exc
 
 
 def _validated_principal(

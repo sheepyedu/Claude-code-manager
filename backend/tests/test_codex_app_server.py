@@ -57,6 +57,9 @@ from backend.services.task_agent_isolation import (
 from backend.services.task_runtime_secrets import (
     create_private_task_temp_dir,
 )
+from backend.services.monitor_direct_ssh import (
+    materialize_monitor_direct_ssh_wrapper,
+)
 from backend.services.codex_tier_proxy import (
     CodexTierRequestProof,
     CodexTierProofError,
@@ -1217,6 +1220,7 @@ async def test_monitor_direct_ssh_uses_read_only_raw_network_profile(
     server.ensure_started = AsyncMock()
     ssh_root = "/Users/operator/.ssh"
     manager_secret = "/private/ccm/manager-secret"
+    wrapper_dir = materialize_monitor_direct_ssh_wrapper(boundary.scratch)
 
     async def request(method, params, **_kwargs):
         if method == "config/read":
@@ -1255,11 +1259,12 @@ async def test_monitor_direct_ssh_uses_read_only_raw_network_profile(
         disable_user_mcp=True,
         sandbox_mode="read-only",
         task_ssh_protected_paths=(manager_secret,),
-        task_ssh_allowed_read_paths=(ssh_root,),
+        task_ssh_allowed_read_paths=(ssh_root, str(wrapper_dir)),
         task_git_read_paths=boundary.git_read_paths,
         task_git_boundary_fingerprint=boundary.git_fingerprint,
         task_private_tmpdir=boundary.scratch,
         task_direct_ssh=True,
+        task_direct_ssh_wrapper_dir=str(wrapper_dir),
         disable_autonomous_features=True,
     )
 
@@ -1278,6 +1283,7 @@ async def test_monitor_direct_ssh_uses_read_only_raw_network_profile(
     filesystem = profile["filesystem"]
     assert filesystem[boundary.cwd] == "read"
     assert filesystem[ssh_root] == "read"
+    assert filesystem[str(wrapper_dir)] == "read"
     assert filesystem[manager_secret] == "deny"
     assert filesystem[str(boundary.scratch.path)] == "write"
     assert {
@@ -1291,10 +1297,10 @@ async def test_monitor_direct_ssh_uses_read_only_raw_network_profile(
         Path.home()
     )
     assert config["shell_environment_policy"]["set"]["SSH_AUTH_SOCK"] == ""
-    assert turn_call.args[1]["sandboxPolicy"] == {
-        "type": "readOnly",
-        "networkAccess": True,
-    }
+    assert config["shell_environment_policy"]["set"]["PATH"].split(
+        os.pathsep, 1
+    )[0] == str(wrapper_dir)
+    assert "sandboxPolicy" not in turn_call.args[1]
 
 
 @pytest.mark.asyncio
@@ -1327,6 +1333,7 @@ async def test_monitor_direct_ssh_rejects_workspace_write_in_thread_response(
         raise AssertionError(method)
 
     server._request = AsyncMock(side_effect=request)
+    wrapper_dir = materialize_monitor_direct_ssh_wrapper(boundary.scratch)
     with pytest.raises(
         CodexRequiredMcpPreTurnError,
         match="Task isolation profile was not proven",
@@ -1343,11 +1350,15 @@ async def test_monitor_direct_ssh_rejects_workspace_write_in_thread_response(
             disable_user_mcp=True,
             sandbox_mode="read-only",
             task_ssh_protected_paths=("/private/ccm/manager-secret",),
-            task_ssh_allowed_read_paths=("/Users/operator/.ssh",),
+            task_ssh_allowed_read_paths=(
+                "/Users/operator/.ssh",
+                str(wrapper_dir),
+            ),
             task_git_read_paths=boundary.git_read_paths,
             task_git_boundary_fingerprint=boundary.git_fingerprint,
             task_private_tmpdir=boundary.scratch,
             task_direct_ssh=True,
+            task_direct_ssh_wrapper_dir=str(wrapper_dir),
             disable_autonomous_features=True,
         )
 

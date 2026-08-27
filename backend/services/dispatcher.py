@@ -1017,6 +1017,7 @@ class GlobalDispatcher:
             int, asyncio.subprocess.Process
         ] = {}  # monitor_session_id -> subprocess
         self._monitor_config_dirs: dict[int, str] = {}
+        self._monitor_direct_ssh_runtime_dirs: dict[int, object] = {}
         self._monitor_log_fhs: dict[
             int, object
         ] = {}  # monitor_session_id -> log file handle
@@ -14924,6 +14925,20 @@ Do NOT create a new PR. Push fixes to the existing branch."""
             )
         return delayed_cancellation
 
+    async def _cleanup_monitor_direct_ssh_runtime(
+        self,
+        session_id: int,
+    ) -> None:
+        """Remove one exact Claude Monitor SSH wrapper after process reap."""
+
+        runtimes = getattr(self, "_monitor_direct_ssh_runtime_dirs", {})
+        runtime = runtimes.get(session_id)
+        if runtime is None:
+            return
+        await asyncio.to_thread(runtime.cleanup)
+        if runtimes.get(session_id) is runtime:
+            runtimes.pop(session_id, None)
+
     async def stop_monitor_session_process(
         self,
         session_id: int,
@@ -14974,6 +14989,7 @@ Do NOT create a new PR. Push fixes to the existing branch."""
             self, "_monitor_turn_handles", {}
         ):
             getattr(self, "_monitor_active_turns", set()).discard(session_id)
+            await self._cleanup_monitor_direct_ssh_runtime(session_id)
 
         if terminal:
             try:
@@ -16359,6 +16375,7 @@ Do NOT create a new PR. Push fixes to the existing branch."""
                 )
 
             task_private_tmpdir = None
+            task_direct_ssh_wrapper_dir: Path | None = None
             try:
                 async with self.db_factory() as db:
                     (
@@ -16407,6 +16424,20 @@ Do NOT create a new PR. Push fixes to the existing branch."""
                         retry_count=task_retry_count,
                         turn_generation=task_turn_generation,
                     )
+                    if direct_ssh:
+                        from backend.services.monitor_direct_ssh import (
+                            materialize_monitor_direct_ssh_wrapper,
+                        )
+
+                        task_direct_ssh_wrapper_dir = (
+                            materialize_monitor_direct_ssh_wrapper(
+                                task_private_tmpdir
+                            )
+                        )
+                        direct_ssh_read_paths = tuple(sorted({
+                            *direct_ssh_read_paths,
+                            str(task_direct_ssh_wrapper_dir),
+                        }))
 
                     async def bind_started_thread(thread_id: str) -> None:
                         """Durably bind thread/start before turn/start admission."""
@@ -16552,6 +16583,11 @@ Do NOT create a new PR. Push fixes to the existing branch."""
                         task_private_tmpdir=task_private_tmpdir,
                         task_ssh_disable_network=not direct_ssh,
                         task_direct_ssh=direct_ssh,
+                        task_direct_ssh_wrapper_dir=(
+                            None
+                            if task_direct_ssh_wrapper_dir is None
+                            else str(task_direct_ssh_wrapper_dir)
+                        ),
                         on_thread_started=bind_started_thread,
                         on_turn_prepared=publish_prepared_turn,
                     )
@@ -16999,6 +17035,22 @@ Do NOT create a new PR. Push fixes to the existing branch."""
 
             if reaped and (handle is None or handle.provider == "claude"):
                 getattr(self, "_monitor_config_dirs", {}).pop(monitor_session_id, None)
+                try:
+                    await self._cleanup_monitor_direct_ssh_runtime(
+                        monitor_session_id
+                    )
+                except Exception as exc:
+                    logger.exception(
+                        "Monitor direct SSH runtime cleanup failed: session=%s "
+                        "generation=%s",
+                        monitor_session_id,
+                        generation,
+                    )
+                    if turn_error is None:
+                        turn_error = (
+                            "Monitor direct SSH runtime cleanup failed: "
+                            f"{exc}"
+                        )
             cleanup_monitor_agent_mcp_config(
                 monitor_session_id,
                 generation,
@@ -17261,6 +17313,7 @@ Do NOT create a new PR. Push fixes to the existing branch."""
         from backend.models.monitor_session import MonitorSession
         from backend.services.monitor_direct_ssh import (
             direct_ssh_filesystem_projection,
+            materialize_monitor_direct_ssh_wrapper,
             revalidate_monitor_direct_ssh,
         )
 
@@ -17303,6 +17356,44 @@ Do NOT create a new PR. Push fixes to the existing branch."""
                 protected_paths, direct_ssh_read_paths = (
                     direct_ssh_filesystem_projection(protected_paths)
                 )
+        direct_ssh_runtime = None
+        if direct_ssh:
+            direct_ssh_runtimes = getattr(
+                self,
+                "_monitor_direct_ssh_runtime_dirs",
+                None,
+            )
+            if direct_ssh_runtimes is None:
+                direct_ssh_runtimes = {}
+                self._monitor_direct_ssh_runtime_dirs = direct_ssh_runtimes
+            if monitor_session_id in direct_ssh_runtimes:
+                raise RuntimeError(
+                    "Monitor direct SSH runtime already exists for this session"
+                )
+            from backend.services.task_runtime_secrets import (
+                create_private_runtime_temp_dir,
+            )
+
+            direct_ssh_runtime = create_private_runtime_temp_dir(
+                runtime_namespace="monitor-ssh",
+                owner_id=monitor_session_id,
+                generation_components={"turn": turn_generation},
+            )
+            try:
+                wrapper_dir = materialize_monitor_direct_ssh_wrapper(
+                    direct_ssh_runtime
+                )
+                direct_ssh_read_paths = tuple(sorted({
+                    *direct_ssh_read_paths,
+                    str(wrapper_dir),
+                }))
+                env["PATH"] = os.pathsep.join((
+                    str(wrapper_dir),
+                    env["PATH"],
+                ))
+            except BaseException:
+                await asyncio.to_thread(direct_ssh_runtime.cleanup_if_unbound)
+                raise
         if settings.claude_task_isolation_enabled:
             isolation_path = generate_claude_aux_isolation_settings(
                 namespace="monitor",
@@ -17383,7 +17474,17 @@ Do NOT create a new PR. Push fixes to the existing branch."""
                     getattr(self, "_monitor_config_dirs", {}).pop(
                         monitor_session_id, None
                     )
+                    if direct_ssh_runtime is not None:
+                        await asyncio.to_thread(
+                            direct_ssh_runtime.cleanup_if_unbound
+                        )
+                elif direct_ssh_runtime is not None:
+                    direct_ssh_runtime.bind_to_runtime()
+                    direct_ssh_runtimes[monitor_session_id] = direct_ssh_runtime
                 raise
+            if direct_ssh_runtime is not None:
+                direct_ssh_runtime.bind_to_runtime()
+                direct_ssh_runtimes[monitor_session_id] = direct_ssh_runtime
         if config_dir and self.pool:
             self.pool.record_routed_account(config_dir)
         log_path = getattr(
@@ -17419,7 +17520,9 @@ Do NOT create a new PR. Push fixes to the existing branch."""
             parts.extend((
                 "",
                 "## Direct SSH（用户已显式授权）",
-                "你可以读取本机现有 ~/.ssh/config，并通过系统 ssh 连接其中的主机。"
+                "你可以读取本机现有 ~/.ssh/config，并通过 PATH 中由 CCM 固定的 ssh "
+                "包装器连接其中的主机；包装器也会约束 ProxyCommand 中的嵌套 ssh，"
+                "统一只读取该用户配置，不读取系统 SSH 配置。"
                 "仅执行状态查询、日志读取、进程/容器观察等非变更命令；严禁在远端"
                 "写文件、停止/启动服务、发送信号或执行其他改变状态的操作。不要修改"
                 "本机 SSH 配置、密钥或 known_hosts。",

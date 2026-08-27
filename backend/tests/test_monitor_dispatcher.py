@@ -558,7 +558,8 @@ def test_build_monitor_agent_prompt_explains_direct_ssh_boundary(dispatcher):
         direct_ssh=True,
     )
     assert "~/.ssh/config" in prompt
-    assert "系统 ssh" in prompt
+    assert "CCM 固定的 ssh" in prompt
+    assert "ProxyCommand" in prompt
     assert "严禁在远端" in prompt
     assert "known_hosts" in prompt
 
@@ -641,13 +642,20 @@ async def test_claude_monitor_direct_ssh_launch_projects_read_only_ssh(
     assert str(ssh_root) in filesystem["denyWrite"]
     assert str(manager_secret) in filesystem["denyRead"]
     assert payload["sandbox"]["network"]["allowedDomains"] == ["*"]
-    assert captured["validate_kwargs"]["_expected_read_only_paths"] == (
-        str(ssh_root),
-    )
+    wrapper_dir = captured["launch"]["env"]["PATH"].split(os.pathsep, 1)[0]
+    expected_read_paths = captured["validate_kwargs"][
+        "_expected_read_only_paths"
+    ]
+    assert set(expected_read_paths) == {str(ssh_root), wrapper_dir}
+    assert wrapper_dir in filesystem["denyWrite"]
+    assert Path(wrapper_dir, "ssh").is_file()
     command = captured["launch"]["cmd"]
     assert command[command.index("--settings") + 1] == str(
         captured["settings_path"]
     )
+    dispatcher._monitor_processes.pop(session_id)
+    await dispatcher._cleanup_monitor_direct_ssh_runtime(session_id)
+    assert not Path(wrapper_dir).exists()
 
 
 @pytest.mark.asyncio
@@ -2324,6 +2332,10 @@ async def test_codex_monitor_direct_ssh_launch_uses_read_only_network_profile(
     assert kwargs["sandbox_mode"] == "read-only"
     assert kwargs["task_direct_ssh"] is True
     assert kwargs["task_ssh_disable_network"] is False
+    assert kwargs["task_direct_ssh_wrapper_dir"] is not None
+    assert kwargs["task_direct_ssh_wrapper_dir"] in kwargs[
+        "task_ssh_allowed_read_paths"
+    ]
     assert str(Path.home() / ".ssh") in kwargs[
         "task_ssh_allowed_read_paths"
     ]
