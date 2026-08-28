@@ -6825,6 +6825,25 @@ async def retry_task(
                 "session_id": None,
                 "context_window_usage": None,
             }
+            # A fresh native session has no provider-side conversation state.
+            # Preserve the model's working context by carrying a bounded,
+            # chronological summary into the initial prompt while retaining
+            # the original Task description and every durable log row.
+            if current.session_id:
+                from backend.main import dispatcher
+                from backend.services.context_compaction import (
+                    build_compacted_task_retry_prompt,
+                )
+
+                summary = await dispatcher._compact_session(
+                    task_id,
+                    current.session_id,
+                    db,
+                )
+                if summary:
+                    retry_updates["description"] = (
+                        build_compacted_task_retry_prompt(summary)
+                    )
         retried = await _retry_local_task_safely(
             task_id,
             queue,

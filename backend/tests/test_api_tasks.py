@@ -2049,6 +2049,15 @@ async def test_retry_task_fresh_session_preserves_history(client, session_factor
         db.add(
             LogEntry(
                 task_id=task.id,
+                event_type="user_message",
+                role="user",
+                content="Earlier user context",
+                is_error=False,
+            )
+        )
+        db.add(
+            LogEntry(
+                task_id=task.id,
                 event_type="message",
                 role="assistant",
                 content="Durable history must remain",
@@ -2073,7 +2082,9 @@ async def test_retry_task_fresh_session_preserves_history(client, session_factor
         assert task.status == "pending"
         assert task.session_id is None
         assert task.context_window_usage is None
-        assert len(history) == 1
+        assert "[Context compacted]" in task.description
+        assert "Earlier user context" in task.description
+        assert len(history) == 2
 
 
 @pytest.mark.asyncio
