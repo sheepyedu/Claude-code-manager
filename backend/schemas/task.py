@@ -273,6 +273,9 @@ class TaskActionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     expected_routing: TaskRoutingExpectation | None = None
+    # Drop an unrecoverable native provider session while retaining all CCM
+    # chat history. This is an explicit recovery action, never the default.
+    fresh_session: bool = False
 
 
 class PlanApprovalRequest(TaskActionRequest):

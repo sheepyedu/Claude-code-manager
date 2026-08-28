@@ -2028,6 +2028,55 @@ async def test_retry_task(client):
 
 
 @pytest.mark.asyncio
+async def test_retry_task_fresh_session_preserves_history(client, session_factory):
+    """Explicit fresh-session recovery clears only the native session pointer."""
+
+    from backend.models.log_entry import LogEntry
+    from backend.models.task import Task
+
+    async with session_factory() as db:
+        task = Task(
+            title="Fresh session recovery",
+            description="retain durable history",
+            status="failed",
+            provider="codex",
+            model="gpt-5.6-sol",
+            session_id="blocked-native-thread",
+            context_window_usage={"context_tokens": 123},
+        )
+        db.add(task)
+        await db.flush()
+        db.add(
+            LogEntry(
+                task_id=task.id,
+                event_type="message",
+                role="assistant",
+                content="Durable history must remain",
+                is_error=False,
+            )
+        )
+        await db.commit()
+        task_id = task.id
+
+    response = await client.post(
+        f"/api/tasks/{task_id}/retry",
+        json={"fresh_session": True},
+    )
+    assert response.status_code == 200, response.text
+    async with session_factory() as db:
+        task = await db.get(Task, task_id)
+        history = (
+            await db.execute(
+                select(LogEntry).where(LogEntry.task_id == task_id)
+            )
+        ).scalars().all()
+        assert task.status == "pending"
+        assert task.session_id is None
+        assert task.context_window_usage is None
+        assert len(history) == 1
+
+
+@pytest.mark.asyncio
 async def test_retry_fences_and_cancels_concurrent_harness_owner(
     client,
     session_factory,

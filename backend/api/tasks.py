@@ -6735,6 +6735,11 @@ async def retry_task(
                 "Plan Tasks cannot be retried; revise the Plan or create an "
                 "execution Task instead",
             )
+        if body is not None and body.fresh_session and current.worker_id is not None:
+            raise HTTPException(
+                409,
+                "Fresh-session retry must be performed on the owning Worker",
+            )
         _require_expected_task_routing(
             current,
             body.expected_routing if body is not None else None,
@@ -6814,11 +6819,18 @@ async def retry_task(
 
         _require_no_pending_worker_routing(current)
         expected_harness_owner = test_harness_owner_identity(current)
+        retry_updates = None
+        if body is not None and body.fresh_session:
+            retry_updates = {
+                "session_id": None,
+                "context_window_usage": None,
+            }
         retried = await _retry_local_task_safely(
             task_id,
             queue,
             db,
             expected_identity=expected_harness_owner,
+            task_updates=retry_updates,
         )
         if not retried:
             raise HTTPException(404, "Task not found")
