@@ -1215,3 +1215,11 @@ ocean/forest/rose 归入 Legacy 组。Header 顶栏导航重构为 AppShell（�
 - **避免复发**：高频轮询不得夹带低变化目录或为偶发 fallback 常驻请求额外列表；筛选与页码必须作为一个查询身份变更，所有异步响应都需验证仍是最新 generation 后才能提交 UI。
 - **验证**：修复前新增用例稳定复现目录重复拉取和 Project 双请求；修复后 `TasksPage.test.tsx` 为 `11 passed`，TypeScript 通过。前端全量 `783 passed / 1 failed`，唯一失败为既有 ChatView `process_exit` 时序用例，单独复跑通过。
 - **提交**：`cc483a62`。
+
+## 2026-08-28 — Task 113 不丢历史的全新会话恢复
+
+- **问题**：Task 113 的 Codex 原生线程因上游 `429 Too Many Requests` 进入 `goal:blocked`，后续复用旧 thread 触发 `CodexThreadNotIdleError` 和 `unsafe-replay`，无法安全恢复。
+- **解决**：为 `POST /api/tasks/{id}/retry` 增加显式 `fresh_session=true`。该操作仅清空 `session_id` 和 `context_window_usage`，保留全部 CCM 聊天历史、工具日志和旧原生 session；Worker 管理的 Task 拒绝执行本地清理，避免跨节点状态分叉。
+- **验证**：服务重启后 Task 113 以 `retry_count=1`、`turn_generation=18` 进入 pending；发送后续消息创建全新 Codex session `01a04614-2ea0-74b0-851d-61ad74efb09b`，当前 `turn_generation=19`、实例 183 正常执行，历史中已出现新的 native turn 和工具结果。
+- **测试**：`backend/tests/test_api_tasks.py -k 'retry_task'` 2 passed；新增用例确认 fresh-session 重试清理会话指针但保留历史日志。
+- **提交**：`6ff17125`。
