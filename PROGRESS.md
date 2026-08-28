@@ -1222,4 +1222,4 @@ ocean/forest/rose 归入 Legacy 组。Header 顶栏导航重构为 AppShell（�
 - **解决**：为 `POST /api/tasks/{id}/retry` 增加显式 `fresh_session=true`。该操作仅清空 `session_id` 和 `context_window_usage`，保留全部 CCM 聊天历史、工具日志和旧原生 session；Worker 管理的 Task 拒绝执行本地清理，避免跨节点状态分叉。
 - **验证**：服务重启后 Task 113 以 `retry_count=1`、`turn_generation=18` 进入 pending；发送后续消息创建全新 Codex session `01a04614-2ea0-74b0-851d-61ad74efb09b`，当前 `turn_generation=19`、实例 183 正常执行，历史中已出现新的 native turn 和工具结果。
 - **测试**：`backend/tests/test_api_tasks.py -k 'retry_task'` 2 passed；新增用例确认 fresh-session 重试清理会话指针但保留历史日志。
-- **提交**：`6ff17125`。
+- **提交**：`6ff17125`；后续补充上下文摘要注入提交 `c55e90cf`。
