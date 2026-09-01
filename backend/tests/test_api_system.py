@@ -68,6 +68,37 @@ async def test_stats_running_instances(client, session_factory):
     assert data["running_instances"] >= 1
 
 
+@pytest.mark.asyncio
+async def test_system_metrics_returns_host_snapshot(client, monkeypatch):
+    snapshot = {
+        "collected_at": "2026-09-01T12:00:00+00:00",
+        "cpu": {"utilization_percent": 12.5, "load_1m": 0.2, "cores": 4},
+        "memory": {
+            "total_bytes": 100,
+            "used_bytes": 40,
+            "available_bytes": 60,
+            "used_percent": 40.0,
+            "swap_total_bytes": 200,
+            "swap_used_bytes": 10,
+            "swap_used_percent": 5.0,
+        },
+        "storage": {
+            "root": {"path": "/", "total_bytes": 1000, "used_bytes": 250, "free_bytes": 750, "used_percent": 25.0},
+            "tmp": {"path": "/tmp", "total_bytes": 1000, "used_bytes": 50, "free_bytes": 950, "used_percent": 5.0},
+        },
+        "cached": False,
+        "cache_age_seconds": 0,
+    }
+    getter = AsyncMock(return_value=snapshot)
+    monkeypatch.setattr("backend.services.system_metrics.get_system_metrics", getter)
+
+    response = await client.get("/api/system/metrics?refresh=true")
+
+    assert response.status_code == 200
+    assert response.json() == snapshot
+    getter.assert_awaited_once_with(force=True)
+
+
 # === /api/system/update tests ===
 
 

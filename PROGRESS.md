@@ -1223,3 +1223,9 @@ ocean/forest/rose 归入 Legacy 组。Header 顶栏导航重构为 AppShell（�
 - **验证**：服务重启后 Task 113 以 `retry_count=1`、`turn_generation=18` 进入 pending；发送后续消息创建全新 Codex session `01a04614-2ea0-74b0-851d-61ad74efb09b`，当前 `turn_generation=19`、实例 183 正常执行，历史中已出现新的 native turn 和工具结果。
 - **测试**：`backend/tests/test_api_tasks.py -k 'retry_task'` 2 passed；新增用例确认 fresh-session 重试清理会话指针但保留历史日志。
 - **提交**：`6ff17125`；后续补充上下文摘要注入提交 `c55e90cf`。
+## 系统资源监控面板（待提交）
+
+- 问题：管理员缺少机器 CPU、内存和存储的统一状态视图，无法快速判断 OOM/磁盘压力。
+- 解决：新增 `/api/system/metrics` 小时级缓存接口，使用 `/proc` 和 `shutil.disk_usage` 采集 CPU、内存、swap、根盘与 `/tmp`；Dashboard 增加手动刷新面板。
+- 经验：系统指标不需要高频轮询；服务端 TTL 缓存能避免前端切页或重复请求放大采样开销。
+- Git commit：`724d877b`

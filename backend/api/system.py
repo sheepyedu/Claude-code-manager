@@ -1,6 +1,6 @@
 import re
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -62,6 +62,15 @@ async def stats(db: AsyncSession = Depends(get_db)):
         "tasks": task_counts,
         "running_instances": running_instances,
     }
+
+
+@router.get("/metrics", dependencies=[Depends(require_admin)])
+async def system_metrics(refresh: bool = Query(False)):
+    """Return cached host CPU, memory, and storage metrics for administrators."""
+
+    from backend.services.system_metrics import get_system_metrics
+
+    return await get_system_metrics(force=refresh)
 
 
 @router.get("/config")

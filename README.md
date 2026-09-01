@@ -17,6 +17,7 @@ Web 端调度和管理多个 Claude Code 实例并行工作。灵感来自胡渊
 - **任务队列** — 按优先级自动调度（数字越小优先级越高）
 - **多实例并行** — 同时运行多个 Claude Code 实例，各自处理不同任务
 - **Git Worktree** — 每个实例在独立的 worktree 中工作，互不干扰
+- **系统资源面板** — 管理员 Dashboard 展示 CPU、内存、swap、根磁盘与 `/tmp` 使用率；数据按小时缓存，也可手动刷新
 
 ### 执行模式
 - **多 Provider（Claude / Codex）** — Task 级选择执行引擎：OpenAI Codex CLI（默认，`gpt-5.6-sol`）或 Claude Code。Codex 任务支持完整生命周期、多轮对话、Goal 模式评估、Plan 审批、上下文自动压缩、瞬时错误退避重试、账号池与跨 Worker rollout 迁移；指令文件读 `AGENTS.md`（自动注入）。PTY 热会话、ask_user 和 Claude 原生子 Agent 仍为 Claude 专属（Codex 下显式隐藏/拒绝，不静默降级）

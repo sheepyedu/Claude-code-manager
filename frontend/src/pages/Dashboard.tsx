@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import type { Instance } from '../api/client';
 import { InstanceGrid } from '../components/Instances/InstanceGrid';
 import { InstanceLog } from '../components/Instances/InstanceLog';
+import { SystemMetricsPanel } from '../components/System/SystemMetricsPanel';
 
 export function Dashboard() {
   const [instances, setInstances] = useState<Instance[]>([]);
@@ -49,6 +50,8 @@ export function Dashboard() {
           </div>
         </div>
       )}
+
+      <SystemMetricsPanel />
 
       {/* Instances */}
       <div>

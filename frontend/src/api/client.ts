@@ -5,6 +5,38 @@ export interface ApiRequestError extends Error {
   detail: unknown;
 }
 
+export interface SystemMetricDisk {
+  path: string;
+  total_bytes: number;
+  used_bytes: number;
+  free_bytes: number;
+  used_percent: number;
+}
+
+export interface SystemMetrics {
+  collected_at: string;
+  cached: boolean;
+  cache_age_seconds: number;
+  cpu: {
+    utilization_percent: number;
+    load_1m: number;
+    cores: number;
+  };
+  memory: {
+    total_bytes: number;
+    used_bytes: number;
+    available_bytes: number;
+    used_percent: number;
+    swap_total_bytes: number;
+    swap_used_bytes: number;
+    swap_used_percent: number;
+  };
+  storage: {
+    root: SystemMetricDisk;
+    tmp: SystemMetricDisk;
+  };
+}
+
 export interface TaskArtifactDownload {
   blob: Blob;
   filename: string;
@@ -3170,6 +3202,7 @@ export const api = {
   // System
   health: () => request<{ status: string; commit?: string }>('/api/system/health'),
   stats: () => request<{ tasks: Record<string, number>; running_instances: number }>('/api/system/stats'),
+  systemMetrics: (refresh = false) => request<SystemMetrics>(`/api/system/metrics${refresh ? '?refresh=true' : ''}`),
   config: () => request<SystemConfig>('/api/system/config'),
   listSkills: () => request<{ key: string; label: string; description: string; always: boolean; priority: number; tags: string[] }[]>('/api/system/skills'),
   listSkillsCached: () => listSkillsCached(),

@@ -25,6 +25,11 @@ cd frontend && npx tsc --noEmit
 
 ## 自动化测试
 
+### 系统资源面板
+
+`backend/tests/test_api_system.py::test_system_metrics_returns_host_snapshot`
+验证管理员系统资源接口返回 CPU、内存、swap、根磁盘和 `/tmp` 的结构化快照，并确认 `refresh=true` 会传递强制刷新参数。`frontend/src/components/System/SystemMetricsPanel.test.tsx` 验证初始缓存读取和按钮强制刷新。前端面板使用 `npm run build` 做 TypeScript 类型检查和生产构建验证。
+
 ### 后端测试（pytest + pytest-asyncio）
 
 测试使用内存 SQLite，不依赖真实数据库或外部服务。
