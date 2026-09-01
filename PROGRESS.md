@@ -1228,4 +1228,4 @@ ocean/forest/rose 归入 Legacy 组。Header 顶栏导航重构为 AppShell（�
 - 问题：管理员缺少机器 CPU、内存和存储的统一状态视图，无法快速判断 OOM/磁盘压力。
 - 解决：新增 `/api/system/metrics` 小时级缓存接口，使用 `/proc` 和 `shutil.disk_usage` 采集 CPU、内存、swap、根盘与 `/tmp`；Dashboard 增加手动刷新面板。
 - 经验：系统指标不需要高频轮询；服务端 TTL 缓存能避免前端切页或重复请求放大采样开销。
-- Git commit：`724d877b`
+- Git commit：`d3a0513b`
