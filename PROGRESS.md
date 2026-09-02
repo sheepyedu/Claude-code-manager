@@ -1223,6 +1223,15 @@ ocean/forest/rose 归入 Legacy 组。Header 顶栏导航重构为 AppShell（�
 - **验证**：服务重启后 Task 113 以 `retry_count=1`、`turn_generation=18` 进入 pending；发送后续消息创建全新 Codex session `01a04614-2ea0-74b0-851d-61ad74efb09b`，当前 `turn_generation=19`、实例 183 正常执行，历史中已出现新的 native turn 和工具结果。
 - **测试**：`backend/tests/test_api_tasks.py -k 'retry_task'` 2 passed；新增用例确认 fresh-session 重试清理会话指针但保留历史日志。
 - **提交**：`6ff17125`；后续补充上下文摘要注入提交 `c55e90cf`。
+
+## 2026-09-02 — Codex 持久子线程图恢复与伪循环根治
+
+- **问题**：Task 116 的原生 rollout 与 Codex `state_5.sqlite` 中 `thread_spawn_edges` 均完整且无环；真正阻断续聊的是 CCM 常驻 app-server 根据共享、乱序及 legacy collaboration 通知维护的 `_children_by_thread` 内存缓存。tool-less receiver 被误猜成 spawn edge、插边前缺少反向可达与多 parent 校验，最终让一次上游 429 留下的 `systemError` 在 runtime recycle 时被伪循环永久卡住。
+- **解决**：Codex 0.147+ 的终态恢复改用 `thread/list(ancestorThreadId=...)` 读取原生持久 spawn forest，分页校验 thread identity、唯一 parent、root 可达、cursor 与无环后，以该局部权威图 deepest-first 检查并释放已终态 descendant；不再把 live 通知缓存与持久 turns 混合作 archive 依据。live graph 插入前拒绝自环、反向环和多 parent，只有显式 spawn 建立恢复层级；tool-less 与 send/resume/close receiver 仅作通信或已知生命周期投影。旧 Codex runtime 保留严格 turns reconstruction fallback，真实损坏仍 fail closed。
+- **避免复发**：恢复边界必须以 provider 的持久关系为权威，进程内观测缓存只能作为提示；任何 graph mutation 都必须先验证 forest invariants。回归测试须预置被污染的共享缓存，并证明健康持久图仍能 archive/unarchive，同时保留显式真实环的拒绝用例。
+- **验证**：关键恢复、协作通知与图校验矩阵 `15 passed, 312 deselected`；此前扩大矩阵 `36 passed, 290 deselected`，Python compile 与 `git diff --check` 通过。全文件测试的两个既有环境失败分别来自默认 Codex Skills 自动注入及 pytest 临时路径归一化，与本次 diff 无关；当前环境未安装 `ruff`。
+- **提交**：`0ba07c4d`。
+
 ## 系统资源监控面板（待提交）
 
 - 问题：管理员缺少机器 CPU、内存和存储的统一状态视图，无法快速判断 OOM/磁盘压力。
