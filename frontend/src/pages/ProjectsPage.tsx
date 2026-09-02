@@ -7,6 +7,7 @@ import { resolveTagColor, TAG_COLOR_OPTIONS } from '../components/TagColors';
 import { TagManager } from '../components/TagManager';
 import { EnvFilesEditor } from '../components/EnvFilesEditor';
 import { ProjectTodoList } from '../components/Projects/ProjectTodoList';
+import { useVisibilityAwareInterval } from '../hooks/useVisibilityAwareInterval';
 
 // ── Shared: identity warning ──────────────────────────────────────────────────
 
@@ -735,11 +736,8 @@ export function ProjectsPage() {
     }
   }, []);
 
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, 5000);
-    return () => clearInterval(interval);
-  }, [refresh]);
+  useEffect(() => { void refresh(); }, [refresh]);
+  useVisibilityAwareInterval(refresh, 30000, true, false);
 
   const toggleSelector = async (project: Project) => {
     setLoading((prev) => ({ ...prev, [project.id]: true }));

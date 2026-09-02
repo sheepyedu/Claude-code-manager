@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { HelpCircle, X } from './icons';
 import { api } from '../api/client';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { useVisibilityAwareInterval } from '../hooks/useVisibilityAwareInterval';
 
 interface PendingAsk {
   task_id: number;
@@ -43,14 +44,6 @@ export function AskUserNotifications() {
       .catch(() => { /* 后端不可达时静默，WS 事件会补 */ });
   }, []);
 
-  useEffect(() => {
-    refresh();
-    // Members cannot subscribe to global channels. This ACL-safe HTTP fallback
-    // keeps the App-level notification working for them on other pages.
-    const interval = window.setInterval(refresh, 5000);
-    return () => window.clearInterval(interval);
-  }, [refresh]);
-
   const handleWs = useCallback((raw: Record<string, unknown>) => {
     const msg = raw as { channel?: string; data?: Record<string, unknown> };
     if (msg.channel !== 'tasks') return;
@@ -74,7 +67,11 @@ export function AskUserNotifications() {
     }
   }, []);
 
-  useWebSocket(['tasks'], handleWs, refresh);
+  const { isConnected: tasksWsConnected } = useWebSocket(['tasks'], handleWs, refresh);
+  // Members cannot subscribe to global channels. This ACL-safe HTTP fallback
+  // keeps the App-level notification working for them on other pages.
+  useEffect(() => { refresh(); }, [refresh]);
+  useVisibilityAwareInterval(refresh, tasksWsConnected ? 30000 : 5000, true, false);
 
   const open = useCallback((taskId: number, requestId: string) => {
     // 跳转到该 task 的聊天页；App 监听 hashchange 完成路由

@@ -1482,3 +1482,12 @@ manager(8003) 注册 worker → 建 git_url 项目 → 创建 task 选 worker �
 转发同 ID、状态回流、43 条日志镜像、README 真实修改 + merge push、
 chat 代理 + session_id 同步、回复经 relay 回流。测试仓库
 github.com/youchengsong/ccm-worker-e2e-test（可删）。
+## 前端性能回归
+
+`frontend/src/hooks/useVisibilityAwareInterval.test.tsx` 覆盖可见性切换、禁用状态、异步刷新不重叠和间隔变化；`useWebSocket.test.tsx` 与 `api/ws.test.ts` 覆盖共享连接、频道重订阅和重连 timer 去重。运行：
+
+```bash
+cd frontend
+npx vitest run src/pages/TasksPage.test.tsx src/hooks/useWebSocket.test.tsx src/api/ws.test.ts src/hooks/useVisibilityAwareInterval.test.tsx src/components/Chat/ChatView.test.tsx src/components/Chat/SharedChatView.test.tsx
+npm run build
+```

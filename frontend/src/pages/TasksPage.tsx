@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../api/client';
 import type { Task, Project, TagItem } from '../api/client';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { useVisibilityAwareInterval } from '../hooks/useVisibilityAwareInterval';
 import { TaskForm } from '../components/Tasks/TaskForm';
 import { TaskList } from '../components/Tasks/TaskList';
 import { ChatView } from '../components/Chat/ChatView';
@@ -239,7 +240,7 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
       }
     }
   }, [setSearchResults]);
-  useWebSocket(['system', 'tasks'], handleGlobalWs);
+  const { isConnected } = useWebSocket(['system', 'tasks'], handleGlobalWs);
 
   const [isWide, setIsWide] = useState(() => window.innerWidth >= 1280);
   useEffect(() => {
@@ -328,23 +329,14 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
 
   refreshRef.current = refresh;
 
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, 5000);
-    return () => {
-      clearInterval(interval);
-      taskRefreshGeneration.current += 1;
-    };
-  }, [refresh]);
+  useEffect(() => { void refresh(); }, [refresh]);
+  useVisibilityAwareInterval(refresh, isConnected ? 60000 : 5000, true, false);
 
   useEffect(() => {
     void refreshCatalog();
-    const interval = setInterval(refreshCatalog, CATALOG_REFRESH_INTERVAL_MS);
-    return () => {
-      clearInterval(interval);
-      catalogRefreshGeneration.current += 1;
-    };
+    return () => { catalogRefreshGeneration.current += 1; };
   }, [refreshCatalog]);
+  useVisibilityAwareInterval(refreshCatalog, CATALOG_REFRESH_INTERVAL_MS, true, false);
 
   const prepareFilterChange = useCallback(() => {
     skipFreezeOnce.current = true;
@@ -746,9 +738,9 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
     const sidebarStatusColors: Record<string, string> = {
       pending: 'bg-yellow-500',
       in_progress: 'bg-blue-500',
-      executing: 'bg-blue-400 animate-pulse',
-      waiting_capability: 'bg-violet-400 animate-pulse',
-      background: 'bg-teal-400 animate-pulse',
+      executing: 'bg-blue-400',
+      waiting_capability: 'bg-violet-400',
+      background: 'bg-teal-400',
       delivery_waiting: 'bg-indigo-400',
       delivery_paused: 'bg-amber-400',
       plan_review: 'bg-purple-500',

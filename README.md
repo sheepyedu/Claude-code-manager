@@ -38,6 +38,7 @@ Web 端调度和管理多个 Claude Code 实例并行工作。灵感来自胡渊
 ### 交互与对话
 - **多轮对话** — 任务完成后可通过 Chat 界面继续追问，自动 `--resume` 同一 session
 - **快速项目筛选** — Tasks 页切换 Project/状态时会同步回到第一页，只请求当前分页与计数；Project/Tag 目录独立低频刷新，快速连续切换时过期响应不会覆盖当前项目
+- **前端资源节流** — 页面隐藏时暂停 HTTP 轮询，恢复可见时立即刷新；同一 `wsUrl + token` 的消费者共享 WebSocket，连接正常时使用低频兜底轮询，避免切页和后台标签页持续占用资源
 - **Session 关注标签** — 每个 Task 可维护一个自定义短标签，在任务列表和 Chat 顶栏醒目展示并随时编辑，便于记录“何时再看/下一步做什么”；该字段与系统内部 `tags` 独立，复制、Fork 和 Worker 迁移时会保留
 - **Task 产物下载** — Claude/Codex 会把明确交付给用户的文件保存到当前 Project 的 `.claude-manager/artifacts/task-<id>/`，聊天中的显式产物链接可直接下载；普通源码和文档引用不会误显示为下载文件
 - **SSH 工作台与 Task 授权** — Files 页面可管理固定主机指纹的 SSH Profile、浏览/下载远程文件；新建、legacy 迁移与密钥轮换只接受上传到 CCM 托管目录，升级前的外部路径 Profile 仅可保持 Files-only。管理员可在新建 Task 或 Chat 中按 `exec/read/write` 最小权限授权，Claude/Codex 通过 task-scoped `ccm_ssh` MCP 使用，私钥始终留在 Manager。使用和安全边界见 [SSH access](docs/ssh-access.md)

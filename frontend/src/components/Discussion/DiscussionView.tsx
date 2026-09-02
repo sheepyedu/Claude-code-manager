@@ -7,6 +7,7 @@ import type {
   DiscussionEventItem,
 } from '../../api/client';
 import { useWebSocket } from '../../hooks/useWebSocket';
+import { useVisibilityAwareInterval } from '../../hooks/useVisibilityAwareInterval';
 import {
   Send,
   ArrowLeft,
@@ -73,12 +74,12 @@ function countToolCalls(events: DiscussionEventItem[]): number {
 
 function useIdleTime(events: DiscussionEventItem[], isRunning: boolean): string | null {
   const [, setTick] = useState(0);
-
-  useEffect(() => {
-    if (isRunning || events.length === 0) return;
-    const interval = setInterval(() => setTick((t) => t + 1), 5000);
-    return () => clearInterval(interval);
-  }, [isRunning, events.length]);
+  useVisibilityAwareInterval(
+    () => setTick((t) => t + 1),
+    5000,
+    !isRunning && events.length > 0,
+    false,
+  );
 
   if (isRunning || events.length === 0) return null;
   const last = events[events.length - 1];

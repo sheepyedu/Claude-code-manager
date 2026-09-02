@@ -3,6 +3,7 @@ import { api } from '../../api/client';
 import type { SharedTaskReceived } from '../../api/client';
 import { ArrowLeft, Send, RefreshCw, Wifi, WifiOff, Loader2 } from '../icons';
 import { MarkdownRenderer } from '../Markdown/MarkdownRenderer';
+import { useVisibilityAwareInterval } from '../../hooks/useVisibilityAwareInterval';
 
 interface SharedChatViewProps {
   shared: SharedTaskReceived;
@@ -239,17 +240,15 @@ export function SharedChatView({ shared, onBack }: SharedChatViewProps) {
     };
   }, [shared.owner_ccm_url, shared.remote_task_id, shared.share_token]);
 
-  // Fallback polling when WS is not connected
-  useEffect(() => {
+  // Fallback polling when WS is not connected. The visibility-aware helper
+  // also prevents a slow relay response from overlapping the next request.
+  useVisibilityAwareInterval(async () => {
     if (wsConnected) return;
-    const interval = setInterval(async () => {
-      try {
-        const history = await api.getSharedHistory(shared.id);
-        setMessages((current) => mergeSharedHistory(history, current));
-      } catch { /* ignore */ }
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [wsConnected, shared.id]);
+    try {
+      const history = await api.getSharedHistory(shared.id);
+      setMessages((current) => mergeSharedHistory(history, current));
+    } catch { /* ignore */ }
+  }, 3000, !wsConnected, false);
 
   useEffect(() => {
     scrollToBottom();

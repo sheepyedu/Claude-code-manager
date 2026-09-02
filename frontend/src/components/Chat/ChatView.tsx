@@ -21,6 +21,7 @@ import type {
 } from '../../api/client';
 import { DEFAULT_BROWSER_CHANNEL } from '../../config/browserReview';
 import { useWebSocket } from '../../hooks/useWebSocket';
+import { useVisibilityAwareInterval } from '../../hooks/useVisibilityAwareInterval';
 import { resolveAssetUrl } from '../../config/server';
 import { Send, ArrowLeft, Loader2, ChevronDown, ChevronRight, ChevronUp, Copy, Check, Paperclip, X, StopCircle, Pencil, ArrowDown, Star, ListPlus, ListTodo, Trash2, AlertCircle, Sparkles, GitBranch, Eye, RefreshCw, Pin } from '../icons';
 import { SecretPicker } from '../Secrets/SecretPicker';
@@ -683,25 +684,41 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
     }
   };
 
-  // Persist the draft as the user types; cleared when input empties (e.g. send)
+  // Debounce storage writes so typing does not synchronously block the main
+  // thread on localStorage for every keystroke.
+  const draftRef = useRef(input);
+  const uploadDraftRef = useRef(fileUpload.uploadedResults);
+  useEffect(() => { draftRef.current = input; }, [input]);
+  useEffect(() => { uploadDraftRef.current = fileUpload.uploadedResults; }, [fileUpload.uploadedResults]);
   useEffect(() => {
-    try {
-      if (input) localStorage.setItem(`ccm-chat-draft-${task.id}`, input);
-      else localStorage.removeItem(`ccm-chat-draft-${task.id}`);
-    } catch { /* storage may be unavailable */ }
+    const timer = window.setTimeout(() => {
+      try {
+        const key = `ccm-chat-draft-${task.id}`;
+        if (input) localStorage.setItem(key, input);
+        else localStorage.removeItem(key);
+      } catch { /* storage may be unavailable */ }
+    }, 500);
+    return () => window.clearTimeout(timer);
   }, [input, task.id]);
   useEffect(() => {
-    try {
-      if (fileUpload.uploadedResults.length > 0) {
-        localStorage.setItem(
-          draftUploadsKey,
-          JSON.stringify(fileUpload.uploadedResults),
-        );
-      } else {
-        localStorage.removeItem(draftUploadsKey);
-      }
-    } catch { /* storage may be unavailable */ }
+    const timer = window.setTimeout(() => {
+      try {
+        if (uploadDraftRef.current.length > 0) {
+          localStorage.setItem(draftUploadsKey, JSON.stringify(uploadDraftRef.current));
+        } else localStorage.removeItem(draftUploadsKey);
+      } catch { /* storage may be unavailable */ }
+    }, 500);
+    return () => window.clearTimeout(timer);
   }, [draftUploadsKey, fileUpload.uploadedResults]);
+  useEffect(() => () => {
+    try {
+      const key = `ccm-chat-draft-${task.id}`;
+      if (draftRef.current) localStorage.setItem(key, draftRef.current);
+      else localStorage.removeItem(key);
+      if (uploadDraftRef.current.length > 0) localStorage.setItem(draftUploadsKey, JSON.stringify(uploadDraftRef.current));
+      else localStorage.removeItem(draftUploadsKey);
+    } catch { /* storage may be unavailable */ }
+  }, [draftUploadsKey, task.id]);
   useEffect(() => {
     try {
       if (localStorage.getItem(forkSeedUploadsConsumedKey)) {
@@ -863,11 +880,13 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
     } catch { /* modal exposes actionable errors; passive polling is best-effort */ }
   }, [task.id, task.session_id, task.shared_from_id]);
 
-  useEffect(() => {
-    void refreshVersionedPlans();
-    const timer = window.setInterval(() => void refreshVersionedPlans(), 5000);
-    return () => window.clearInterval(timer);
-  }, [refreshVersionedPlans]);
+  useEffect(() => { void refreshVersionedPlans(); }, [refreshVersionedPlans]);
+  useVisibilityAwareInterval(
+    () => refreshVersionedPlans(),
+    5000,
+    Boolean(task.session_id) && task.shared_from_id == null,
+    false,
+  );
 
   const togglePlanVersionAttachment = useCallback((versionId: number) => {
     setSelectedPlanVersionIds((current) => current.includes(versionId)
@@ -907,14 +926,12 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
     [messages, task.retry_count, task.turn_generation],
   );
   const [, refreshBackgroundAge] = useState(0);
-  useEffect(() => {
-    if (!backgroundLifecycle) return;
-    const timer = window.setInterval(
-      () => refreshBackgroundAge((generation) => generation + 1),
-      60_000,
-    );
-    return () => window.clearInterval(timer);
-  }, [backgroundLifecycle]);
+  useVisibilityAwareInterval(
+    () => refreshBackgroundAge((generation) => generation + 1),
+    60_000,
+    Boolean(backgroundLifecycle),
+    false,
+  );
   const workspaceReviewCanBeConfigured = (
     workspaceReviewCapability?.available === true
     || workspaceReviewCapability?.suggested_config != null
@@ -2797,7 +2814,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                 </>
               )}
               {backgroundActive && (
-                <span className="text-xs bg-teal-600/25 text-teal-300 px-1.5 rounded font-medium whitespace-nowrap animate-pulse">
+                <span className="text-xs bg-teal-600/25 text-teal-300 px-1.5 rounded font-medium whitespace-nowrap">
                   后台运行中
                 </span>
               )}
