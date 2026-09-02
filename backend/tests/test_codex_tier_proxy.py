@@ -237,6 +237,81 @@ async def test_fast_accepts_informational_response_tier(
 
 
 @pytest.mark.asyncio
+async def test_fast_accepts_gateway_stream_starting_at_response_in_progress():
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            content=(
+                b"event: response.in_progress\n"
+                b'data: {"type":"response.in_progress",'
+                b'"response":{"id":"resp-in-progress","service_tier":"auto"}}\n\n'
+                b"event: response.completed\n"
+                b'data: {"type":"response.completed",'
+                b'"response":{"id":"resp-in-progress"}}\n\n'
+            ),
+        )
+
+    proxy = await _running_proxy(handler)
+    proxy.set_thread_tier("thread-1", "priority")
+    try:
+        async with httpx.AsyncClient(trust_env=False) as client:
+            response = await client.post(
+                f"{proxy.local_base_url}/responses",
+                headers={"x-client-request-id": "thread-1"},
+                json=_request_body(),
+            )
+        assert response.status_code == 200
+        assert b"response.in_progress" in response.content
+        proof = await proxy.wait_for_request_acceptance(
+            "thread-1",
+            "turn-1",
+            "priority",
+            timeout=0.2,
+        )
+        assert proof.response_id == "resp-in-progress"
+        assert proof.upstream_reported_tier == "auto"
+    finally:
+        await proxy.close()
+
+
+@pytest.mark.asyncio
+async def test_fast_rejects_unknown_first_response_event():
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            content=(
+                b"event: response.output_text.delta\n"
+                b'data: {"type":"response.output_text.delta","delta":"x"}\n\n'
+            ),
+        )
+
+    proxy = await _running_proxy(handler)
+    proxy.set_thread_tier("thread-1", "priority")
+    try:
+        async with httpx.AsyncClient(trust_env=False) as client:
+            response = await client.post(
+                f"{proxy.local_base_url}/responses",
+                headers={"x-client-request-id": "thread-1"},
+                json=_request_body(),
+            )
+        assert response.status_code == 502
+        with pytest.raises(
+            CodexTierProofError,
+            match="accepted response lifecycle",
+        ):
+            await proxy.wait_for_request_acceptance(
+                "thread-1",
+                "turn-1",
+                "priority",
+                timeout=0.2,
+            )
+    finally:
+        await proxy.close()
+
+
+@pytest.mark.asyncio
 async def test_fast_proxy_rejects_non_sse_success_without_releasing_body():
     async def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(

@@ -44,6 +44,14 @@ CODEX_TIER_DEFAULT = "default"
 CODEX_TIER_PRIORITY = "priority"
 _CODEX_TIERS = frozenset({CODEX_TIER_DEFAULT, CODEX_TIER_PRIORITY})
 _CODEX_REPORTED_TIERS = frozenset({"auto", "default", "flex", "priority"})
+# Some Responses-compatible gateways omit ``response.created`` and begin the
+# stream at ``response.in_progress``.  Both events carry the created response
+# identity and are safe admission evidence; arbitrary output/error events are
+# deliberately not accepted as a tier proof.
+_ACCEPTED_RESPONSE_EVENTS = frozenset({
+    "response.created",
+    "response.in_progress",
+})
 
 _MAX_HEADER_BYTES = 64 * 1024
 _MAX_HEADER_LINE_BYTES = 16 * 1024
@@ -1559,15 +1567,17 @@ class CodexActualTierProxy:
                 event = _parse_sse_json(record)
                 if event is None:
                     continue
-                if event.get("type") != "response.created":
+                event_type = event.get("type")
+                if event_type not in _ACCEPTED_RESPONSE_EVENTS:
                     raise CodexTierProofError(
-                        "First Responses event was not response.created"
+                        "First Responses event was not an accepted response "
+                        "lifecycle event"
                     )
                 response = event.get("response")
                 if not isinstance(response, dict):
                     raise CodexTierProofError(
-                        "response.created omitted response"
-                )
+                        f"{event_type} omitted response"
+                    )
                 reported_tier = response.get("service_tier")
                 normalised_reported_tier = (
                     reported_tier.strip().lower()

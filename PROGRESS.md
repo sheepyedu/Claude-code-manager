@@ -2,6 +2,19 @@
 
 > **重要：Claude 必须自主维护本文件。** 每次完成重要改动或遇到问题后，在对应章节记录。每条记录必须附上 git commit ID。
 
+## 2026-09-02 — Codex Fast SSE 前导兼容
+
+- **问题**：Task 70 的 priority 回合被 `CodexTierProofError` 拒绝。Apex 兼容 Responses 网关返回 HTTP 200，
+  但首个语义事件是 `response.in_progress` 而不是严格的 `response.created`，导致 CCM 在模型产生任何可见输出前
+  以 `unsafe-replay` fail closed。重复发送还会触发 queued session recovery 代次替换，但不是根因。
+- **解决**：Fast tier proxy 只把官方 Responses 生命周期中的 `response.created` 和兼容网关的
+  `response.in_progress` 作为首个接受证明，并对两者统一校验 response 对象和 response id；未知输出、错误事件、
+  非 SSE 或压缩流仍拒绝。补充正反向回归测试和运行文档，保留请求 `service_tier=priority` 的 exact turn 校验。
+- **避免复发**：provider 兼容性探针应记录首个 SSE 事件类型；扩展白名单时必须绑定同一响应身份校验，不能因 HTTP 200
+  或任意 SSE 数据放宽 tier proof。
+- **验证**：`test_codex_tier_proxy.py` 43 passed；完整后端测试与 TypeScript 检查待提交后执行。
+- **Git commit**：`5253c392`。
+
 ## 已完成功能
 
 ### Codex GPT-5.6 缓存兼容与终态子线程安全回收（2026-08-19）
