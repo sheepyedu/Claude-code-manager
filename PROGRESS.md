@@ -13,7 +13,7 @@
 - **避免复发**：provider 兼容性探针应记录首个 SSE 事件类型；扩展白名单时必须绑定同一响应身份校验，不能因 HTTP 200
   或任意 SSE 数据放宽 tier proof。
 - **验证**：`test_codex_tier_proxy.py` 43 passed；完整后端测试与 TypeScript 检查待提交后执行。
-- **Git commit**：`5253c392`。
+- **Git commit**：`4b3c2b9e`。
 
 ## 已完成功能
 
