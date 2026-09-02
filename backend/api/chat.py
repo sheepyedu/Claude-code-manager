@@ -20,7 +20,7 @@ from backend.api.deps import (
     require_task_control,
 )
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import and_, not_, select, update as sa_update
+from sqlalchemy import and_, func, not_, select, update as sa_update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -3672,6 +3672,98 @@ async def get_chat_history(
     if limit > 0 and len(messages) > limit:
         messages = messages[-limit:]
     return messages
+
+
+@router.get("/{task_id}/chat/search")
+async def search_chat_history(
+    task_id: int,
+    request: Request,
+    q: str = "",
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+):
+    """Search persisted chat content for one accessible Task.
+
+    Search deliberately stays Task-scoped so the existing Task ACL remains
+    the single authorization boundary.  Tool payloads are searchable, but the
+    response only returns a bounded snippet rather than raw JSON/output.
+    """
+    task = await db.get(Task, task_id)
+    if not task:
+        raise HTTPException(404, "Task not found")
+    await require_task_access(request, task, db)
+
+    query = q.strip()
+    if not query:
+        return []
+    if len(query) > 200:
+        raise HTTPException(422, "Search query is too long")
+    limit = max(1, min(limit, 100))
+
+    # SQLAlchemy's autoescape keeps '%' and '_' in a user's query literal,
+    # avoiding accidental wildcard expansion while retaining SQLite/Postgres
+    # portability.
+    folded_query = query.casefold()
+    pattern = (
+        func.lower(LogEntry.content).contains(folded_query, autoescape=True)
+        | func.lower(LogEntry.tool_input).contains(folded_query, autoescape=True)
+        | func.lower(LogEntry.tool_output).contains(folded_query, autoescape=True)
+    )
+    noisy_system = ["task_progress", "thinking_tokens", "token_usage", "api_request", "api_response"]
+    stmt = (
+        select(
+            LogEntry.id,
+            LogEntry.role,
+            LogEntry.event_type,
+            LogEntry.content,
+            LogEntry.tool_name,
+            LogEntry.tool_input,
+            LogEntry.tool_output,
+            LogEntry.timestamp,
+        )
+        .where(
+            LogEntry.task_id == task_id,
+            pattern,
+            LogEntry.event_type.in_([
+                "user_message", "message", "result", "tool_use", "tool_result",
+                "system_init", "system_event", "thinking", "process_exit",
+                "background_lifecycle",
+            ]),
+            not_(and_(
+                LogEntry.event_type == "system_event",
+                LogEntry.content.in_(noisy_system),
+            )),
+        )
+        .order_by(LogEntry.id.desc())
+        .limit(limit)
+    )
+    rows = (await db.execute(stmt)).all()
+
+    def _snippet(row) -> str:
+        for value in (row.content, row.tool_input, row.tool_output):
+            if value and query.casefold() in value.casefold():
+                folded = value.casefold()
+                start = max(0, folded.find(query.casefold()) - 90)
+                end = min(len(value), start + 240)
+                snippet = value[start:end].strip()
+                if start > 0:
+                    snippet = "..." + snippet
+                if end < len(value):
+                    snippet += "..."
+                return snippet
+        return ""
+
+    return [
+        {
+            "id": row.id,
+            "role": row.role,
+            "event_type": row.event_type,
+            "tool_name": row.tool_name,
+            "snippet": _snippet(row),
+            "timestamp": row.timestamp.isoformat() + "Z" if row.timestamp else None,
+        }
+        for row in rows
+    ]
 
 
 @router.get("/{task_id}/chat/{message_id}/detail")

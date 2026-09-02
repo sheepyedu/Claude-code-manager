@@ -985,6 +985,15 @@ export interface ChatMessage {
   ask_status?: 'pending' | 'answered' | 'timed_out' | 'expired' | null;
 }
 
+export interface ChatSearchResult {
+  id: number;
+  role: string | null;
+  event_type: string;
+  tool_name: string | null;
+  snippet: string;
+  timestamp: string | null;
+}
+
 export interface BackgroundLifecycle {
   state: 'running' | 'completed';
   reason: 'waiting_for_descendants' | 'waiting_for_native_goal' | string;
@@ -2644,6 +2653,8 @@ export const api = {
   // 分页翻旧消息不传，避免后台轮询/旧版客户端把任务在列表里来回顶到最前
   getTaskChatHistory: (taskId: number, compact = true, limit = 0, beforeId = 0, touch = false) =>
     request<ChatMessage[]>(`/api/tasks/${taskId}/chat/history?compact=${compact}${limit ? `&limit=${limit}` : ''}${beforeId ? `&before_id=${beforeId}` : ''}${touch ? '&touch=true' : ''}`),
+  searchTaskChatHistory: (taskId: number, query: string, limit = 50) =>
+    request<ChatSearchResult[]>(`/api/tasks/${taskId}/chat/search?q=${encodeURIComponent(query)}&limit=${limit}`),
   getMessageDetail: (taskId: number, messageId: number) =>
     request<{ id: number; tool_input: string | null; tool_output: string | null; content: string | null }>(`/api/tasks/${taskId}/chat/${messageId}/detail`),
 

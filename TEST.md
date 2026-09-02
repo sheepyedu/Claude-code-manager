@@ -30,6 +30,11 @@ cd frontend && npx tsc --noEmit
 `backend/tests/test_api_system.py::test_system_metrics_returns_host_snapshot`
 验证管理员系统资源接口返回 CPU、内存、swap、根磁盘和 `/tmp` 的结构化快照，并确认 `refresh=true` 会传递强制刷新参数。`frontend/src/components/System/SystemMetricsPanel.test.tsx` 验证初始缓存读取和按钮强制刷新。前端面板使用 `npm run build` 做 TypeScript 类型检查和生产构建验证。
 
+### 历史聊天查询
+
+`backend/tests/test_api_chat_plan.py::test_chat_history_search_matches_content_and_tool_payload`
+验证搜索正文和工具载荷、限制噪声事件并返回摘要；`frontend/src/components/Chat/ChatView.test.tsx` 覆盖 Chat 顶栏及历史内容渲染回归。手动验证：打开 Task Chat，点击搜索按钮，输入关键词，点击结果应滚动到对应消息；点击较早结果时会先加载包含该消息的历史页再定位。
+
 ### 后端测试（pytest + pytest-asyncio）
 
 测试使用内存 SQLite，不依赖真实数据库或外部服务。

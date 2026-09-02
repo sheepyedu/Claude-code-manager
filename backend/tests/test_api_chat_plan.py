@@ -68,6 +68,56 @@ async def test_chat_history_empty(client):
 
 
 @pytest.mark.asyncio
+async def test_chat_history_search_matches_content_and_tool_payload(client, session_factory):
+    create_resp = await client.post("/api/tasks", json={
+        "title": "Searchable task", "description": "d", "target_repo": "/tmp",
+    })
+    task_id = create_resp.json()["id"]
+    async with session_factory() as db:
+        db.add_all([
+            LogEntry(
+                task_id=task_id,
+                event_type="user_message",
+                role="user",
+                content="Investigate the quota recovery path",
+            ),
+            LogEntry(
+                task_id=task_id,
+                event_type="tool_use",
+                role="assistant",
+                tool_name="Bash",
+                tool_input='{"command":"df -h /tmp"}',
+            ),
+            LogEntry(
+                task_id=task_id,
+                event_type="system_event",
+                content="token_usage",
+                tool_output="quota recovery",
+            ),
+        ])
+        await db.commit()
+
+    response = await client.get(
+        f"/api/tasks/{task_id}/chat/search",
+        params={"q": "quota recovery"},
+    )
+
+    assert response.status_code == 200
+    results = response.json()
+    assert len(results) == 1
+    assert results[0]["event_type"] == "user_message"
+    assert "quota recovery" in results[0]["snippet"]
+
+    tool_response = await client.get(
+        f"/api/tasks/{task_id}/chat/search",
+        params={"q": "df -h"},
+    )
+    assert tool_response.status_code == 200
+    assert tool_response.json()[0]["tool_name"] == "Bash"
+
+
+
+@pytest.mark.asyncio
 async def test_chat_history_exposes_durable_turn_scope(client, session_factory):
     create_resp = await client.post("/api/tasks", json={
         "title": "Scoped", "description": "d", "target_repo": "/tmp",

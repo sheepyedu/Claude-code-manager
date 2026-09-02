@@ -12,6 +12,7 @@ vi.mock('../../api/client', () => ({
   ),
   api: {
     getTaskChatHistory: vi.fn().mockResolvedValue([]),
+    searchTaskChatHistory: vi.fn().mockResolvedValue([]),
     getTask: vi.fn(),
     sendTaskChat: vi.fn().mockResolvedValue({}),
     startFrontendReviewGoal: vi.fn().mockResolvedValue({
@@ -333,6 +334,7 @@ describe('ChatView', () => {
     localStorage.clear();
     vi.clearAllMocks();
     (api.getTaskChatHistory as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (api.searchTaskChatHistory as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (api.getTask as ReturnType<typeof vi.fn>).mockReset();
     (api.getTask as ReturnType<typeof vi.fn>).mockResolvedValue({
       status: 'executing',
@@ -574,6 +576,36 @@ describe('ChatView', () => {
       await userEvent.click(screen.getByTitle('Send (Ctrl+Enter)'));
 
       expect(await screen.findByTitle('Interrupt session')).toBeInTheDocument();
+    });
+  });
+
+  it('searches persisted chat history from the header', async () => {
+    (api.searchTaskChatHistory as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        id: 11,
+        role: 'user',
+        event_type: 'user_message',
+        tool_name: null,
+        snippet: 'quota recovery path',
+        timestamp: null,
+      },
+    ]);
+    render(
+      <ChatView
+        task={makeTask({ id: 75 })}
+        projects={projects}
+        onBack={onBack}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search chat history' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search this chat history' }), {
+      target: { value: 'quota' },
+    });
+
+    await waitFor(() => {
+      expect(api.searchTaskChatHistory).toHaveBeenCalledWith(75, 'quota');
+      expect(screen.getByText('quota recovery path')).toBeInTheDocument();
     });
   });
 

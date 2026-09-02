@@ -6,6 +6,7 @@ import type {
   AskUserQuestion,
   AppliedPlanSnapshot,
   ChatMessage,
+  ChatSearchResult,
   CodexForkAnchor,
   FileAttachment,
   FrontendReviewGoalCapabilities,
@@ -23,7 +24,7 @@ import { DEFAULT_BROWSER_CHANNEL } from '../../config/browserReview';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { useVisibilityAwareInterval } from '../../hooks/useVisibilityAwareInterval';
 import { resolveAssetUrl } from '../../config/server';
-import { Send, ArrowLeft, Loader2, ChevronDown, ChevronRight, ChevronUp, Copy, Check, Paperclip, X, StopCircle, Pencil, ArrowDown, Star, ListPlus, ListTodo, Trash2, AlertCircle, Sparkles, GitBranch, Eye, RefreshCw, Pin } from '../icons';
+import { Send, ArrowLeft, Loader2, ChevronDown, ChevronRight, ChevronUp, Copy, Check, Paperclip, X, StopCircle, Pencil, ArrowDown, Star, ListPlus, ListTodo, Trash2, AlertCircle, Sparkles, GitBranch, Eye, RefreshCw, Pin, Search } from '../icons';
 import { SecretPicker } from '../Secrets/SecretPicker';
 import { QuickPhraseDropdown } from '../QuickPhrases/QuickPhraseDropdown';
 import { ListFilter, Syringe } from '../icons';
@@ -495,6 +496,11 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
   // an older request can return `true` just after the authoritative WS `false`.
   const lastWsBackgroundAt = useRef(0);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [historySearchOpen, setHistorySearchOpen] = useState(false);
+  const [historySearchQuery, setHistorySearchQuery] = useState('');
+  const [historySearchResults, setHistorySearchResults] = useState<ChatSearchResult[]>([]);
+  const [historySearchLoading, setHistorySearchLoading] = useState(false);
+  const historySearchInputRef = useRef<HTMLInputElement>(null);
   const [interrupting, setInterrupting] = useState(false);
   const [terminalReconciliationPending, setTerminalReconciliationPending] = useState(false);
   const [stillRunning, setStillRunning] = useState(false);
@@ -531,6 +537,64 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [starred, setStarred] = useState(task.starred);
+
+  useEffect(() => {
+    if (!historySearchOpen) return;
+    historySearchInputRef.current?.focus();
+  }, [historySearchOpen]);
+
+  useEffect(() => {
+    if (!historySearchOpen) {
+      setHistorySearchResults([]);
+      return;
+    }
+    const query = historySearchQuery.trim();
+    if (!query) {
+      setHistorySearchResults([]);
+      setHistorySearchLoading(false);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setHistorySearchLoading(true);
+      try {
+        const results = await api.searchTaskChatHistory(task.id, query);
+        if (!cancelled) setHistorySearchResults(results);
+      } catch {
+        if (!cancelled) setHistorySearchResults([]);
+      } finally {
+        if (!cancelled) setHistorySearchLoading(false);
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [historySearchOpen, historySearchQuery, task.id]);
+
+  const jumpToHistorySearchResult = useCallback(async (messageId: number) => {
+    const selector = `[data-chat-message-id="${messageId}"]`;
+    let target = messagesContainerRef.current?.querySelector<HTMLElement>(selector);
+    if (!target) {
+      // Search covers complete persisted history while Chat initially loads
+      // only the newest page. Fetch the page containing an older hit first.
+      try {
+        const older = await api.getTaskChatHistory(task.id, true, HISTORY_PAGE_SIZE, messageId + 1);
+        const filtered = older
+          .filter((message) => !isLegacyCodexCollabCompleted(message))
+          .map((message) => ({ ...message, persisted: true }));
+        if (filtered.length > 0) {
+          setMessages((current) => mergeChatHistory(filtered, current));
+          setHasMoreHistory(older.length >= HISTORY_PAGE_SIZE);
+        }
+      } catch {
+        return;
+      }
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+      target = messagesContainerRef.current?.querySelector<HTMLElement>(selector);
+    }
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [task.id]);
 
   useEffect(() => {
     const incoming = taskTurnIdentity(task);
@@ -2864,6 +2928,21 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
             {!deliveryReadOnly && (
               <button
                 type="button"
+                onClick={() => setHistorySearchOpen((value) => !value)}
+                className={`rounded p-1.5 transition-colors ${
+                  historySearchOpen
+                    ? 'bg-indigo-500/15 text-indigo-300'
+                    : 'text-gray-600 hover:text-indigo-400'
+                }`}
+                title="Search chat history"
+                aria-label="Search chat history"
+              >
+                <Search size={18} />
+              </button>
+            )}
+            {!deliveryReadOnly && (
+              <button
+                type="button"
                 onClick={() => setShowBrowserReviewPanel((value) => !value)}
                 className={`relative rounded p-1.5 transition-colors ${
                   showBrowserReviewPanel
@@ -3054,6 +3133,65 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
           )}
         </div>
       </div>
+
+      {historySearchOpen && (
+        <div className="border-b border-gray-800 bg-gray-950 px-3 py-2 sm:px-4">
+          <div className="mx-auto flex max-w-3xl flex-col gap-2">
+            <div className="relative">
+              <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+              <input
+                ref={historySearchInputRef}
+                value={historySearchQuery}
+                onChange={(event) => setHistorySearchQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    setHistorySearchOpen(false);
+                    setHistorySearchQuery('');
+                  }
+                }}
+                placeholder="Search this chat history..."
+                aria-label="Search this chat history"
+                className="w-full rounded border border-gray-700 bg-gray-900 py-1.5 pl-8 pr-8 text-sm text-gray-200 placeholder-gray-600 focus:border-indigo-500 focus:outline-none"
+              />
+              {historySearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setHistorySearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                  aria-label="Clear chat history search"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            {historySearchQuery.trim() && (
+              <div className="max-h-52 overflow-y-auto rounded border border-gray-800 bg-gray-900/80">
+                {historySearchLoading ? (
+                  <div className="px-3 py-2 text-xs text-gray-500">Searching...</div>
+                ) : historySearchResults.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-gray-500">No matching messages</div>
+                ) : (
+                  historySearchResults.map((result) => (
+                    <button
+                      type="button"
+                      key={result.id}
+                      onClick={() => jumpToHistorySearchResult(result.id)}
+                      className="block w-full border-b border-gray-800 px-3 py-2 text-left last:border-b-0 hover:bg-gray-800"
+                    >
+                      <div className="flex items-center gap-2 text-[11px] text-gray-500">
+                        <span>{result.role || result.event_type}</span>
+                        {result.tool_name && <span>{result.tool_name}</span>}
+                        {result.timestamp && <span className="ml-auto">{formatMessageTime(result.timestamp)}</span>}
+                      </div>
+                      <div className="mt-0.5 line-clamp-2 text-xs text-gray-300">{result.snippet}</div>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {deliveryReadOnly && task.delivery_run_id != null && (
         <div className="border-b border-gray-800 bg-gray-950 px-3 py-2 sm:px-4">
@@ -3433,12 +3571,13 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
               taskId={task.id}
             />
           ) : (
-            <MessageBubble
-              key={group.message.id}
-              message={group.message}
-              taskId={task.id}
-              onAskUserResolved={markAskUserResolved}
-            />
+            <div key={group.message.id} data-chat-message-id={group.message.id}>
+              <MessageBubble
+                message={group.message}
+                taskId={task.id}
+                onAskUserResolved={markAskUserResolved}
+              />
+            </div>
           )
         )}
         {isProcessing && backgroundLifecycle && (() => {
@@ -4130,7 +4269,7 @@ function ToolItem({ message, taskId }: { message: ChatMessage; taskId: number })
   if (isToolUse) {
     const summary = toolUseSummary(message);
     return (
-      <div>
+      <div data-chat-message-id={message.id}>
         <button
           onClick={handleExpand}
           className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-400 py-0.5 max-w-full"
@@ -4151,7 +4290,7 @@ function ToolItem({ message, taskId }: { message: ChatMessage; taskId: number })
   const statusIcon = message.is_error ? '✗' : '✓';
   const statusColor = message.is_error ? 'text-red-400' : 'text-green-600';
   return (
-    <div>
+    <div data-chat-message-id={message.id}>
       <button
         onClick={handleExpand}
         className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-400 py-0.5"
