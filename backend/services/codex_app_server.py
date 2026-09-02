@@ -281,6 +281,7 @@ _CODEX_APP_SERVER_USER_AGENT_RE = re.compile(
     r"\("
 )
 _MANAGED_NETWORK_MIN_CODEX_VERSION = (0, 146, 0)
+_PERSISTED_DESCENDANT_GRAPH_MIN_CODEX_VERSION = (0, 147, 0)
 _TASK_SHELL_ENV_EXCLUDES = (
     "AUTH_TOKEN",
     "CCM_*",
@@ -3412,18 +3413,64 @@ class CodexAppServer:
         self,
         parent_thread_id: str,
         child_thread_id: str,
-    ) -> None:
+    ) -> bool:
+        """Remember one proven spawn edge without poisoning the shared graph.
+
+        The app-server connection is shared by every Task using one CODEX_HOME.
+        Notifications are therefore hints until their parent/child shape has
+        passed the same forest invariants as Codex's persisted spawn-edge
+        store.  A malformed or stale notification must not make an unrelated
+        Task's later runtime recycle impossible.
+        """
+
         if not parent_thread_id or not child_thread_id:
-            return
+            return False
         if parent_thread_id == child_thread_id:
             logger.error(
                 "Ignoring cyclic Codex child-thread relation %s",
                 child_thread_id,
             )
-            return
+            return False
+
+        existing_parents = {
+            candidate_parent
+            for candidate_parent, children in self._children_by_thread.items()
+            if child_thread_id in children
+        }
+        if existing_parents and parent_thread_id not in existing_parents:
+            logger.error(
+                "Ignoring ambiguous Codex child-thread relation child=%s "
+                "parent=%s existing=%s",
+                child_thread_id,
+                parent_thread_id,
+                sorted(existing_parents),
+            )
+            return False
+
+        # Adding parent -> child is cyclic exactly when parent is already
+        # reachable from child.  Check before mutation so one bad notification
+        # cannot strand every later resume on this account transport.
+        pending = [child_thread_id]
+        seen: set[str] = set()
+        while pending:
+            candidate = pending.pop()
+            if candidate == parent_thread_id:
+                logger.error(
+                    "Ignoring cyclic Codex child-thread relation "
+                    "parent=%s child=%s",
+                    parent_thread_id,
+                    child_thread_id,
+                )
+                return False
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            pending.extend(self._children_by_thread.get(candidate, ()))
+
         self._children_by_thread.setdefault(parent_thread_id, set()).add(
             child_thread_id
         )
+        return True
 
     def _attach_descendant(
         self,
@@ -3514,7 +3561,8 @@ class CodexAppServer:
             if not child_id:
                 return
             child_id = str(child_id)
-            self._record_child_relation(event_thread_id, child_id)
+            if not self._record_child_relation(event_thread_id, child_id):
+                return
             self._remember_descendant_lifecycle_details(
                 context,
                 child_id,
@@ -3602,21 +3650,30 @@ class CodexAppServer:
         }
         for raw_child_id in receiver_ids:
             child_id = str(raw_child_id)
-            is_creation_edge = (
-                tool in creation_tools
-                or (not tool and sender_id == event_thread_id)
-            )
+            is_creation_edge = tool in creation_tools
             if child_id == context.thread_id and not is_creation_edge:
                 # A descendant reporting back to the root is collaboration
                 # traffic for the current adapter, not a descendant whose
                 # lifecycle or parent metadata should be rewritten.
                 continue
-            if (
-                is_creation_edge
-                and child_id != sender_id
-                and child_id != context.thread_id
-            ):
-                self._record_child_relation(sender_id, child_id)
+            relation_parent: str | None = None
+            if is_creation_edge:
+                if (
+                    child_id == sender_id
+                    or child_id == context.thread_id
+                    or not self._record_child_relation(sender_id, child_id)
+                ):
+                    continue
+                relation_parent = sender_id
+            elif child_id not in context.descendant_thread_ids:
+                # Communication can update a known descendant's lifecycle,
+                # but it can never create a recovery-graph edge.  A root turn
+                # may observe wait/send before the matching activity item, so
+                # retain that bounded lifecycle projection without letting a
+                # nested sender claim an unrelated thread.
+                if sender_id != context.thread_id:
+                    continue
+                relation_parent = sender_id
             state = agent_states.get(child_id)
             agent_status = (
                 str(state.get("status") or "")
@@ -3627,7 +3684,7 @@ class CodexAppServer:
             self._remember_descendant_lifecycle_details(
                 context,
                 child_id,
-                parent_thread_id=sender_id,
+                parent_thread_id=relation_parent,
                 item=item,
                 state=state_dict,
             )
@@ -7706,7 +7763,6 @@ class CodexAppServer:
                 thread_id,
                 quiescence_snapshot,
             )
-        self._remember_persisted_child_relations(thread_id, root)
         root_status = root.get("status")
         if (
             isinstance(root_status, dict)
@@ -7715,7 +7771,24 @@ class CodexAppServer:
             # There is no loaded runtime or writer to refresh.  Avoid turning
             # an already-safe state into an archive mutation.
             return
-        await self._unsubscribe_idle_descendants_before_recycle(thread_id)
+        if (
+            self._runtime_version is not None
+            and self._runtime_version
+            >= _PERSISTED_DESCENDANT_GRAPH_MIN_CODEX_VERSION
+        ):
+            descendant_graph = await self._read_authoritative_descendant_graph(
+                thread_id
+            )
+        else:
+            # Older runtimes do not expose the durable spawn-edge index.  Keep
+            # the strict history reconstruction fallback for compatibility;
+            # newly observed edges are still protected by forest validation.
+            self._remember_persisted_child_relations(thread_id, root)
+            descendant_graph = self._children_by_thread
+        await self._unsubscribe_idle_descendants_before_recycle(
+            thread_id,
+            children_by_thread=descendant_graph,
+        )
 
         async def _archive_then_unarchive() -> None:
             await self._request(
@@ -8029,7 +8102,16 @@ class CodexAppServer:
                 # for deepest-first unsubscribe.
                 if child_id in reachable and not explicit_hierarchy:
                     continue
-                self._record_child_relation(parent_id, child_id)
+                relation_accepted = self._record_child_relation(
+                    parent_id,
+                    child_id,
+                )
+                if explicit_hierarchy and not relation_accepted:
+                    raise CodexAppServerError(
+                        "Codex child-thread graph contains a cycle or "
+                        "ambiguous spawn edge before runtime recycle: "
+                        f"{parent_id} -> {child_id}"
+                    )
                 if child_id not in reachable:
                     reachable.add(child_id)
                     progressed = True
@@ -8037,9 +8119,118 @@ class CodexAppServer:
                 break
             pending = remaining
 
-    def _descendants_postorder(self, thread_id: str) -> tuple[str, ...]:
+    async def _read_authoritative_descendant_graph(
+        self,
+        root_thread_id: str,
+    ) -> dict[str, set[str]]:
+        """Read the persisted Codex spawn forest for one exact root.
+
+        Codex 0.147 exposes its durable ``thread_spawn_edges`` relation via
+        ``thread/list(ancestorThreadId=...)``.  Runtime notification caches are
+        intentionally excluded: this proof is used at the archive boundary,
+        where a stale cross-Task edge could otherwise make a healthy session
+        permanently unrecoverable.
+        """
+
+        parents: dict[str, str] = {}
+        cursor: str | None = None
+        seen_cursors: set[str] = set()
+        while True:
+            params: dict[str, Any] = {
+                "ancestorThreadId": root_thread_id,
+                "limit": 100,
+            }
+            if cursor is not None:
+                params["cursor"] = cursor
+            response = await self._request("thread/list", params)
+            if not isinstance(response, dict):
+                raise CodexAppServerError(
+                    "thread/list returned an invalid descendant graph for "
+                    f"{root_thread_id}"
+                )
+            data = response.get("data")
+            if not isinstance(data, list):
+                raise CodexAppServerError(
+                    "thread/list omitted descendant data for "
+                    f"{root_thread_id}"
+                )
+            for item in data:
+                if not isinstance(item, dict):
+                    raise CodexAppServerError(
+                        "thread/list returned an invalid descendant entry for "
+                        f"{root_thread_id}"
+                    )
+                child_id = _require_native_thread_id(
+                    item.get("id"),
+                    field="child thread id",
+                )
+                parent_id = _require_native_thread_id(
+                    item.get("parentThreadId"),
+                    field="parent thread id",
+                )
+                if child_id == root_thread_id:
+                    raise CodexAppServerError(
+                        "Codex persisted descendant graph contains its root "
+                        f"as a child: {root_thread_id}"
+                    )
+                existing_parent = parents.get(child_id)
+                if existing_parent is not None and existing_parent != parent_id:
+                    raise CodexAppServerError(
+                        "Codex persisted descendant graph has ambiguous "
+                        f"parents for {child_id}"
+                    )
+                parents[child_id] = parent_id
+
+            next_cursor = response.get("nextCursor")
+            if next_cursor is None:
+                break
+            if not isinstance(next_cursor, str) or not next_cursor:
+                raise CodexAppServerError(
+                    "thread/list returned an invalid descendant cursor for "
+                    f"{root_thread_id}"
+                )
+            if next_cursor in seen_cursors:
+                raise CodexAppServerError(
+                    "thread/list repeated a descendant cursor for "
+                    f"{root_thread_id}"
+                )
+            seen_cursors.add(next_cursor)
+            cursor = next_cursor
+
+        known_ids = {root_thread_id, *parents}
+        graph: dict[str, set[str]] = {}
+        for child_id, parent_id in parents.items():
+            if parent_id not in known_ids:
+                raise CodexAppServerError(
+                    "Codex persisted descendant graph has an unreachable "
+                    f"parent {parent_id} for {child_id}"
+                )
+            graph.setdefault(parent_id, set()).add(child_id)
+
+        descendants = self._descendants_postorder(
+            root_thread_id,
+            children_by_thread=graph,
+        )
+        if set(descendants) != set(parents):
+            raise CodexAppServerError(
+                "Codex persisted descendant graph contains an unreachable "
+                f"component for {root_thread_id}"
+            )
+        return graph
+
+    def _descendants_postorder(
+        self,
+        thread_id: str,
+        *,
+        children_by_thread: dict[str, set[str]] | None = None,
+    ) -> tuple[str, ...]:
         """Return known descendants deepest-first, rejecting corrupt cycles."""
 
+        graph = (
+            children_by_thread
+            if children_by_thread is not None
+            else self._children_by_thread
+        )
         ordered: list[str] = []
         visited: set[str] = set()
         visiting: set[str] = set()
@@ -8053,7 +8244,7 @@ class CodexAppServer:
             if parent_id in visited:
                 return
             visiting.add(parent_id)
-            for child_id in sorted(self._children_by_thread.get(parent_id, ())):
+            for child_id in sorted(graph.get(parent_id, ())):
                 visit(child_id)
                 ordered.append(child_id)
             visiting.remove(parent_id)
@@ -8068,6 +8259,8 @@ class CodexAppServer:
     async def _unsubscribe_idle_descendants_before_recycle(
         self,
         thread_id: str,
+        *,
+        children_by_thread: dict[str, set[str]] | None = None,
     ) -> None:
         """Release proven-quiescent child writers before archiving a parent.
 
@@ -8078,7 +8271,10 @@ class CodexAppServer:
         concurrent activity aborts the parent recycle before its archive RPC.
         """
 
-        for descendant_id in self._descendants_postorder(thread_id):
+        for descendant_id in self._descendants_postorder(
+            thread_id,
+            children_by_thread=children_by_thread,
+        ):
             if self.has_active_thread(descendant_id):
                 raise CodexAppServerBusyError(
                     f"Codex descendant thread {descendant_id} still has an "
@@ -8594,12 +8790,20 @@ class CodexAppServer:
                         child_id,
                         thread.get("status"),
                     )
+                relation_accepted = False
                 if (
                     isinstance(child_id, str)
                     and isinstance(parent_id, str)
                 ):
-                    self._record_child_relation(parent_id, child_id)
-                    lineage_context = self._lineage_context_for_thread(parent_id)
+                    relation_accepted = self._record_child_relation(
+                        parent_id,
+                        child_id,
+                    )
+                    lineage_context = (
+                        self._lineage_context_for_thread(parent_id)
+                        if relation_accepted
+                        else None
+                    )
                     if lineage_context is not None:
                         self._remember_descendant_lifecycle_details(
                             lineage_context,
@@ -8629,6 +8833,7 @@ class CodexAppServer:
                     proxy is not None
                     and isinstance(child_id, str)
                     and isinstance(parent_id, str)
+                    and relation_accepted
                 ):
                     try:
                         proxy.register_thread_parent(child_id, parent_id)

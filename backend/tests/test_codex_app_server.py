@@ -7512,6 +7512,133 @@ async def test_recycle_thread_runtime_ignores_child_message_back_to_root():
 
 
 @pytest.mark.asyncio
+async def test_recycle_thread_runtime_uses_authoritative_descendant_graph():
+    """A poisoned notification cache must not strand a healthy native tree."""
+
+    server = CodexAppServer("codex")
+    server.ensure_started = AsyncMock()
+    server._runtime_version = (0, 147, 0)
+    calls = []
+    server._children_by_thread = {
+        "thread-parent": {"thread-poisoned"},
+        "thread-poisoned": {"thread-parent"},
+    }
+
+    async def request(method, params, **_kwargs):
+        calls.append((method, params))
+        if method == "thread/goal/get":
+            return {"goal": None}
+        if method == "thread/read":
+            return {
+                "thread": {
+                    "id": params["threadId"],
+                    "status": {
+                        "type": (
+                            "systemError"
+                            if params["threadId"] == "thread-parent"
+                            else "idle"
+                        )
+                    },
+                    **(
+                        {"turns": []}
+                        if params.get("includeTurns")
+                        else {}
+                    ),
+                },
+            }
+        if method == "thread/list":
+            assert params == {
+                "ancestorThreadId": "thread-parent",
+                "limit": 100,
+            }
+            return {
+                "data": [{
+                    "id": "thread-child",
+                    "parentThreadId": "thread-parent",
+                    "status": {"type": "idle"},
+                }],
+                "nextCursor": None,
+            }
+        if method == "thread/unsubscribe":
+            assert params["threadId"] == "thread-child"
+            return {"status": "unsubscribed"}
+        if method == "thread/archive":
+            return {}
+        if method == "thread/unarchive":
+            return {"thread": {"id": "thread-parent"}}
+        raise AssertionError(method)
+
+    server._request = AsyncMock(side_effect=request)
+    await server.recycle_thread_runtime("thread-parent")
+
+    assert not any(
+        params.get("threadId") == "thread-poisoned"
+        for _method, params in calls
+        if isinstance(params, dict)
+    )
+    assert calls[-3:] == [
+        ("thread/unsubscribe", {"threadId": "thread-child"}),
+        ("thread/archive", {"threadId": "thread-parent"}),
+        ("thread/unarchive", {"threadId": "thread-parent"}),
+    ]
+
+
+def test_record_child_relation_rejects_cycle_and_ambiguous_parent():
+    server = CodexAppServer("codex")
+
+    assert server._record_child_relation("thread-root", "thread-child") is True
+    assert server._record_child_relation("thread-child", "thread-grandchild") is True
+    assert server._record_child_relation("thread-grandchild", "thread-root") is False
+    assert server._record_child_relation("thread-other", "thread-child") is False
+
+    assert server._children_by_thread == {
+        "thread-root": {"thread-child"},
+        "thread-child": {"thread-grandchild"},
+    }
+
+
+@pytest.mark.asyncio
+async def test_toolless_nested_collaboration_message_is_not_a_spawn_edge():
+    server = CodexAppServer("codex")
+    server._process = SimpleNamespace(pid=4321, returncode=None)
+
+    async def interrupt():
+        return None
+
+    process = CodexTurnProcess(4321, interrupt, thread_id="thread-root")
+    context = _TurnContext(
+        thread_id="thread-root",
+        process=process,
+        launch_started=0.0,
+        task_id=1,
+    )
+    server._contexts_by_thread["thread-root"] = context
+    assert server._record_child_relation("thread-root", "thread-child") is True
+    assert server._record_child_relation("thread-child", "thread-grandchild") is True
+    context.descendant_thread_ids.update({"thread-child", "thread-grandchild"})
+    context.descendant_parent_thread_ids.update({
+        "thread-child": "thread-root",
+        "thread-grandchild": "thread-child",
+    })
+
+    server._track_collaboration_item(context, "thread-grandchild", {
+        "type": "collabAgentToolCall",
+        # Replayed legacy notifications may omit the operation name.  The
+        # receiver is a communication target, not proof of hierarchy.
+        "status": "completed",
+        "senderThreadId": "thread-grandchild",
+        "receiverThreadIds": ["thread-child"],
+    })
+
+    assert server._children_by_thread == {
+        "thread-root": {"thread-child"},
+        "thread-child": {"thread-grandchild"},
+    }
+    assert context.descendant_parent_thread_ids["thread-child"] == "thread-root"
+    process.finish(0)
+
+
+@pytest.mark.asyncio
 async def test_recycle_thread_runtime_rejects_explicit_spawn_cycle():
     server = CodexAppServer("codex")
     server.ensure_started = AsyncMock()

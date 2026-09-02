@@ -899,6 +899,7 @@ cloudflared tunnel run <tunnel-name>
 - **进程超时保护**：任务执行超过 `TASK_TIMEOUT_SECONDS`（默认 30 分钟）后自动 kill，防止进程挂死
 - **多轮对话**：session_id 绑定在 Task 上，follow-up 时使用 `--resume <session_id>` 续接会话
 - **Codex 共享传输停止**：`stop-session` 会终止目标 Task 的全部存活 turn（包括续接期间尚未收敛的旧 turn 及其原生后代）。若同账号还有其他 Task，只精确收敛目标并保留共享 transport；目标独占账号时再回收 transport，以确认 Task 私有 helper 已退出。已准入请求或无法确认的精确中断会返回 409 并保留运行证据和排队消息，不会误杀其他任务
+- **Codex 终态恢复**：上游 429 等错误让原生 thread 进入 `systemError` 时，CCM 会保留原 session，并在下一条消息前安全重载 runtime。Codex 0.147+ 直接读取原生持久子线程关系，不再让共享 app-server 中陈旧或乱序的协作通知制造伪循环、永久卡死健康历史；真正的活跃子线程或持久图损坏仍会明确拒绝恢复
 - **Codex Fast**：`Task.codex_service_tier` 持久保存 `default|priority`。Standard 会显式清除会话残留的 Fast tier；Fast 必须同时通过账号模型目录的显式能力、app-server priority 准入，以及 CCM loopback Responses 代理对 exact thread/turn 发出的 `service_tier=priority` 请求验证。成功 `response.created` 表示上游接受该请求；其响应 `service_tier` 仅作为遥测，即使为 `auto/default` 或缺失也继续执行。请求 tier 不一致、非 2xx、未知 lineage 或代理不可用仍明确失败，且 Fast 禁止回退 `codex exec`。日志与聊天事件记录 `service_tier_request_verified=true`、上游报告值和 response id，不宣称实际 Fast 已获证明。Fast Goal evaluator 使用与任务相同的模型并走同一请求验证链路；当前 Distill 无法提供同等保证，因此 Fast Task 会在 Distill 执行前明确返回 409
 - **子 Agent 系统**：统一存 `sub_agent_sessions` 表，`agent_type` 区分类别（monitor / native-agent / native-monitor）。CCM 自有子 agent 拥有独立 MCP server，通过 HTTP API 与系统通信
 - **瞬时过载重试**：Anthropic 基础设施侧 429/overloaded 与账号额度用尽严格区分，前者退避重试同一账号，后者走号池轮换
