@@ -1238,3 +1238,12 @@ ocean/forest/rose 归入 Legacy 组。Header 顶栏导航重构为 AppShell（�
 - 解决：新增 `/api/system/metrics` 小时级缓存接口，使用 `/proc` 和 `shutil.disk_usage` 采集 CPU、内存、swap、根盘与 `/tmp`；Dashboard 增加手动刷新面板。
 - 经验：系统指标不需要高频轮询；服务端 TTL 缓存能避免前端切页或重复请求放大采样开销。
 - Git commit：`d3a0513b`
+
+## 2026-09-02 — 前端轮询与 WebSocket 资源节流
+
+- **问题**：多个页面持续 5 秒轮询，隐藏标签页仍占用请求和渲染资源；每个 consumer 独立创建 WebSocket，切页时还可能产生重复重连和过期订阅。
+- **解决**：新增可见性感知轮询调度器，隐藏页面停止 timer、恢复可见立即刷新，并等待异步刷新完成后再安排下一次；Tasks/Dashboard/Projects/Workers/Plans/Chat 等页面按 WebSocket 连接状态降低兜底频率。按 `wsUrl + token` 共享 WebSocket，聚合频道并在移除频道时执行全清后重订阅；草稿 localStorage 写入延迟 500ms，移除持续状态动画以降低重绘。
+- **远程提交复用**：选择性移植 `origin/main` 的 `d87f4638`；未移植其中已删除页面及与本次无关的账号 UI 改动。最新 `84e49553`、`3a8a786e`、`1e89e416` 等提交分别属于 PR Monitor、PTY 图片输入和部署刷新，不影响本次卡顿。
+- **模型状态**：当前支持 `claude-fable-5`/`claude-fable-5[1m]`；没有从远程提交、Claude CLI 或本地模型目录确认 `claude-fable-5.1`，因此未伪造该模型选项。确认 provider 的准确 ID 后可通过现有字符串配置接入，Fable context 逻辑已按 1M 处理。
+- **验证**：前端定向测试 `6 files / 177 tests passed`，`npm run build` 与 `git diff --check` 通过。
+- **Git commit**：`11468e44`。
