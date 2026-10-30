@@ -2,6 +2,15 @@
 
 > **重要：Claude 必须自主维护本文件。** 每次完成重要改动或遇到问题后，在对应章节记录。每条记录必须附上 git commit ID。
 
+## 2026-10-30 — macOS 资源监控与中文界面
+
+- **问题**：系统资源接口直接读取 Linux `/proc/stat` 和 `/proc/meminfo`，macOS 仪表盘返回 500；界面缺少统一语言选项。
+- **解决**：引入 psutil 原生 CPU/内存/swap 统计，CPU 采样在线程中执行，保留小时缓存与刷新接口；新增浏览器级中英文选项，接入齿轮、设置和主要页面文案。仅翻译界面来源字符串，保留用户输入、模型内容、代码和 API 值；缓存时间按分钟显示。
+- **验证**：后端定向 27 passed，前端定向 41 passed，TypeScript 与生产构建通过。完整后端仍在既有迁移 downgrade trigger 失败处停止（141 passed / 1 failed）；前端完整 781 passed / 14 failed，其中 13 项与改动前相同，聊天 process_exit 回归在原版和修改版单文件完整运行均为 139 passed / 1 failed，单项运行通过。真实 macOS 服务返回 HTTP 200 与 24 GB 内存统计；浏览器验证实时切换、刷新保留、两个设置入口、无脚本错误或 HTTP 500。
+- **部署**：本地 127.0.0.1:8000 已在无活动任务时重启。官方 Codex 默认 gpt-6.1-sol、Claude 默认 claude-opus-5-5、并发上限 5 沿用本机配置；本机凭据和数据库不发布。`origin` 指向 sheepyedu/Claude-code-manager，原来源保留为 `upstream`。
+- **避免复发**：宿主指标不得依赖平台专用文件；CPU 阻塞采样不能进入 ASGI 主线程。新增界面文案同步译表，模型和用户内容必须绕过翻译。
+- **Git commit**：`36268554`。
+
 ## 2026-10-30 — Claude 专用目录与无推理启动准备
 
 - **问题**：配置专用 Claude CLI 入口后，PTY/无号池续聊仍可能以默认 `~/.claude` 定位 JSONL；首次预热也绕过 `CLAUDE_BINARY` 调用真实模型并改写原目录。
