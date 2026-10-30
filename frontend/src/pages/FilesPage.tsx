@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../config/language";
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   ChevronRight, ChevronDown, Folder, FolderOpen, FileText,
@@ -104,6 +105,7 @@ interface TreeNodeProps {
 }
 
 function TreeNode({ entry, selectedPath, onSelect, fetchChildren }: TreeNodeProps) {
+  useLanguage();
   const [open, setOpen] = useState(false);
   const [children, setChildren] = useState<DirEntry[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -162,7 +164,7 @@ function TreeNode({ entry, selectedPath, onSelect, fetchChildren }: TreeNodeProp
       {error && <div className="ml-8 text-xs text-red-400 py-0.5">{error}</div>}
       {open && children && (
         <div className="ml-4 border-l border-gray-700">
-          {children.length === 0 && <div className="ml-4 text-xs text-gray-600 py-0.5">empty</div>}
+          {children.length === 0 && <div className="ml-4 text-xs text-gray-600 py-0.5">{translateUI("empty")}</div>}
           {children.map((child) => (
             <TreeNode key={child.path} entry={child} selectedPath={selectedPath} onSelect={onSelect} fetchChildren={fetchChildren} />
           ))}
@@ -255,6 +257,7 @@ function ManagedSSHPanel({
   onDeleteLegacy,
   isAdmin,
 }: ManagedSSHPanelProps) {
+  useLanguage();
   const [editing, setEditing] = useState<ManagedProfileDraft | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -460,7 +463,7 @@ function ManagedSSHPanel({
   };
 
   const deleteManagedProfile = async (profile: ManagedSSHProfile) => {
-    if (!window.confirm(`Delete SSH profile “${profile.name}”?`)) return;
+    if (!window.confirm(translateUI("Delete SSH profile “{0}”?", [profile.name]))) return;
     setBusy(true);
     setMessage(null);
     try {
@@ -486,16 +489,15 @@ function ManagedSSHPanel({
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <div className="text-sm font-medium text-gray-200">SSH connections</div>
-          <div className="text-xs text-gray-500">Every managed connection can browse files. You decide whether Tasks may use it.</div>
+          <div className="text-sm font-medium text-gray-200">{translateUI("SSH connections")}</div>
+          <div className="text-xs text-gray-500">{translateUI("Every managed connection can browse files. You decide whether Tasks may use it.")}</div>
         </div>
         {isAdmin && <button
           disabled={busy}
           onClick={() => beginEditing(emptyManagedDraft())}
           className="flex items-center gap-1 px-2 py-1 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 disabled:opacity-50"
         >
-          <Plus size={12} /> Add SSH connection
-        </button>}
+          <Plus size={12} /> {translateUI("Add SSH connection ")}</button>}
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -508,29 +510,29 @@ function ManagedSSHPanel({
               <div className="flex items-center gap-2 text-sm text-gray-200">
                 <Server size={14} className="text-indigo-400" />
                 <span className="truncate font-medium">{profile.name}</span>
-                {!profile.enabled && <span className="ml-auto text-[10px] text-amber-400">disabled</span>}
+                {!profile.enabled && <span className="ml-auto text-[10px] text-amber-400">{translateUI("disabled")}</span>}
               </div>
               <div className="mt-1 truncate text-xs text-gray-500">{profile.username}@{profile.host}:{profile.port}</div>
               <div className="mt-1 truncate font-mono text-[10px] text-gray-600" title={profile.host_key_fingerprint}>
-                host {profile.host_key_fingerprint}
+                {translateUI("host ")}{profile.host_key_fingerprint}
               </div>
               <div className="mt-2 flex flex-wrap gap-1">
-                <span className="rounded bg-indigo-500/15 px-1.5 py-0.5 text-[10px] text-indigo-300">Files</span>
+                <span className="rounded bg-indigo-500/15 px-1.5 py-0.5 text-[10px] text-indigo-300">{translateUI("Files")}</span>
                 {profile.allowed_roots.map((root) => (
-                  <span key={root} className="max-w-full truncate rounded bg-violet-500/15 px-1.5 py-0.5 font-mono text-[10px] text-violet-300" title={root}>root: {root}</span>
+                  <span key={root} className="max-w-full truncate rounded bg-violet-500/15 px-1.5 py-0.5 font-mono text-[10px] text-violet-300" title={root}>{translateUI("root: ")}{root}</span>
                 ))}
                 {profile.task_access_enabled ? (
                   profile.task_capabilities.map((capability) => (
-                    <span key={capability} className="rounded bg-cyan-500/15 px-1.5 py-0.5 text-[10px] text-cyan-300">Task: {capability}</span>
+                    <span key={capability} className="rounded bg-cyan-500/15 px-1.5 py-0.5 text-[10px] text-cyan-300">{translateUI("Task: ")}{capability}</span>
                   ))
                 ) : (
-                  <span className="rounded bg-gray-700 px-1.5 py-0.5 text-[10px] text-gray-400">Not exposed to Tasks</span>
+                  <span className="rounded bg-gray-700 px-1.5 py-0.5 text-[10px] text-gray-400">{translateUI("Not exposed to Tasks")}</span>
                 )}
               </div>
             </button>
             <div className="mt-2 flex gap-2 text-xs">
-              <button disabled={busy} onClick={() => testManagedProfile(profile)} className="text-emerald-400 hover:text-emerald-300 disabled:opacity-50">test</button>
-              {isAdmin && <button disabled={busy} onClick={() => startEdit(profile)} className="text-indigo-400 hover:text-indigo-300 disabled:opacity-50">edit</button>}
+              <button disabled={busy} onClick={() => testManagedProfile(profile)} className="text-emerald-400 hover:text-emerald-300 disabled:opacity-50">{translateUI("test")}</button>
+              {isAdmin && <button disabled={busy} onClick={() => startEdit(profile)} className="text-indigo-400 hover:text-indigo-300 disabled:opacity-50">{translateUI("edit")}</button>}
               {isAdmin && <button disabled={busy} onClick={() => deleteManagedProfile(profile)} className="ml-auto text-red-400 hover:text-red-300 disabled:opacity-50"><Trash2 size={12} /></button>}
             </div>
           </div>
@@ -547,83 +549,79 @@ function ManagedSSHPanel({
               </div>
               <div className="mt-1 truncate text-xs text-gray-500">{profile.username}@{profile.host}:{profile.port}</div>
               <div className="mt-2 flex flex-wrap gap-1">
-                <span className="rounded bg-indigo-500/15 px-1.5 py-0.5 text-[10px] text-indigo-300">Files</span>
-                <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-300">Legacy · migrate to expose to Tasks</span>
+                <span className="rounded bg-indigo-500/15 px-1.5 py-0.5 text-[10px] text-indigo-300">{translateUI("Files")}</span>
+                <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-300">{translateUI("Legacy · migrate to expose to Tasks")}</span>
               </div>
             </button>
             {isAdmin && !profile.id.startsWith('worker-') && (
               <div className="mt-2 flex gap-2 text-xs">
-                <button disabled={busy} onClick={() => startLegacyMigration(profile)} className="text-indigo-400 hover:text-indigo-300 disabled:opacity-50">migrate</button>
+                <button disabled={busy} onClick={() => startLegacyMigration(profile)} className="text-indigo-400 hover:text-indigo-300 disabled:opacity-50">{translateUI("migrate")}</button>
                 <button disabled={busy} onClick={() => onDeleteLegacy(profile.id)} className="ml-auto text-red-400 hover:text-red-300 disabled:opacity-50"><Trash2 size={12} /></button>
               </div>
             )}
           </div>
         ))}
         {profiles.length === 0 && legacyProfiles.length === 0 && (
-          <div className="rounded border border-dashed border-gray-700 p-4 text-xs text-gray-500">No SSH connections yet.</div>
+          <div className="rounded border border-dashed border-gray-700 p-4 text-xs text-gray-500">{translateUI("No SSH connections yet.")}</div>
         )}
       </div>
 
       {editing && (
         <div className="rounded border border-gray-700 bg-gray-800 p-3 space-y-3">
-          <div className="text-sm font-medium text-gray-200">{editing.legacyId ? 'Migrate SSH connection' : editing.id === null ? 'New SSH connection' : 'Edit SSH connection'}</div>
+          <div className="text-sm font-medium text-gray-200">{editing.legacyId ? translateUI("Migrate SSH connection") : editing.id === null ? translateUI("New SSH connection") : translateUI("Edit SSH connection")}</div>
           <div className="grid gap-2 md:grid-cols-2">
-            <label className="text-xs text-gray-400">Name<input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} className="mt-1 w-full rounded bg-gray-700 px-2 py-1.5 text-gray-200" /></label>
-            <label className="text-xs text-gray-400">Username<input value={editing.username} onChange={(e) => setEditing({ ...editing, username: e.target.value })} className="mt-1 w-full rounded bg-gray-700 px-2 py-1.5 text-gray-200" /></label>
-            <label className="text-xs text-gray-400">Host<input value={editing.host} onChange={(e) => setEditing({ ...editing, host: e.target.value, hostKeyValue: '', hostKeyFingerprint: '', hostKeyConfirmed: false })} className="mt-1 w-full rounded bg-gray-700 px-2 py-1.5 text-gray-200" /></label>
-            <label className="text-xs text-gray-400">Port<input type="number" min={1} max={65535} value={editing.port} onChange={(e) => setEditing({ ...editing, port: Number(e.target.value), hostKeyValue: '', hostKeyFingerprint: '', hostKeyConfirmed: false })} className="mt-1 w-full rounded bg-gray-700 px-2 py-1.5 text-gray-200" /></label>
+            <label className="text-xs text-gray-400">{translateUI("Name")}<input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} className="mt-1 w-full rounded bg-gray-700 px-2 py-1.5 text-gray-200" /></label>
+            <label className="text-xs text-gray-400">{translateUI("Username")}<input value={editing.username} onChange={(e) => setEditing({ ...editing, username: e.target.value })} className="mt-1 w-full rounded bg-gray-700 px-2 py-1.5 text-gray-200" /></label>
+            <label className="text-xs text-gray-400">{translateUI("Host")}<input value={editing.host} onChange={(e) => setEditing({ ...editing, host: e.target.value, hostKeyValue: '', hostKeyFingerprint: '', hostKeyConfirmed: false })} className="mt-1 w-full rounded bg-gray-700 px-2 py-1.5 text-gray-200" /></label>
+            <label className="text-xs text-gray-400">{translateUI("Port")}<input type="number" min={1} max={65535} value={editing.port} onChange={(e) => setEditing({ ...editing, port: Number(e.target.value), hostKeyValue: '', hostKeyFingerprint: '', hostKeyConfirmed: false })} className="mt-1 w-full rounded bg-gray-700 px-2 py-1.5 text-gray-200" /></label>
             <div className="text-xs text-gray-400 md:col-span-2">
               <div className="flex items-center justify-between gap-2">
-                <span>Private key</span>
+                <span>{translateUI("Private key")}</span>
                 <button disabled={busy} onClick={() => keyUploadInputRef.current?.click()} className="flex items-center gap-1 rounded bg-gray-700 px-2 py-1 text-indigo-300 hover:bg-gray-600 disabled:opacity-50">
-                  <Upload size={12} /> Upload PEM or private key
-                </button>
-                <input ref={keyUploadInputRef} aria-label="Upload SSH private key" type="file" className="hidden" onChange={uploadPrivateKey} />
+                  <Upload size={12} /> {translateUI("Upload PEM or private key ")}</button>
+                <input ref={keyUploadInputRef} aria-label={translateUI("Upload SSH private key")} type="file" className="hidden" onChange={uploadPrivateKey} />
               </div>
               {editing.keyUploadToken ? (
                 <div className="mt-1 flex flex-wrap items-center gap-2 rounded border border-emerald-800 bg-emerald-950/30 px-2 py-1.5">
-                  <span className="text-emerald-300">Uploaded: {editing.keyUploadFilename}</span>
+                  <span className="text-emerald-300">{translateUI("Uploaded: ")}{editing.keyUploadFilename}</span>
                   <span className="min-w-0 truncate font-mono text-[10px] text-gray-500">{editing.keyUploadFingerprint}</span>
-                  <button disabled={busy} onClick={removeUploadedKey} className="ml-auto text-red-400 hover:text-red-300 disabled:opacity-50">remove</button>
+                  <button disabled={busy} onClick={removeUploadedKey} className="ml-auto text-red-400 hover:text-red-300 disabled:opacity-50">{translateUI("remove")}</button>
                 </div>
               ) : (
                 <div className="mt-1 rounded border border-gray-700 bg-gray-900/40 px-2 py-1.5 text-gray-400">
                   {editing.id === null
-                    ? 'Upload is required for every new or migrated connection.'
-                    : `Current key (${profiles.find((profile) => profile.id === editing.id)?.key_path_hint || 'stored on Manager'}) will be kept. Upload only to rotate it.`}
+                    ? translateUI("Upload is required for every new or migrated connection.")
+                    : translateUI("Current key ({0}) will be kept. Upload only to rotate it.", [profiles.find((profile) => profile.id === editing.id)?.key_path_hint || 'stored on Manager'])}
                 </div>
               )}
-              <div className="mt-1 text-[10px] text-gray-500">Uploaded keys are validated and stored only on the CCM server with mode 0600.</div>
+              <div className="mt-1 text-[10px] text-gray-500">{translateUI("Uploaded keys are validated and stored only on the CCM server with mode 0600.")}</div>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 rounded bg-gray-900/70 p-2">
-            <button disabled={busy || !editing.host.trim()} onClick={probeHostKey} className="px-2 py-1 rounded bg-amber-600 text-white text-xs hover:bg-amber-700 disabled:opacity-50">Probe host identity</button>
-            <span className="min-w-0 truncate font-mono text-[10px] text-gray-400">{editing.hostKeyFingerprint || 'No newly verified fingerprint'}</span>
+            <button disabled={busy || !editing.host.trim()} onClick={probeHostKey} className="px-2 py-1 rounded bg-amber-600 text-white text-xs hover:bg-amber-700 disabled:opacity-50">{translateUI("Probe host identity")}</button>
+            <span className="min-w-0 truncate font-mono text-[10px] text-gray-400">{editing.hostKeyFingerprint || translateUI("No newly verified fingerprint")}</span>
             {editing.hostKeyValue && (
               <label className="flex items-center gap-1.5 text-xs text-amber-300">
                 <input type="checkbox" checked={editing.hostKeyConfirmed} onChange={(e) => setEditing({ ...editing, hostKeyConfirmed: e.target.checked })} />
-                I verified this host fingerprint
-              </label>
+                {translateUI("I verified this host fingerprint ")}</label>
             )}
           </div>
           <label className="block text-xs text-gray-400">
-            Allowed remote roots
-            <textarea
-              aria-label="Allowed remote roots"
+            {translateUI("Allowed remote roots ")}<textarea
+              aria-label={translateUI("Allowed remote roots")}
               rows={3}
               value={editing.allowedRootsText}
               onChange={(event) => setEditing({ ...editing, allowedRootsText: event.target.value })}
-              placeholder="/srv/app\n/var/log/my-app"
+              placeholder={translateUI("/srv/app\\n/var/log/my-app")}
               className="mt-1 w-full rounded bg-gray-700 px-2 py-1.5 font-mono text-gray-200"
             />
             <span className="mt-1 block text-[10px] text-gray-500">
-              One absolute POSIX path per line. This limits Files and Task file operations; command execution is not path-scoped. Changing roots requires existing Task grants to be re-authorized.
-            </span>
+              {translateUI("One absolute POSIX path per line. This limits Files and Task file operations; command execution is not path-scoped. Changing roots requires existing Task grants to be re-authorized. ")}</span>
           </label>
           <div className="rounded border border-gray-700 bg-gray-900/50 p-3">
             <label className="flex items-start gap-2 text-xs text-gray-300">
               <input
-                aria-label="Allow Tasks to use this connection"
+                aria-label={translateUI("Allow Tasks to use this connection")}
                 type="checkbox"
                 checked={editing.taskAccessEnabled}
                 onChange={(event) => setEditing({
@@ -636,8 +634,8 @@ function ManagedSSHPanel({
                 className="mt-0.5 accent-cyan-500"
               />
               <span>
-                <span className="block font-medium">Allow Tasks to use this connection</span>
-                <span className="block text-[10px] text-gray-500">Off means this connection is available only in Files.</span>
+                <span className="block font-medium">{translateUI("Allow Tasks to use this connection")}</span>
+                <span className="block text-[10px] text-gray-500">{translateUI("Off means this connection is available only in Files.")}</span>
               </span>
             </label>
             {editing.taskAccessEnabled && (
@@ -647,7 +645,7 @@ function ManagedSSHPanel({
                     <span className="flex items-center gap-1.5">
                       <input
                         type="checkbox"
-                        aria-label={`Task capability: ${capability.label}`}
+                        aria-label={translateUI("Task capability: {0}", [capability.label])}
                         checked={editing.taskCapabilities.includes(capability.key)}
                         onChange={(event) => {
                           const next = event.target.checked
@@ -657,7 +655,7 @@ function ManagedSSHPanel({
                         }}
                         className="accent-cyan-500"
                       />
-                      {capability.label}
+                      {translateUI(capability.label)}
                     </span>
                     <span className="mt-1 block text-[10px] text-gray-500">{capability.detail}</span>
                   </label>
@@ -665,10 +663,10 @@ function ManagedSSHPanel({
               </div>
             )}
           </div>
-          <label className="flex items-center gap-2 text-xs text-gray-400"><input type="checkbox" checked={editing.enabled} onChange={(e) => setEditing({ ...editing, enabled: e.target.checked })} />Enabled</label>
+          <label className="flex items-center gap-2 text-xs text-gray-400"><input type="checkbox" checked={editing.enabled} onChange={(e) => setEditing({ ...editing, enabled: e.target.checked })} />{translateUI("Enabled")}</label>
           <div className="flex gap-2">
-            <button disabled={busy} onClick={saveManagedProfile} className="px-3 py-1 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 disabled:opacity-50">{busy ? 'Working…' : 'Save'}</button>
-            <button disabled={busy} onClick={() => { abandonUploadedKey(editing); setEditing(null); }} className="px-3 py-1 bg-gray-700 text-gray-300 rounded text-xs hover:bg-gray-600 disabled:opacity-50">Cancel</button>
+            <button disabled={busy} onClick={saveManagedProfile} className="px-3 py-1 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 disabled:opacity-50">{busy ? translateUI("Working…") : translateUI("Save")}</button>
+            <button disabled={busy} onClick={() => { abandonUploadedKey(editing); setEditing(null); }} className="px-3 py-1 bg-gray-700 text-gray-300 rounded text-xs hover:bg-gray-600 disabled:opacity-50">{translateUI("Cancel")}</button>
           </div>
         </div>
       )}
@@ -699,8 +697,9 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 function DiffView({ diff }: { diff: string }) {
+  useLanguage();
   if (!diff.trim()) {
-    return <div className="p-4 text-gray-500 text-sm">No changes</div>;
+    return <div className="p-4 text-gray-500 text-sm">{translateUI("No changes")}</div>;
   }
 
   const lines = diff.split('\n');
@@ -736,6 +735,7 @@ function DiffView({ diff }: { diff: string }) {
 // ---------------------------------------------------------------------------
 
 export function FilesPage() {
+  useLanguage();
   const ccUser = JSON.parse(localStorage.getItem('cc_user') || '{}');
   const isAdmin = ccUser.role === 'admin' || ccUser.role === 'super_admin' || !ccUser.id;
   const [mode, setMode] = useState<Mode>('local');
@@ -1016,26 +1016,23 @@ export function FilesPage() {
       {/* Mode toggle + path bar */}
       <div className="bg-gray-800 rounded-lg p-4 space-y-3">
         <div className="flex items-center gap-3 flex-wrap">
-          <h2 className="text-sm font-semibold text-foreground">Files</h2>
+          <h2 className="text-sm font-semibold text-foreground">{translateUI("Files")}</h2>
           <div className="flex rounded overflow-hidden border border-gray-600 text-xs">
             <button
               onClick={() => setMode('local')}
               className={`flex items-center gap-1 px-3 py-1.5 ${mode === 'local' ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
             >
-              <HardDrive size={12} /> Local
-            </button>
+              <HardDrive size={12} /> {translateUI("Local ")}</button>
             <button
               onClick={() => setMode('ssh')}
               className={`flex items-center gap-1 px-3 py-1.5 ${mode === 'ssh' ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
             >
-              <Server size={12} /> SSH workspace
-            </button>
+              <Server size={12} /> {translateUI("SSH workspace ")}</button>
             <button
               onClick={() => setMode('git')}
               className={`flex items-center gap-1 px-3 py-1.5 ${mode === 'git' ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
             >
-              <GitBranch size={12} /> Git
-            </button>
+              <GitBranch size={12} /> {translateUI("Git ")}</button>
           </div>
         </div>
 
@@ -1050,7 +1047,7 @@ export function FilesPage() {
                 defaultValue=""
                 className="bg-gray-700 text-gray-300 text-sm rounded px-2 py-1.5 border border-gray-600 focus:outline-none focus:border-indigo-500"
               >
-                <option value="" disabled>Select project...</option>
+                <option value="" disabled>{translateUI("Select project...")}</option>
                 {projects.filter((p) => p.local_path && (!p.location || p.location === 'local')).map((p) => (
                   <option key={p.id} value={String(p.id)}>{p.name}</option>
                 ))}
@@ -1061,7 +1058,7 @@ export function FilesPage() {
               value={inputPath}
               onChange={(e) => setInputPath(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && loadLocalRoot(inputPath)}
-              placeholder="/path/to/directory"
+              placeholder={translateUI("/path/to/directory")}
               className="flex-1 bg-gray-700 text-gray-300 text-sm rounded px-3 py-1.5 border border-gray-600 focus:outline-none focus:border-indigo-500 min-w-48"
             />
             <button
@@ -1069,8 +1066,7 @@ export function FilesPage() {
               disabled={rootLoading || !inputPath.trim()}
               className="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Browse
-            </button>
+              {translateUI("Browse ")}</button>
             {rootPath && (
               <>
                 <input ref={uploadInputRef} type="file" multiple className="hidden" onChange={handleUploadFiles} />
@@ -1080,8 +1076,7 @@ export function FilesPage() {
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-sm rounded hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                  Upload
-                </button>
+                  {translateUI("Upload ")}</button>
               </>
             )}
           </div>
@@ -1114,7 +1109,7 @@ export function FilesPage() {
                   value={sshPath}
                   onChange={(e) => setSshPath(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && loadSshRoot(activeConnection, sshPath)}
-                  placeholder="/home/user"
+                  placeholder={translateUI("/home/user")}
                   className="flex-1 bg-gray-700 text-gray-300 text-sm rounded px-3 py-1.5 border border-gray-600 focus:outline-none focus:border-indigo-500"
                 />
                 <button
@@ -1122,8 +1117,7 @@ export function FilesPage() {
                   disabled={sshLoading}
                   className="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700 disabled:opacity-50"
                 >
-                  Browse
-                </button>
+                  {translateUI("Browse ")}</button>
               </div>
             )}
           </div>
@@ -1141,7 +1135,7 @@ export function FilesPage() {
                   defaultValue=""
                   className="bg-gray-700 text-gray-300 text-sm rounded px-2 py-1.5 border border-gray-600 focus:outline-none focus:border-indigo-500"
                 >
-                  <option value="" disabled>Select project...</option>
+                  <option value="" disabled>{translateUI("Select project...")}</option>
                   {projects.filter((p) => p.local_path && (!p.location || p.location === 'local')).map((p) => (
                     <option key={p.id} value={String(p.id)}>{p.name}</option>
                   ))}
@@ -1152,7 +1146,7 @@ export function FilesPage() {
                 value={gitPath}
                 onChange={(e) => setGitPath(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && loadGitStatus(gitPath)}
-                placeholder="/path/to/git/repo"
+                placeholder={translateUI("/path/to/git/repo")}
                 className="flex-1 bg-gray-700 text-gray-300 text-sm rounded px-3 py-1.5 border border-gray-600 focus:outline-none focus:border-indigo-500 min-w-48"
               />
               <button
@@ -1160,7 +1154,7 @@ export function FilesPage() {
                 disabled={gitLoading || !gitPath.trim()}
                 className="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {gitLoading ? <Loader2 size={14} className="animate-spin" /> : 'Load'}
+                {gitLoading ? <Loader2 size={14} className="animate-spin" /> : translateUI("Load")}
               </button>
             </div>
           </div>
@@ -1180,12 +1174,12 @@ export function FilesPage() {
           <div className="w-full md:w-72 md:flex-shrink-0 max-h-64 md:max-h-none bg-gray-800 rounded-lg overflow-y-auto p-2">
             <div className="flex items-center gap-2 px-2 pb-2 border-b border-gray-700 mb-2">
               <GitBranch size={14} className="text-indigo-400" />
-              <span className="text-xs text-indigo-400 font-medium">{gitBranch || 'HEAD'}</span>
-              <span className="text-xs text-gray-500">({gitFiles.length} changes)</span>
+              <span className="text-xs text-indigo-400 font-medium">{gitBranch || translateUI("HEAD")}</span>
+              <span className="text-xs text-gray-500">({gitFiles.length} {translateUI("changes)")}</span>
               <button
                 onClick={() => loadGitStatus(gitPath)}
                 className="ml-auto text-gray-500 hover:text-gray-300"
-                title="Refresh"
+                title={translateUI("Refresh")}
               >
                 <RefreshCw size={12} />
               </button>
@@ -1196,18 +1190,16 @@ export function FilesPage() {
                 onClick={() => { setGitShowStaged(false); if (gitSelectedFile) loadGitDiff(gitPath, gitSelectedFile, false); else if (gitDiff !== null) loadGitDiff(gitPath, undefined, false); }}
                 className={`px-2 py-0.5 rounded text-xs ${!gitShowStaged ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
               >
-                Unstaged
-              </button>
+                {translateUI("Unstaged ")}</button>
               <button
                 onClick={() => { setGitShowStaged(true); if (gitSelectedFile) loadGitDiff(gitPath, gitSelectedFile, true); else if (gitDiff !== null) loadGitDiff(gitPath, undefined, true); }}
                 className={`px-2 py-0.5 rounded text-xs ${gitShowStaged ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
               >
-                Staged
-              </button>
+                {translateUI("Staged ")}</button>
             </div>
 
             {gitFiles.length === 0 && (
-              <div className="text-xs text-gray-500 px-2 py-4 text-center">Working tree clean</div>
+              <div className="text-xs text-gray-500 px-2 py-4 text-center">{translateUI("Working tree clean")}</div>
             )}
 
             {gitFiles.length > 0 && (
@@ -1218,7 +1210,7 @@ export function FilesPage() {
                 }`}
               >
                 <FileText size={12} className="text-gray-500" />
-                <span>All changes</span>
+                <span>{translateUI("All changes")}</span>
               </button>
             )}
 
@@ -1242,18 +1234,16 @@ export function FilesPage() {
           <div className="flex-1 min-h-80 bg-gray-800 rounded-lg overflow-hidden flex flex-col">
             {gitDiff === null && !gitDiffLoading && (
               <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">
-                Select a file or click "All changes" to view diff
-              </div>
+                {translateUI("Select a file or click \"All changes\" to view diff ")}</div>
             )}
             {gitDiffLoading && (
               <div className="flex-1 flex items-center justify-center text-gray-400 text-sm gap-2">
-                <Loader2 size={14} className="animate-spin" /> Loading diff...
-              </div>
+                <Loader2 size={14} className="animate-spin" /> {translateUI("Loading diff... ")}</div>
             )}
             {gitDiff !== null && !gitDiffLoading && (
               <>
                 <div className="px-4 py-2 border-b border-gray-700 text-xs text-gray-400">
-                  {gitSelectedFile || 'All changes'} — {gitShowStaged ? 'staged' : 'unstaged'}
+                  {gitSelectedFile || translateUI("All changes")} — {gitShowStaged ? translateUI("staged") : translateUI("unstaged")}
                 </div>
                 <div className="flex-1 overflow-auto">
                   <DiffView diff={gitDiff} />
@@ -1272,11 +1262,10 @@ export function FilesPage() {
             <div className="text-xs text-gray-500 px-2 pb-1 truncate" title={currentRootLabel}>{currentRootLabel}</div>
             {(rootLoading || sshLoading) && (
               <div className="flex items-center gap-2 px-2 py-4 text-gray-400 text-sm">
-                <Loader2 size={14} className="animate-spin" /> Loading...
-              </div>
+                <Loader2 size={14} className="animate-spin" /> {translateUI("Loading... ")}</div>
             )}
             {currentEntries.length === 0 && !rootLoading && !sshLoading && (
-              <div className="text-xs text-gray-600 px-2 py-2">empty directory</div>
+              <div className="text-xs text-gray-600 px-2 py-2">{translateUI("empty directory")}</div>
             )}
             {currentEntries.map((entry) => (
               <TreeNode
@@ -1293,8 +1282,7 @@ export function FilesPage() {
           <div className="flex-1 min-h-80 bg-gray-800 rounded-lg overflow-hidden flex flex-col">
             {!selectedFile && (
               <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">
-                Select a file to preview
-              </div>
+                {translateUI("Select a file to preview ")}</div>
             )}
             {selectedFile && (
               <>
@@ -1303,16 +1291,14 @@ export function FilesPage() {
                   <button
                     onClick={handleDownload}
                     className="flex items-center gap-1 px-2 py-1 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 flex-shrink-0"
-                    title="Download file"
+                    title={translateUI("Download file")}
                   >
-                    <Download size={12} /> Download
-                  </button>
+                    <Download size={12} /> {translateUI("Download ")}</button>
                 </div>
                 <div className="flex-1 overflow-auto">
                   {fileLoading && (
                     <div className="flex items-center gap-2 p-4 text-gray-400 text-sm">
-                      <Loader2 size={14} className="animate-spin" /> Loading...
-                    </div>
+                      <Loader2 size={14} className="animate-spin" /> {translateUI("Loading... ")}</div>
                   )}
                   {fileError && (
                     <div className="flex items-center gap-2 p-4 text-red-400 text-sm">

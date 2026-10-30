@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
@@ -37,6 +38,7 @@ interface NavItem {
  * 页面主体走文档流滚动（sticky 顶栏），分屏视图的 100vh 计算依赖顶栏
  * 高度 = h-12 (3rem) + 底边框。 */
 export function AppShell({ currentPage, onNavigate, wide, children }: AppShellProps) {
+  useLanguage();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [navCollapsed, setNavCollapsed] = useState(
     () => localStorage.getItem('ccm-nav-collapsed') === 'true',
@@ -157,7 +159,7 @@ export function AppShell({ currentPage, onNavigate, wide, children }: AppShellPr
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-700 text-white shadow-md shadow-indigo-600/25">
         <Bot size={18} />
       </div>
-      <span data-shell-brand-text className="text-sm font-semibold tracking-tight text-foreground truncate">Claude Manager</span>
+      <span data-shell-brand-text className="text-sm font-semibold tracking-tight text-foreground truncate">{translateUI("Claude Manager")}</span>
     </div>
   );
 
@@ -191,12 +193,12 @@ export function AppShell({ currentPage, onNavigate, wide, children }: AppShellPr
               })()}
               {p.key === 'plans' && hasPlanActions && (
                 <span
-                  aria-label="Plans requiring action"
+                  aria-label={translateUI("Plans requiring action")}
                   className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-red-500 ring-2 ring-red-500/20"
                 />
               )}
             </span>
-            {p.label}
+            {translateUI(p.label)}
           </button>
         );
       })}
@@ -220,8 +222,8 @@ export function AppShell({ currentPage, onNavigate, wide, children }: AppShellPr
       type="button"
       onClick={toggleNavCollapsed}
       className="hidden lg:inline-flex shrink-0 p-1.5 rounded-md text-gray-500 hover:text-gray-200 hover:bg-gray-800 transition-colors"
-      aria-label="收起导航"
-      title="收起导航"
+      aria-label={translateUI("收起导航")}
+      title={translateUI("收起导航")}
     >
       <PanelLeftClose size={17} />
     </button>
@@ -284,13 +286,13 @@ export function AppShell({ currentPage, onNavigate, wide, children }: AppShellPr
             <button
               onClick={() => setDrawerOpen(true)}
               className="lg:hidden p-2 -ml-1 rounded-lg text-gray-400 hover:text-foreground hover:bg-gray-800 transition-colors"
-              aria-label="打开导航"
+              aria-label={translateUI("打开导航")}
             >
               <Menu size={18} />
             </button>
             <div className="lg:hidden flex items-center gap-2 min-w-0">
               <span className="text-sm font-semibold tracking-tight text-foreground truncate">
-                {current?.label ?? 'Claude Manager'}
+                {translateUI(current?.label ?? "Claude Manager")}
               </span>
             </div>
             {navCollapsed && (
@@ -298,14 +300,14 @@ export function AppShell({ currentPage, onNavigate, wide, children }: AppShellPr
                 type="button"
                 onClick={toggleNavCollapsed}
                 className="hidden lg:inline-flex p-1.5 -ml-1 rounded-md text-gray-400 hover:text-foreground hover:bg-gray-800 transition-colors"
-                aria-label="展开导航"
-                title="展开导航"
+                aria-label={translateUI("展开导航")}
+                title={translateUI("展开导航")}
               >
                 <PanelLeftOpen size={18} />
               </button>
             )}
             <span className="hidden lg:block text-sm font-semibold tracking-tight text-foreground">
-              {current?.label ?? ''}
+              {translateUI(current?.label ?? '')}
             </span>
             <div className="ml-auto flex items-center gap-1">
               {ccUser.name && (

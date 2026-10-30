@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../config/language";
 import { useState, useEffect } from 'react';
 import { Plus, Pencil, Trash2, X, Check } from '../components/icons';
 import { api } from '../api/client';
@@ -12,6 +13,7 @@ interface UserSkill {
 }
 
 export function SkillsPage() {
+  useLanguage();
   const [skills, setSkills] = useState<UserSkill[]>([]);
   const [editing, setEditing] = useState<UserSkill | null>(null);
   const [creating, setCreating] = useState(false);
@@ -56,7 +58,7 @@ export function SkillsPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('确定删除这个 Skill？')) return;
+    if (!confirm(translateUI("确定删除这个 Skill？"))) return;
     try {
       await api.deleteUserSkill(id);
       load();
@@ -92,18 +94,16 @@ export function SkillsPage() {
     <div className="max-w-4xl mx-auto p-4 space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Skills</h2>
+          <h2 className="text-lg font-semibold text-foreground">{translateUI("Skills")}</h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            自然语言知识/指导，创建后可在 Task 中选用，Agent 按需加载
-          </p>
+            {translateUI("自然语言知识/指导，创建后可在 Task 中选用，Agent 按需加载 ")}</p>
         </div>
         {!showForm && (
           <button
             onClick={startCreate}
             className="flex items-center gap-1 px-3 py-1.5 text-xs rounded bg-indigo-600 text-white hover:bg-indigo-500"
           >
-            <Plus size={14} /> 新建 Skill
-          </button>
+            <Plus size={14} /> {translateUI("新建 Skill ")}</button>
         )}
       </div>
 
@@ -112,7 +112,7 @@ export function SkillsPage() {
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium text-foreground">
-              {creating ? '新建 Skill' : `编辑: ${editing!.name}`}
+              {creating ? translateUI("新建 Skill") : translateUI("编辑: {0}", [editing!.name])}
             </h3>
             <button onClick={cancel} className="text-gray-400 hover:text-foreground">
               <X size={16} />
@@ -120,28 +120,28 @@ export function SkillsPage() {
           </div>
 
           <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 items-center text-xs">
-            <span className="text-gray-400">名称</span>
+            <span className="text-gray-400">{translateUI("名称")}</span>
             <input
               className="bg-gray-700 text-foreground rounded px-2 py-1.5 text-xs border border-gray-600 focus:border-indigo-500 focus:outline-none"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="如: code-review-guide"
+              placeholder={translateUI("如: code-review-guide")}
             />
 
-            <span className="text-gray-400">描述</span>
+            <span className="text-gray-400">{translateUI("描述")}</span>
             <input
               className="bg-gray-700 text-foreground rounded px-2 py-1.5 text-xs border border-gray-600 focus:border-indigo-500 focus:outline-none"
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder="一句话说明这个 skill 的用途"
+              placeholder={translateUI("一句话说明这个 skill 的用途")}
             />
 
-            <span className="text-gray-400 self-start mt-1">内容</span>
+            <span className="text-gray-400 self-start mt-1">{translateUI("内容")}</span>
             <textarea
               className="bg-gray-700 text-foreground rounded px-2 py-1.5 text-xs border border-gray-600 focus:border-indigo-500 focus:outline-none min-h-[200px] font-mono"
               value={form.content}
               onChange={(e) => setForm({ ...form, content: e.target.value })}
-              placeholder="Skill 的完整内容（Markdown），Agent 按需加载..."
+              placeholder={translateUI("Skill 的完整内容（Markdown），Agent 按需加载...")}
             />
           </div>
 
@@ -149,14 +149,13 @@ export function SkillsPage() {
 
           <div className="flex justify-end gap-2">
             <button onClick={cancel} className="px-3 py-1.5 text-xs rounded bg-gray-700 text-gray-300 hover:bg-gray-600">
-              取消
-            </button>
+              {translateUI("取消 ")}</button>
             <button
               onClick={creating ? handleCreate : handleUpdate}
               disabled={loading || !form.name.trim()}
               className="flex items-center gap-1 px-3 py-1.5 text-xs rounded bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50"
             >
-              <Check size={13} /> {creating ? '创建' : '保存'}
+              <Check size={13} /> {creating ? translateUI("创建") : translateUI("保存")}
             </button>
           </div>
         </div>
@@ -165,8 +164,7 @@ export function SkillsPage() {
       {/* Skill list */}
       {skills.length === 0 && !showForm ? (
         <div className="text-center py-12 text-gray-500 text-sm">
-          还没有 Skill，点击右上角创建一个
-        </div>
+          {translateUI("还没有 Skill，点击右上角创建一个 ")}</div>
       ) : (
         <div className="space-y-2">
           {skills.map((skill) => (
@@ -181,8 +179,7 @@ export function SkillsPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-foreground">{skill.name}</span>
                     <span className="text-[10px] text-gray-600">
-                      {skill.content.length} chars
-                    </span>
+                      {skill.content.length} {translateUI("chars ")}</span>
                   </div>
                   {skill.description && (
                     <p className="text-xs text-gray-400 mt-0.5">{skill.description}</p>
@@ -197,14 +194,14 @@ export function SkillsPage() {
                   <button
                     onClick={() => startEdit(skill)}
                     className="p-1.5 text-gray-500 hover:text-foreground transition-colors"
-                    title="编辑"
+                    title={translateUI("编辑")}
                   >
                     <Pencil size={14} />
                   </button>
                   <button
                     onClick={() => handleDelete(skill.id)}
                     className="p-1.5 text-gray-500 hover:text-red-400 transition-colors"
-                    title="删除"
+                    title={translateUI("删除")}
                   >
                     <Trash2 size={14} />
                   </button>

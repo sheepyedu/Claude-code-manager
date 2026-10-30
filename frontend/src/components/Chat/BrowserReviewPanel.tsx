@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
@@ -189,6 +190,7 @@ export function BrowserReviewPanel({
   onGoalReviewFound,
   goalProgress,
 }: BrowserReviewPanelProps) {
+  useLanguage();
   const [runs, setRuns] = useState<TestHarnessRun[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -271,7 +273,7 @@ export function BrowserReviewPanel({
       applyRuntimeConfig(config);
       return config;
     } catch (nextError) {
-      setError(`加载 Browser Agent 配置失败：${errorText(nextError)}`);
+      setError(translateUI("加载 Browser Agent 配置失败：{0}", [errorText(nextError)]));
       return null;
     } finally {
       setRuntimeConfigLoading(false);
@@ -285,7 +287,7 @@ export function BrowserReviewPanel({
       setCapabilities(nextCapabilities);
       return nextCapabilities;
     } catch (nextError) {
-      setError(`加载测试能力失败：${errorText(nextError)}`);
+      setError(translateUI("加载测试能力失败：{0}", [errorText(nextError)]));
       return null;
     } finally {
       setCapabilitiesLoading(false);
@@ -667,7 +669,7 @@ export function BrowserReviewPanel({
     try {
       await persistRuntimeConfig();
     } catch (nextError) {
-      setError(`保存 Browser Agent 配置失败：${errorText(nextError)}`);
+      setError(translateUI("保存 Browser Agent 配置失败：{0}", [errorText(nextError)]));
     }
   };
 
@@ -695,7 +697,7 @@ export function BrowserReviewPanel({
         item.id === cancelled.id ? cancelled : item
       )));
     } catch (nextError) {
-      setError(`停止审查失败，Task 可能仍在运行：${errorText(nextError)}`);
+      setError(translateUI("停止审查失败，Task 可能仍在运行：{0}", [errorText(nextError)]));
     } finally {
       setCancellingJobId(null);
     }
@@ -722,7 +724,7 @@ export function BrowserReviewPanel({
       onAvailableChange(true);
       onNewReview();
     } catch (nextError) {
-      setError(`重新测试失败：${errorText(nextError)}`);
+      setError(translateUI("重新测试失败：{0}", [errorText(nextError)]));
     } finally {
       setRepeatingRunId(null);
     }
@@ -795,7 +797,7 @@ export function BrowserReviewPanel({
       onAvailableChange(true);
       onNewReview();
     } catch (nextError) {
-      setError(`启动测试失败：${errorText(nextError)}`);
+      setError(translateUI("启动测试失败：{0}", [errorText(nextError)]));
     } finally {
       setStartingConfiguredReview(false);
     }
@@ -861,7 +863,7 @@ export function BrowserReviewPanel({
   const panel = (
     <aside
       ref={floatingPanelRef}
-      aria-label="Frontend Review progress"
+      aria-label={translateUI("Frontend Review progress")}
       data-display-mode={displayMode}
       className={displayMode === 'floating'
         ? `fixed z-[70] flex w-[min(430px,calc(100vw-24px))] flex-col overflow-hidden rounded-xl border border-gray-600/60 bg-gray-950/98 shadow-2xl shadow-black/60 backdrop-blur ${minimized ? '' : 'max-h-[min(720px,calc(100vh-24px))]'}`
@@ -876,21 +878,21 @@ export function BrowserReviewPanel({
         {displayMode === 'floating' && <GripVertical size={14} className="shrink-0 text-gray-600" />}
         <Eye size={16} className="text-indigo-400" />
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-medium text-gray-100">前端运行审查</div>
+          <div className="text-sm font-medium text-gray-100">{translateUI("前端运行审查")}</div>
           <div className="truncate text-[10px] text-gray-500">
-            Task #{taskId}{displayedGoalRound ? ` · Goal Agent 第 ${displayedGoalRound} 轮` : ''} · {settingsOpen
-              ? '测试配置'
+            {translateUI("Task #")}{taskId}{displayedGoalRound ? translateUI(" · Goal Agent 第 {0} 轮", [displayedGoalRound]) : ''} · {settingsOpen
+              ? translateUI("测试配置")
               : waitingForGoalReview
               ? goalStart?.phase === 'starting_review'
-                ? '正在创建新的浏览器复查'
-                : '正在启动循环审查'
+                ? translateUI("正在创建新的浏览器复查")
+                : translateUI("正在启动循环审查")
               : waitingForWorkspaceReview
-              ? '等待 Agent 创建新的浏览器审查'
+              ? translateUI("等待 Agent 创建新的浏览器审查")
               : displayedRun
               ? STAGE_LABELS[displayedRun.stage] || displayedRun.stage
               : loading
-                ? '加载测试记录'
-                : '待机 · 尚未启动测试'}
+                ? translateUI("加载测试记录")
+                : translateUI("待机 · 尚未启动测试")}
           </div>
         </div>
         <button
@@ -902,8 +904,8 @@ export function BrowserReviewPanel({
           className={`rounded p-1.5 transition-colors ${settingsOpen
             ? 'bg-indigo-500/15 text-indigo-300'
             : 'text-gray-500 hover:bg-gray-800 hover:text-indigo-300'}`}
-          title={settingsOpen ? '返回测试进度' : '配置并启动前端测试'}
-          aria-label="Configure frontend test"
+          title={settingsOpen ? translateUI("返回测试进度") : translateUI("配置并启动前端测试")}
+          aria-label={translateUI("Configure frontend test")}
           aria-pressed={settingsOpen}
         >
           <Settings size={14} />
@@ -912,7 +914,7 @@ export function BrowserReviewPanel({
           type="button"
           onClick={() => void refresh()}
           className="rounded p-1.5 text-gray-500 hover:bg-gray-800 hover:text-gray-300"
-          title="刷新审查进度"
+          title={translateUI("刷新审查进度")}
         >
           <RefreshCw size={14} />
         </button>
@@ -921,8 +923,8 @@ export function BrowserReviewPanel({
             type="button"
             onClick={() => onDisplayModeChange('floating')}
             className="rounded p-1.5 text-gray-500 hover:bg-gray-800 hover:text-indigo-300"
-            title="切换为浮窗"
-            aria-label="Open Frontend Review as floating window"
+            title={translateUI("切换为浮窗")}
+            aria-label={translateUI("Open Frontend Review as floating window")}
           >
             <Square size={13} />
           </button>
@@ -932,8 +934,8 @@ export function BrowserReviewPanel({
               type="button"
               onClick={() => onDisplayModeChange('docked')}
               className="rounded p-1.5 text-gray-500 hover:bg-gray-800 hover:text-indigo-300"
-              title="停靠到右侧"
-              aria-label="Dock Frontend Review panel"
+              title={translateUI("停靠到右侧")}
+              aria-label={translateUI("Dock Frontend Review panel")}
             >
               <PanelLeftOpen size={14} />
             </button>
@@ -941,8 +943,8 @@ export function BrowserReviewPanel({
               type="button"
               onClick={() => setMinimized((value) => !value)}
               className="rounded p-1.5 text-gray-500 hover:bg-gray-800 hover:text-gray-300"
-              title={minimized ? '展开浮窗' : '最小化浮窗'}
-              aria-label={minimized ? 'Restore Frontend Review window' : 'Minimize Frontend Review window'}
+              title={minimized ? translateUI("展开浮窗") : translateUI("最小化浮窗")}
+              aria-label={minimized ? translateUI("Restore Frontend Review window") : translateUI("Minimize Frontend Review window")}
             >
               {minimized ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
@@ -952,7 +954,7 @@ export function BrowserReviewPanel({
           type="button"
           onClick={onClose}
           className="rounded p-1.5 text-gray-500 hover:bg-gray-800 hover:text-gray-300"
-          aria-label="Close Frontend Review panel"
+          aria-label={translateUI("Close Frontend Review panel")}
         >
           <X size={14} />
         </button>
@@ -964,7 +966,7 @@ export function BrowserReviewPanel({
             <select
               value={harnessRun?.id || ''}
               onChange={(event) => setSelectedId(event.target.value)}
-              aria-label="Select test run"
+              aria-label={translateUI("Select test run")}
               className="min-w-0 flex-1 rounded border border-gray-600/60 bg-gray-900 px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-indigo-500"
             >
               {runs.map((item, index) => (
@@ -978,8 +980,8 @@ export function BrowserReviewPanel({
               onClick={() => selectAdjacentRun(1)}
               disabled={selectedRunIndex < 0 || selectedRunIndex >= runs.length - 1}
               className="rounded border border-gray-600/60 bg-gray-900 p-1.5 text-gray-400 hover:border-indigo-500/60 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-35"
-              title="切换到更早的测试"
-              aria-label="Select older test run"
+              title={translateUI("切换到更早的测试")}
+              aria-label={translateUI("Select older test run")}
             >
               <ChevronDown size={14} />
             </button>
@@ -988,8 +990,8 @@ export function BrowserReviewPanel({
               onClick={() => selectAdjacentRun(-1)}
               disabled={selectedRunIndex <= 0}
               className="rounded border border-gray-600/60 bg-gray-900 p-1.5 text-gray-400 hover:border-indigo-500/60 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-35"
-              title="切换到更新的测试"
-              aria-label="Select newer test run"
+              title={translateUI("切换到更新的测试")}
+              aria-label={translateUI("Select newer test run")}
             >
               <ChevronUp size={14} />
             </button>
@@ -1002,11 +1004,9 @@ export function BrowserReviewPanel({
           <form onSubmit={startConfiguredReview} className="space-y-4" data-testid="frontend-test-settings">
             <section className="rounded-lg border border-indigo-500/25 bg-indigo-500/8 p-3">
               <div className="flex items-center gap-2 text-sm font-medium text-indigo-300">
-                <Settings size={15} />前端测试配置
-              </div>
+                <Settings size={15} />{translateUI("前端测试配置 ")}</div>
               <p className="mt-1 text-[11px] leading-relaxed text-gray-400">
-                在当前 Task 中直接创建当前工作区、固定 URL、GitHub PR 或 Git ref 的独立 Harness Run。
-              </p>
+                {translateUI("在当前 Task 中直接创建当前工作区、固定 URL、GitHub PR 或 Git ref 的独立 Harness Run。 ")}</p>
             </section>
 
             {error && (
@@ -1020,17 +1020,15 @@ export function BrowserReviewPanel({
               <div className="flex items-start gap-2">
                 <Shield size={14} className="mt-0.5 shrink-0 text-emerald-400" />
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-medium text-gray-200">Browser Agent 独立运行配置</div>
+                  <div className="text-xs font-medium text-gray-200">{translateUI("Browser Agent 独立运行配置")}</div>
                   <div className="mt-1 text-[10px] leading-relaxed text-gray-500">
-                    这组设置只控制浏览器审查 Agent，不会修改当前 Task 的模型或推理强度。普通对话、单次审查和 Goal 复查都会使用它。
-                  </div>
+                    {translateUI("这组设置只控制浏览器审查 Agent，不会修改当前 Task 的模型或推理强度。普通对话、单次审查和 Goal 复查都会使用它。 ")}</div>
                 </div>
               </div>
 
               {runtimeConfigLoading ? (
                 <div className="flex items-center gap-2 rounded border border-gray-600/45 bg-gray-950/40 px-2.5 py-2 text-[10px] text-gray-500">
-                  <Loader2 size={12} className="animate-spin" />正在加载可用模型…
-                </div>
+                  <Loader2 size={12} className="animate-spin" />{translateUI("正在加载可用模型… ")}</div>
               ) : (
                 <>
                   <label className="flex cursor-pointer items-start gap-2 rounded border border-gray-600/45 bg-gray-950/40 px-2.5 py-2 text-xs text-gray-300">
@@ -1050,9 +1048,8 @@ export function BrowserReviewPanel({
                       className="mt-0.5 rounded border-gray-600 bg-gray-800 text-indigo-500"
                     />
                     <span>
-                      跟随当前 Task
-                      <span className="mt-0.5 block text-[10px] text-gray-500">
-                        {taskProvider === 'claude' ? 'Claude' : 'Codex'} · {taskModel || '默认模型'} · effort {taskEffort || '默认'}
+                      {translateUI("跟随当前 Task ")}<span className="mt-0.5 block text-[10px] text-gray-500">
+                        {taskProvider === 'claude' ? translateUI("Claude") : translateUI("Codex")} · {taskModel || translateUI("默认模型")} {translateUI("· effort ")}{taskEffort || translateUI("默认")}
                         {taskProvider === 'codex' ? ` · ${taskServiceTier === 'priority' ? 'Fast' : 'Standard'}` : ''}
                       </span>
                     </span>
@@ -1061,7 +1058,7 @@ export function BrowserReviewPanel({
                   {!inheritTaskRuntime && (
                     <div className="grid grid-cols-1 gap-3">
                       <div>
-                        <label htmlFor={`frontend-test-provider-${taskId}`} className="mb-1 block text-[10px] font-medium text-gray-400">审查 Provider</label>
+                        <label htmlFor={`frontend-test-provider-${taskId}`} className="mb-1 block text-[10px] font-medium text-gray-400">{translateUI("审查 Provider")}</label>
                         <select
                           id={`frontend-test-provider-${taskId}`}
                           value={reviewProvider}
@@ -1069,12 +1066,12 @@ export function BrowserReviewPanel({
                           className="w-full rounded border border-gray-600/60 bg-gray-950 px-2.5 py-2 text-xs text-gray-100 outline-none focus:border-indigo-500"
                         >
                           {(runtimeConfig?.providers || ['claude', 'codex']).map((provider) => (
-                            <option key={provider} value={provider}>{provider === 'claude' ? 'Claude' : 'Codex'}</option>
+                            <option key={provider} value={provider}>{provider === 'claude' ? translateUI("Claude") : translateUI("Codex")}</option>
                           ))}
                         </select>
                       </div>
                       <div>
-                        <label htmlFor={`frontend-test-model-${taskId}`} className="mb-1 block text-[10px] font-medium text-gray-400">审查模型</label>
+                        <label htmlFor={`frontend-test-model-${taskId}`} className="mb-1 block text-[10px] font-medium text-gray-400">{translateUI("审查模型")}</label>
                         <select
                           id={`frontend-test-model-${taskId}`}
                           value={reviewModel}
@@ -1086,7 +1083,7 @@ export function BrowserReviewPanel({
                       </div>
                       <div className={`grid gap-3 ${reviewProvider === 'codex' ? 'grid-cols-2' : 'grid-cols-1'}`}>
                         <div>
-                          <label htmlFor={`frontend-test-effort-${taskId}`} className="mb-1 block text-[10px] font-medium text-gray-400">推理强度</label>
+                          <label htmlFor={`frontend-test-effort-${taskId}`} className="mb-1 block text-[10px] font-medium text-gray-400">{translateUI("推理强度")}</label>
                           <select
                             id={`frontend-test-effort-${taskId}`}
                             value={reviewEffort}
@@ -1098,7 +1095,7 @@ export function BrowserReviewPanel({
                         </div>
                         {reviewProvider === 'codex' && (
                           <div>
-                            <label htmlFor={`frontend-test-tier-${taskId}`} className="mb-1 block text-[10px] font-medium text-gray-400">速度</label>
+                            <label htmlFor={`frontend-test-tier-${taskId}`} className="mb-1 block text-[10px] font-medium text-gray-400">{translateUI("速度")}</label>
                             <select
                               id={`frontend-test-tier-${taskId}`}
                               value={reviewServiceTier}
@@ -1106,7 +1103,7 @@ export function BrowserReviewPanel({
                               className="w-full rounded border border-gray-600/60 bg-gray-950 px-2.5 py-2 text-xs text-gray-100 outline-none focus:border-indigo-500"
                             >
                               {reviewServiceTiers.map((tier) => (
-                                <option key={tier} value={tier}>{tier === 'priority' ? 'Fast' : 'Standard'}</option>
+                                <option key={tier} value={tier}>{tier === 'priority' ? translateUI("Fast") : translateUI("Standard")}</option>
                               ))}
                             </select>
                           </div>
@@ -1122,12 +1119,11 @@ export function BrowserReviewPanel({
                     className="inline-flex w-full items-center justify-center gap-1.5 rounded border border-indigo-500/35 bg-indigo-500/10 px-3 py-2 text-xs font-medium text-indigo-300 hover:bg-indigo-500/15 disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     {runtimeConfigSaving ? <Loader2 size={13} className="animate-spin" /> : <Settings size={13} />}
-                    {runtimeConfigSaving ? '正在保存…' : '保存审查 Agent 配置'}
+                    {runtimeConfigSaving ? translateUI("正在保存…") : translateUI("保存审查 Agent 配置")}
                   </button>
                   {taskActive && (
                     <div className="text-center text-[10px] leading-relaxed text-amber-300">
-                      当前 Task 回合结束后可保存；已经启动的 Harness Run 始终使用冻结配置。
-                    </div>
+                      {translateUI("当前 Task 回合结束后可保存；已经启动的 Harness Run 始终使用冻结配置。 ")}</div>
                   )}
                 </>
               )}
@@ -1135,7 +1131,7 @@ export function BrowserReviewPanel({
 
             <section className="space-y-3 rounded-lg border border-gray-600/60 bg-gray-900/55 p-3">
               <div>
-                <label htmlFor={`frontend-test-target-${taskId}`} className="mb-1.5 block text-xs font-medium text-gray-300">测试目标类型</label>
+                <label htmlFor={`frontend-test-target-${taskId}`} className="mb-1.5 block text-xs font-medium text-gray-300">{translateUI("测试目标类型")}</label>
                 <select
                   id={`frontend-test-target-${taskId}`}
                   value={configuredTargetKind}
@@ -1145,34 +1141,33 @@ export function BrowserReviewPanel({
                   }}
                   className="w-full rounded-lg border border-gray-600/60 bg-gray-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-indigo-500"
                 >
-                  <option value="current_workspace">当前工作区</option>
-                  <option value="fixed_url">固定 URL</option>
-                  <option value="pull_request">GitHub PR</option>
-                  <option value="git_ref">Git ref / 分支</option>
+                  <option value="current_workspace">{translateUI("当前工作区")}</option>
+                  <option value="fixed_url">{translateUI("固定 URL")}</option>
+                  <option value="pull_request">{translateUI("GitHub PR")}</option>
+                  <option value="git_ref">{translateUI("Git ref / 分支")}</option>
                 </select>
               </div>
 
               {configuredTargetKind === 'fixed_url' && (
                 <div>
-                  <label htmlFor={`frontend-test-url-${taskId}`} className="mb-1.5 block text-xs font-medium text-gray-300">待检测网站</label>
+                  <label htmlFor={`frontend-test-url-${taskId}`} className="mb-1.5 block text-xs font-medium text-gray-300">{translateUI("待检测网站")}</label>
                   <input
                     id={`frontend-test-url-${taskId}`}
                     type="url"
                     required
                     value={configuredUrl}
                     onChange={(event) => setConfiguredUrl(event.target.value)}
-                    placeholder="https://example.com"
+                    placeholder={translateUI("https://example.com")}
                     className="w-full rounded-lg border border-gray-600/60 bg-gray-950 px-3 py-2.5 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                   />
                   <p className="mt-1.5 text-[10px] leading-relaxed text-gray-500">
-                    仅允许公网 HTTP(S)，浏览器所有连接都经过受控网络出口。
-                  </p>
+                    {translateUI("仅允许公网 HTTP(S)，浏览器所有连接都经过受控网络出口。 ")}</p>
                 </div>
               )}
 
               {configuredTargetKind === 'pull_request' && (
                 <div>
-                  <label htmlFor={`frontend-test-pr-${taskId}`} className="mb-1.5 block text-xs font-medium text-gray-300">Pull Request 编号</label>
+                  <label htmlFor={`frontend-test-pr-${taskId}`} className="mb-1.5 block text-xs font-medium text-gray-300">{translateUI("Pull Request 编号")}</label>
                   <input
                     id={`frontend-test-pr-${taskId}`}
                     type="number"
@@ -1189,14 +1184,14 @@ export function BrowserReviewPanel({
 
               {configuredTargetKind === 'git_ref' && (
                 <div>
-                  <label htmlFor={`frontend-test-ref-${taskId}`} className="mb-1.5 block text-xs font-medium text-gray-300">Git ref 或分支名</label>
+                  <label htmlFor={`frontend-test-ref-${taskId}`} className="mb-1.5 block text-xs font-medium text-gray-300">{translateUI("Git ref 或分支名")}</label>
                   <input
                     id={`frontend-test-ref-${taskId}`}
                     type="text"
                     required
                     value={configuredGitRef}
                     onChange={(event) => setConfiguredGitRef(event.target.value)}
-                    placeholder="feature/browser-review"
+                    placeholder={translateUI("feature/browser-review")}
                     className="w-full rounded-lg border border-gray-600/60 bg-gray-950 px-3 py-2.5 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                   />
                 </div>
@@ -1204,14 +1199,12 @@ export function BrowserReviewPanel({
 
               {configuredTargetKind === 'current_workspace' && (
                 <p className="text-[10px] leading-relaxed text-gray-500">
-                  使用 Task 绑定的可信本地 Git 工作区和管理员已确认的 Preview 配置；不会切换或覆盖当前分支。
-                </p>
+                  {translateUI("使用 Task 绑定的可信本地 Git 工作区和管理员已确认的 Preview 配置；不会切换或覆盖当前分支。 ")}</p>
               )}
 
               {capabilitiesLoading && configuredTargetKind !== 'fixed_url' && (
                 <div className="flex items-center gap-2 text-[10px] text-gray-500">
-                  <Loader2 size={11} className="animate-spin" />正在检查目标与 Sandbox 能力…
-                </div>
+                  <Loader2 size={11} className="animate-spin" />{translateUI("正在检查目标与 Sandbox 能力… ")}</div>
               )}
               {!capabilitiesLoading && !selectedTargetAvailable && selectedTargetReason && (
                 <div role="alert" className="flex items-start gap-2 rounded border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-[10px] leading-relaxed text-amber-300">
@@ -1222,13 +1215,13 @@ export function BrowserReviewPanel({
               {(configuredTargetKind === 'pull_request' || configuredTargetKind === 'git_ref') && capabilities?.sandbox.available && (
                 <div className="flex items-start gap-2 rounded border border-emerald-500/25 bg-emerald-500/8 px-2.5 py-2 text-[10px] leading-relaxed text-emerald-300">
                   <Shield size={12} className="mt-0.5 shrink-0" />
-                  <span>Sandbox 已就绪 · {capabilities.sandbox.backend || 'isolated runtime'} · exact SHA 获取、依赖与 Preview 均不在 Manager 宿主机执行。</span>
+                  <span>{translateUI("Sandbox 已就绪 · ")}{capabilities.sandbox.backend || translateUI("isolated runtime")} {translateUI("· exact SHA 获取、依赖与 Preview 均不在 Manager 宿主机执行。")}</span>
                 </div>
               )}
             </section>
 
             <div>
-              <label htmlFor={`frontend-test-goal-${taskId}`} className="mb-1.5 block text-xs font-medium text-gray-300">测试目标</label>
+              <label htmlFor={`frontend-test-goal-${taskId}`} className="mb-1.5 block text-xs font-medium text-gray-300">{translateUI("测试目标")}</label>
               <textarea
                 id={`frontend-test-goal-${taskId}`}
                 required
@@ -1241,42 +1234,42 @@ export function BrowserReviewPanel({
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-1">
               <div>
-                <label htmlFor={`frontend-test-profile-${taskId}`} className="mb-1.5 block text-xs font-medium text-gray-300">测试深度</label>
+                <label htmlFor={`frontend-test-profile-${taskId}`} className="mb-1.5 block text-xs font-medium text-gray-300">{translateUI("测试深度")}</label>
                 <select
                   id={`frontend-test-profile-${taskId}`}
                   value={configuredProfile}
                   onChange={(event) => setConfiguredProfile(event.target.value as 'quick' | 'standard' | 'exhaustive')}
                   className="w-full rounded-lg border border-gray-600/60 bg-gray-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-indigo-500"
                 >
-                  <option value="quick">快速</option>
-                  <option value="standard">标准</option>
-                  <option value="exhaustive">完整</option>
+                  <option value="quick">{translateUI("快速")}</option>
+                  <option value="standard">{translateUI("标准")}</option>
+                  <option value="exhaustive">{translateUI("完整")}</option>
                 </select>
               </div>
               <div>
-                <label htmlFor={`frontend-test-viewport-${taskId}`} className="mb-1.5 block text-xs font-medium text-gray-300">视口</label>
+                <label htmlFor={`frontend-test-viewport-${taskId}`} className="mb-1.5 block text-xs font-medium text-gray-300">{translateUI("视口")}</label>
                 <select
                   id={`frontend-test-viewport-${taskId}`}
                   value={configuredViewport}
                   onChange={(event) => setConfiguredViewport(event.target.value)}
                   className="w-full rounded-lg border border-gray-600/60 bg-gray-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-indigo-500"
                 >
-                  <option value="1440x900">桌面 1440×900</option>
-                  <option value="1280x720">桌面 1280×720</option>
-                  <option value="768x1024">平板 768×1024</option>
-                  <option value="390x844">手机 390×844</option>
+                  <option value="1440x900">{translateUI("桌面 1440×900")}</option>
+                  <option value="1280x720">{translateUI("桌面 1280×720")}</option>
+                  <option value="768x1024">{translateUI("平板 768×1024")}</option>
+                  <option value="390x844">{translateUI("手机 390×844")}</option>
                 </select>
               </div>
               <div>
-                <label htmlFor={`frontend-test-browser-${taskId}`} className="mb-1.5 block text-xs font-medium text-gray-300">浏览器</label>
+                <label htmlFor={`frontend-test-browser-${taskId}`} className="mb-1.5 block text-xs font-medium text-gray-300">{translateUI("浏览器")}</label>
                 <select
                   id={`frontend-test-browser-${taskId}`}
                   value={configuredBrowserChannel}
                   onChange={(event) => setConfiguredBrowserChannel(event.target.value as 'chrome' | 'chromium')}
                   className="w-full rounded-lg border border-gray-600/60 bg-gray-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-indigo-500"
                 >
-                  <option value="chromium">Playwright Chromium</option>
-                  <option value="chrome">系统 Chrome</option>
+                  <option value="chromium">{translateUI("Playwright Chromium")}</option>
+                  <option value="chrome">{translateUI("系统 Chrome")}</option>
                 </select>
               </div>
             </div>
@@ -1289,8 +1282,7 @@ export function BrowserReviewPanel({
                 className="mt-0.5 rounded border-gray-600 bg-gray-800 text-indigo-500"
               />
               <span>
-                允许安全的点击和输入
-                <span className="mt-0.5 block text-[10px] leading-relaxed text-gray-500">仍会阻止跨域顶层跳转、弹窗和下载；不要用于生产写操作或含敏感账号的页面。</span>
+                {translateUI("允许安全的点击和输入 ")}<span className="mt-0.5 block text-[10px] leading-relaxed text-gray-500">{translateUI("仍会阻止跨域顶层跳转、弹窗和下载；不要用于生产写操作或含敏感账号的页面。")}</span>
               </span>
             </label>
 
@@ -1301,16 +1293,16 @@ export function BrowserReviewPanel({
             >
               {startingConfiguredReview ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
               {startingConfiguredReview
-                ? '正在创建测试…'
+                ? translateUI("正在创建测试…")
                 : configuredTargetKind === 'fixed_url'
-                  ? '开始网站测试'
-                  : `开始 ${TARGET_LABELS[configuredTargetKind]} 测试`}
+                  ? translateUI("开始网站测试")
+                  : translateUI("开始 {0} 测试", [TARGET_LABELS[configuredTargetKind]])}
             </button>
             {(taskActive || hasActiveReview || !canStartConfiguredReview) && (
               <p className="text-center text-[10px] leading-relaxed text-amber-300">
                 {hasActiveReview
-                  ? '当前已有测试正在执行，请等待结束或先停止。'
-                  : configuredReviewUnavailableReason || '等待当前 Task 回合结束后再从界面启动测试。'}
+                  ? translateUI("当前已有测试正在执行，请等待结束或先停止。")
+                  : configuredReviewUnavailableReason || translateUI("等待当前 Task 回合结束后再从界面启动测试。")}
               </p>
             )}
           </form>
@@ -1325,26 +1317,25 @@ export function BrowserReviewPanel({
             </div>
             <div className="mt-3 text-sm font-medium text-indigo-300">
               {goalStart.phase === 'starting_review'
-                ? '正在创建本轮浏览器复查'
-                : 'Goal 循环审查正在启动'}
+                ? translateUI("正在创建本轮浏览器复查")
+                : translateUI("Goal 循环审查正在启动")}
             </div>
             <div className="mt-1 max-w-80 text-[11px] leading-relaxed text-gray-400">
               {goalStart.phase === 'starting_review'
-                ? 'Agent 已发起新的 Harness Run。本页已与上一轮证据分离，新 Run 建立后会自动切换到实时截图和操作轨迹。'
-                : '已接收 Goal，正在当前 Task/session 中启动“浏览器审查 → 必要修改 → 测试 → 重新审查”的执行链。'}
+                ? translateUI("Agent 已发起新的 Harness Run。本页已与上一轮证据分离，新 Run 建立后会自动切换到实时截图和操作轨迹。")
+                : translateUI("已接收 Goal，正在当前 Task/session 中启动“浏览器审查 → 必要修改 → 测试 → 重新审查”的执行链。")}
             </div>
             <div className="mt-4 w-full max-w-80 rounded-lg border border-gray-600/45 bg-gray-900/75 px-3 py-2 text-left">
-              <div className="text-[9px] font-medium uppercase tracking-wide text-gray-500">本次目标</div>
+              <div className="text-[9px] font-medium uppercase tracking-wide text-gray-500">{translateUI("本次目标")}</div>
               <div className="mt-1 whitespace-pre-wrap break-words text-[11px] leading-relaxed text-gray-300">{goalStart.prompt}</div>
             </div>
             <div className="mt-3 grid w-full max-w-80 gap-1.5 text-left text-[10px] text-gray-400">
-              <div className="rounded border border-gray-600/35 bg-gray-900/60 px-2.5 py-1.5">1 · 创建独立 Harness Run 与代码指纹</div>
-              <div className="rounded border border-gray-600/35 bg-gray-900/60 px-2.5 py-1.5">2 · 启动隔离预览与黑盒 Browser Agent</div>
-              <div className="rounded border border-gray-600/35 bg-gray-900/60 px-2.5 py-1.5">3 · 回传截图、操作轨迹和审查报告</div>
+              <div className="rounded border border-gray-600/35 bg-gray-900/60 px-2.5 py-1.5">{translateUI("1 · 创建独立 Harness Run 与代码指纹")}</div>
+              <div className="rounded border border-gray-600/35 bg-gray-900/60 px-2.5 py-1.5">{translateUI("2 · 启动隔离预览与黑盒 Browser Agent")}</div>
+              <div className="rounded border border-gray-600/35 bg-gray-900/60 px-2.5 py-1.5">{translateUI("3 · 回传截图、操作轨迹和审查报告")}</div>
             </div>
             <div className="mt-3 text-[10px] text-gray-500">
-              Goal Agent 最多 {goalStart.maxTurns} 轮；同一轮内可以执行多次浏览器审查与复查。
-            </div>
+              {translateUI("Goal Agent 最多 ")}{goalStart.maxTurns} {translateUI("轮；同一轮内可以执行多次浏览器审查与复查。 ")}</div>
           </section>
         )}
         {!waitingForGoalReview && waitingForWorkspaceReview && (
@@ -1352,43 +1343,38 @@ export function BrowserReviewPanel({
             <div className="flex h-10 w-10 items-center justify-center rounded-full border border-cyan-400/25 bg-cyan-400/10">
               <Loader2 size={18} className="animate-spin text-cyan-300" />
             </div>
-            <div className="mt-3 text-sm font-medium text-cyan-300">正在创建新的前端测试</div>
+            <div className="mt-3 text-sm font-medium text-cyan-300">{translateUI("正在创建新的前端测试")}</div>
             <div className="mt-1 max-w-72 text-[11px] leading-relaxed text-gray-400">
-              已收到本次测试请求，正在等待 Agent 创建独立的 Harness Run。新 Run 就绪后，右栏会自动切换到它的实时截图和操作轨迹。
-            </div>
+              {translateUI("已收到本次测试请求，正在等待 Agent 创建独立的 Harness Run。新 Run 就绪后，右栏会自动切换到它的实时截图和操作轨迹。 ")}</div>
             <div className="mt-4 grid w-full max-w-72 gap-1.5 text-left text-[10px] text-gray-500">
-              <div className="rounded border border-gray-600/35 bg-gray-900/60 px-2.5 py-1.5">1 · 识别本次测试目标</div>
-              <div className="rounded border border-gray-600/35 bg-gray-900/60 px-2.5 py-1.5">2 · 创建独立 Harness Run</div>
-              <div className="rounded border border-gray-600/35 bg-gray-900/60 px-2.5 py-1.5">3 · 绑定浏览器 Agent</div>
+              <div className="rounded border border-gray-600/35 bg-gray-900/60 px-2.5 py-1.5">{translateUI("1 · 识别本次测试目标")}</div>
+              <div className="rounded border border-gray-600/35 bg-gray-900/60 px-2.5 py-1.5">{translateUI("2 · 创建独立 Harness Run")}</div>
+              <div className="rounded border border-gray-600/35 bg-gray-900/60 px-2.5 py-1.5">{translateUI("3 · 绑定浏览器 Agent")}</div>
             </div>
-            <div className="mt-3 text-[10px] text-gray-500">上一轮测试仍保留在历史记录中，本页不会继续展示其内容。</div>
+            <div className="mt-3 text-[10px] text-gray-500">{translateUI("上一轮测试仍保留在历史记录中，本页不会继续展示其内容。")}</div>
           </section>
         )}
         {loading && !waitingForWorkspaceReview && !waitingForGoalReview && !displayedRun && (
           <div className="flex items-center justify-center gap-2 py-10 text-sm text-gray-500">
             <Loader2 size={15} className="animate-spin" />
-            加载测试记录…
-          </div>
+            {translateUI("加载测试记录… ")}</div>
         )}
         {!loading && !waitingForWorkspaceReview && !waitingForGoalReview && !displayedRun && (
           <section data-testid="frontend-test-idle" className="flex min-h-80 flex-col items-center justify-center rounded-xl border border-dashed border-gray-600/60 bg-gray-900/35 px-6 py-10 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-indigo-500/25 bg-indigo-500/10 text-indigo-300">
               <Eye size={22} />
             </div>
-            <div className="mt-4 text-sm font-medium text-gray-100">尚未启动前端测试</div>
+            <div className="mt-4 text-sm font-medium text-gray-100">{translateUI("尚未启动前端测试")}</div>
             <p className="mt-1 max-w-72 text-[11px] leading-relaxed text-gray-400">
-              这里会显示实时浏览器画面、操作轨迹、运行时错误和最终报告。
-            </p>
+              {translateUI("这里会显示实时浏览器画面、操作轨迹、运行时错误和最终报告。 ")}</p>
             <button
               type="button"
               onClick={openRuntimeSettings}
               className="mt-5 inline-flex items-center gap-2 rounded-lg border border-indigo-500/35 bg-indigo-500/10 px-3.5 py-2 text-xs font-medium text-indigo-300 transition-colors hover:bg-indigo-500/15"
             >
-              <Settings size={14} />配置并启动测试
-            </button>
+              <Settings size={14} />{translateUI("配置并启动测试 ")}</button>
             <div className="mt-4 max-w-72 text-[10px] leading-relaxed text-gray-500">
-              也可以使用输入框上方的“单次审查”或“循环审查”，测试当前分支的新功能。
-            </div>
+              {translateUI("也可以使用输入框上方的“单次审查”或“循环审查”，测试当前分支的新功能。 ")}</div>
           </section>
         )}
         {error && (
@@ -1401,13 +1387,13 @@ export function BrowserReviewPanel({
           <section data-testid="test-harness-progress" className="rounded-lg border border-indigo-500/25 bg-indigo-500/8 p-3">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <div className="text-xs font-medium text-indigo-300">Test Harness · {TARGET_LABELS[displayedRun.target_kind]}</div>
+                <div className="text-xs font-medium text-indigo-300">{translateUI("Test Harness · ")}{TARGET_LABELS[displayedRun.target_kind]}</div>
                 <div className="mt-0.5 line-clamp-2 text-[10px] text-gray-500">
                   {displayedObjective}
                 </div>
                 {typeof displayedRun.runtime.provider === 'string' && (
                   <div className="mt-1 truncate text-[10px] text-indigo-300/80" title={`${String(displayedRun.runtime.provider)} · ${String(displayedRun.runtime.model || '')} · ${String(displayedRun.runtime.reasoning_effort || '')}`}>
-                    Browser Agent · {displayedRun.runtime.provider === 'claude' ? 'Claude' : 'Codex'} · {String(displayedRun.runtime.model || '默认模型')} · effort {String(displayedRun.runtime.reasoning_effort || '默认')}
+                    {translateUI("Browser Agent · ")}{displayedRun.runtime.provider === 'claude' ? translateUI("Claude") : translateUI("Codex")} · {String(displayedRun.runtime.model || '默认模型')} {translateUI("· effort ")}{String(displayedRun.runtime.reasoning_effort || '默认')}
                     {displayedRun.runtime.provider === 'codex' ? ` · ${displayedRun.runtime.codex_service_tier === 'priority' ? 'Fast' : 'Standard'}` : ''}
                   </div>
                 )}
@@ -1419,12 +1405,12 @@ export function BrowserReviewPanel({
                     onClick={() => void stopReview()}
                     disabled={cancellingJobId === displayedRun.id}
                     className="inline-flex items-center gap-1 rounded border border-red-500/30 px-1.5 py-0.5 text-[10px] text-red-300 hover:bg-red-500/10 disabled:cursor-wait disabled:opacity-60"
-                    aria-label="Stop test run"
+                    aria-label={translateUI("Stop test run")}
                   >
                     {cancellingJobId === displayedRun.id
                       ? <Loader2 size={10} className="animate-spin" />
                       : <Square size={9} />}
-                    {cancellingJobId === displayedRun.id ? '停止中' : '停止'}
+                    {cancellingJobId === displayedRun.id ? translateUI("停止中") : translateUI("停止")}
                   </button>
                 )}
                 {TERMINAL.has(displayedRun.status) && !taskActive && (
@@ -1433,10 +1419,10 @@ export function BrowserReviewPanel({
                     onClick={() => void repeatReview()}
                     disabled={repeatingRunId === displayedRun.id}
                     className="inline-flex items-center gap-1 rounded border border-indigo-500/30 px-1.5 py-0.5 text-[10px] text-indigo-300 hover:bg-indigo-500/10 disabled:cursor-wait disabled:opacity-60"
-                    aria-label="Repeat test run"
+                    aria-label={translateUI("Repeat test run")}
                   >
                     <RefreshCw size={10} className={repeatingRunId === displayedRun.id ? 'animate-spin' : ''} />
-                    {repeatingRunId === displayedRun.id ? '创建中' : '重新测试'}
+                    {repeatingRunId === displayedRun.id ? translateUI("创建中") : translateUI("重新测试")}
                   </button>
                 )}
                 <span className={`rounded-full border px-2 py-0.5 text-[10px] ${statusClass(displayedRun.status)}`}>
@@ -1446,20 +1432,20 @@ export function BrowserReviewPanel({
             </div>
             <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] text-gray-500">
               <div className="truncate rounded bg-gray-950/60 px-2 py-1.5" title={displayedRun.source_git_head || ''}>
-                {displayedRun.source_git_head ? `HEAD ${displayedRun.source_git_head.slice(0, 10)}` : `Run ${displayedRun.id.slice(0, 10)}`}
+                {displayedRun.source_git_head ? translateUI("HEAD {0}", [displayedRun.source_git_head.slice(0, 10)]) : translateUI("Run {0}", [displayedRun.id.slice(0, 10)])}
               </div>
               <div className={`rounded px-2 py-1.5 ${displayedRun.stale ? 'bg-amber-500/10 text-amber-300' : 'bg-gray-950/60'}`}>
-                {displayedRun.stale ? '代码已变化 · 结果过期' : `结论 ${displayedRun.verdict || '待定'}`}
+                {displayedRun.stale ? translateUI("代码已变化 · 结果过期") : translateUI("结论 {0}", [displayedRun.verdict || '待定'])}
               </div>
             </div>
             {resolvedTarget && (
               <div data-testid="git-target-resolution" className="mt-2 rounded border border-cyan-500/20 bg-cyan-500/5 p-2 text-[10px] text-gray-400">
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate font-medium text-cyan-300" title={resolvedRepository || ''}>
-                    {resolvedRepository || 'GitHub target'}
+                    {resolvedRepository || translateUI("GitHub target")}
                   </span>
                   {typeof resolvedTarget.pr_number === 'number' && (
-                    <span className="shrink-0 rounded border border-cyan-500/25 px-1.5 py-0.5 text-cyan-300">PR #{resolvedTarget.pr_number}</span>
+                    <span className="shrink-0 rounded border border-cyan-500/25 px-1.5 py-0.5 text-cyan-300">{translateUI("PR #")}{resolvedTarget.pr_number}</span>
                   )}
                 </div>
                 {resolvedHead && (
@@ -1470,7 +1456,7 @@ export function BrowserReviewPanel({
                 {resolvedChangedFiles.length > 0 && (
                   <div className="mt-2">
                     <div className="mb-1 text-[9px] uppercase tracking-wide text-gray-500">
-                      变更文件 {resolvedChangedFiles.length}
+                      {translateUI("变更文件 ")}{resolvedChangedFiles.length}
                     </div>
                     <div className="space-y-1">
                       {resolvedChangedFiles.slice(0, 6).map((item, index) => (
@@ -1480,7 +1466,7 @@ export function BrowserReviewPanel({
                         </div>
                       ))}
                       {resolvedChangedFiles.length > 6 && (
-                        <div className="text-gray-500">另有 {resolvedChangedFiles.length - 6} 个文件…</div>
+                        <div className="text-gray-500">{translateUI("另有 ")}{resolvedChangedFiles.length - 6} {translateUI("个文件…")}</div>
                       )}
                     </div>
                   </div>
@@ -1491,8 +1477,8 @@ export function BrowserReviewPanel({
               <div className={`mt-2 flex items-center gap-1.5 text-[10px] ${displayedRun.cleanup_status === 'completed' ? 'text-emerald-300' : 'text-red-300'}`}>
                 <Shield size={11} />
                 {displayedRun.cleanup_status === 'completed'
-                  ? '隔离资源已完成身份校验与清理'
-                  : `隔离资源清理：${displayedRun.cleanup_status}`}
+                  ? translateUI("隔离资源已完成身份校验与清理")
+                  : translateUI("隔离资源清理：{0}", [displayedRun.cleanup_status])}
               </div>
             )}
             {displayedRun.evidence_archive_state && (
@@ -1507,23 +1493,23 @@ export function BrowserReviewPanel({
                 <Shield size={11} className="mt-0.5 shrink-0" />
                 <span className="min-w-0 break-words">
                   {displayedRun.evidence_archive_state === 'complete'
-                    ? '截图与报告已完成哈希校验和持久化归档'
+                    ? translateUI("截图与报告已完成哈希校验和持久化归档")
                     : displayedRun.evidence_archive_state === 'archiving'
-                      ? '正在校验并归档截图与报告'
+                      ? translateUI("正在校验并归档截图与报告")
                       : displayedRun.evidence_archive_state === 'staging'
-                        ? '正在收集截图与报告'
-                        : `证据归档未完成：${displayedRun.evidence_archive_error || displayedRun.evidence_archive_state}`}
+                        ? translateUI("正在收集截图与报告")
+                        : translateUI("证据归档未完成：{0}", [displayedRun.evidence_archive_error || displayedRun.evidence_archive_state])}
                 </span>
               </div>
             )}
             {workspaceRun && (
               <div data-testid="workspace-review-progress" className="mt-2 border-t border-gray-600/40 pt-2 text-[10px] text-gray-500">
                 <div className="truncate" title={workspaceRun.workspace_fingerprint}>
-                  工作区指纹 {workspaceRun.workspace_fingerprint.slice(0, 10)}
+                  {translateUI("工作区指纹 ")}{workspaceRun.workspace_fingerprint.slice(0, 10)}
                 </div>
                 {workspaceRun.preview_url && (
                   <div className="mt-1 truncate" title={workspaceRun.preview_url}>
-                    隔离预览：{workspaceRun.preview_url}
+                    {translateUI("隔离预览：")}{workspaceRun.preview_url}
                   </div>
                 )}
                 {(workspaceRun.error || workspaceRun.cleanup_error)
@@ -1545,10 +1531,9 @@ export function BrowserReviewPanel({
           <section data-testid="frontend-review-goal-progress" className="rounded-lg border border-indigo-500/30 bg-indigo-500/8 p-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="text-xs font-medium text-indigo-300">Goal 循环审查 · 模型自动判断</div>
+                <div className="text-xs font-medium text-indigo-300">{translateUI("Goal 循环审查 · 模型自动判断")}</div>
                 <div className="mt-0.5 text-[10px] text-gray-500">
-                  Agent 第 {displayedGoalRound ?? 1} 轮 · 安全上限 {goalProgress.maxTurns} 轮
-                </div>
+                  {translateUI("Agent 第 ")}{displayedGoalRound ?? 1} {translateUI("轮 · 安全上限 ")}{goalProgress.maxTurns} {translateUI("轮 ")}</div>
               </div>
               <span className={`h-2 w-2 shrink-0 rounded-full ${goalProgress.active ? 'animate-pulse bg-blue-400' : 'bg-emerald-400'}`} />
             </div>
@@ -1559,11 +1544,10 @@ export function BrowserReviewPanel({
               />
             </div>
             <div className="mt-2 text-[10px] leading-relaxed text-gray-500">
-              本轮 Harness 报告只是 Goal 证据；Agent 仍会按需修改、测试并创建新的复查。
-            </div>
+              {translateUI("本轮 Harness 报告只是 Goal 证据；Agent 仍会按需修改、测试并创建新的复查。 ")}</div>
             {goalProgress.lastReason && (
               <div className="mt-2 line-clamp-3 text-[10px] leading-relaxed text-gray-400">
-                评估器：{goalProgress.lastReason}
+                {translateUI("评估器：")}{goalProgress.lastReason}
               </div>
             )}
           </section>
@@ -1572,13 +1556,12 @@ export function BrowserReviewPanel({
           <section className="overflow-hidden rounded-lg border border-gray-600/60 bg-black">
             <div className="flex items-center gap-1.5 border-b border-gray-600/50 bg-gray-900 px-2.5 py-2 text-[11px] text-gray-400">
               <Image size={13} />
-              最新浏览器画面
-            </div>
+              {translateUI("最新浏览器画面 ")}</div>
             {screenshotUrl ? (
               <img src={screenshotUrl} alt="Latest frontend review screenshot" className="block h-auto w-full" />
             ) : (
               <div className="flex aspect-video items-center justify-center text-xs text-gray-500">
-                {TERMINAL.has(job.status) ? '没有可用截图' : '等待浏览器截图…'}
+                {TERMINAL.has(job.status) ? translateUI("没有可用截图") : translateUI("等待浏览器截图…")}
               </div>
             )}
           </section>
@@ -1587,11 +1570,10 @@ export function BrowserReviewPanel({
           <section className="rounded-lg border border-gray-600/60 bg-gray-900/55">
             <div className="flex items-center gap-1.5 border-b border-gray-600/50 px-3 py-2 text-xs font-medium text-gray-200">
               <Activity size={13} className="text-indigo-400" />
-              模型观察与操作轨迹
-            </div>
+              {translateUI("模型观察与操作轨迹 ")}</div>
             <div className="max-h-72 space-y-0 overflow-y-auto px-3 py-1">
               {displayedRun.events.length === 0 && (
-                <div className="py-5 text-center text-[11px] text-gray-500">等待测试 Harness 开始…</div>
+                <div className="py-5 text-center text-[11px] text-gray-500">{translateUI("等待测试 Harness 开始…")}</div>
               )}
               {displayedRun.events.map((event, index) => (
                 <div key={event.id} className="relative border-l border-gray-600/60 py-2 pl-4">
@@ -1625,24 +1607,21 @@ export function BrowserReviewPanel({
               <div className="mt-2 grid grid-cols-3 gap-2 text-center text-[10px]">
                 <div className="rounded bg-gray-950/70 px-2 py-1.5 text-gray-400">
                   <Activity size={12} className="mx-auto mb-0.5 text-blue-400" />
-                  {job.steps}/{job.max_steps} 步
-                </div>
+                  {job.steps}/{job.max_steps} {translateUI("步 ")}</div>
                 <div className="rounded bg-gray-950/70 px-2 py-1.5 text-gray-400">
                   <Clock size={12} className="mx-auto mb-0.5 text-amber-400" />
-                  {TERMINAL.has(job.status) ? '已结束' : '运行中'}
+                  {TERMINAL.has(job.status) ? translateUI("已结束") : translateUI("运行中")}
                 </div>
                 <div className="rounded bg-gray-950/70 px-2 py-1.5 text-gray-400">
                   <CheckCircle2 size={12} className="mx-auto mb-0.5 text-emerald-400" />
-                  {job.actions} 动作
-                </div>
+                  {job.actions} {translateUI("动作 ")}</div>
               </div>
             </section>
 
             {telemetry.length > 0 && (
               <section className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
                 <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-amber-300">
-                  <AlertCircle size={13} />运行时信号
-                </div>
+                  <AlertCircle size={13} />{translateUI("运行时信号 ")}</div>
                 <div className="flex flex-wrap gap-1.5">
                   {telemetry.map(([name, entries]) => (
                     <span key={name} className="rounded border border-amber-500/20 bg-gray-950/60 px-2 py-1 text-[10px] text-gray-400">
@@ -1656,8 +1635,7 @@ export function BrowserReviewPanel({
             {(displayedRun?.report || job.report) && (
               <section className="rounded-lg border border-emerald-500/20 bg-emerald-500/5">
                 <div className="flex items-center gap-1.5 border-b border-emerald-500/15 px-3 py-2 text-xs font-medium text-emerald-300">
-                  <FileText size={13} />审查报告
-                </div>
+                  <FileText size={13} />{translateUI("审查报告 ")}</div>
                 <div className="prose prose-invert prose-sm max-w-none px-3 py-2 text-xs text-gray-300 prose-headings:text-gray-100 prose-p:text-gray-300 prose-li:text-gray-300 prose-strong:text-gray-200 prose-a:text-indigo-300 prose-code:text-gray-200">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayedRun?.report || job.report}</ReactMarkdown>
                 </div>
@@ -1667,8 +1645,7 @@ export function BrowserReviewPanel({
             {(displayedRun?.findings.length ?? 0) > 0 && (
               <section className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
                 <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-amber-300">
-                  <AlertCircle size={13} />结构化发现
-                </div>
+                  <AlertCircle size={13} />{translateUI("结构化发现 ")}</div>
                 <div className="space-y-2">
                   {displayedRun!.findings.map((finding) => (
                     <div key={finding.fingerprint || `${finding.scenario_id}-${finding.title}`} className="rounded border border-gray-600/55 bg-gray-950/55 p-2">

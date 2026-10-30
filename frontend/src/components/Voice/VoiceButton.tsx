@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useState, useRef } from 'react';
 import { Mic, MicOff, Loader } from '../icons';
 import { api } from '../../api/client';
@@ -7,6 +8,7 @@ interface VoiceButtonProps {
 }
 
 export function VoiceButton({ onTranscribed }: VoiceButtonProps) {
+  useLanguage();
   const [recording, setRecording] = useState(false);
   const [loading, setLoading] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -74,7 +76,7 @@ export function VoiceButton({ onTranscribed }: VoiceButtonProps) {
             ? 'bg-gray-600 text-gray-400'
             : 'bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-foreground'
       }`}
-      title={recording ? 'Stop recording' : loading ? 'Transcribing...' : 'Voice input'}
+      title={recording ? translateUI("Stop recording") : loading ? translateUI("Transcribing...") : translateUI("Voice input")}
     >
       {loading ? <Loader size={16} className="animate-spin" /> : recording ? <MicOff size={16} /> : <Mic size={16} />}
     </button>

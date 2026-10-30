@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../config/language";
 import { useState } from 'react';
 import { setToken } from '../api/client';
 import { getApiBase, getServerUrl, setServerUrl } from '../config/server';
@@ -8,6 +9,7 @@ interface LoginPageProps {
 }
 
 export function LoginPage({ onLogin }: LoginPageProps) {
+  useLanguage();
   const [mode, setMode] = useState<'token' | 'email' | 'register'>('email');
   const [token, setTokenValue] = useState('');
   const [email, setEmail] = useState('');
@@ -47,7 +49,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         setError(data.detail || 'Failed to send code');
       }
     } catch {
-      setError('Connection failed');
+      setError(translateUI("Connection failed"));
     }
   };
 
@@ -83,10 +85,10 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         } catch {}
         onLogin();
       } else {
-        setError('Invalid token');
+        setError(translateUI("Invalid token"));
       }
     } catch {
-      setError('Connection failed');
+      setError(translateUI("Connection failed"));
     } finally {
       setLoading(false);
     }
@@ -112,7 +114,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         setError(data.detail || 'Login failed');
       }
     } catch {
-      setError('Connection failed');
+      setError(translateUI("Connection failed"));
     } finally {
       setLoading(false);
     }
@@ -144,7 +146,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         setError(data.detail || 'Registration failed');
       }
     } catch {
-      setError('Connection failed');
+      setError(translateUI("Connection failed"));
     } finally {
       setLoading(false);
     }
@@ -163,8 +165,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             <Bot size={26} />
           </div>
           <div className="text-center">
-            <h1 className="text-foreground text-xl font-semibold tracking-tight">Claude Code Manager</h1>
-            <p className="text-gray-500 text-xs mt-1">调度并行 Claude Code 实例的控制台</p>
+            <h1 className="text-foreground text-xl font-semibold tracking-tight">{translateUI("Claude Code Manager")}</h1>
+            <p className="text-gray-500 text-xs mt-1">{translateUI("调度并行 Claude Code 实例的控制台")}</p>
           </div>
         </div>
         <div className="bg-gray-800 border border-gray-700/70 rounded-2xl p-6 space-y-4 shadow-xl shadow-black/10">
@@ -180,7 +182,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                 mode === key ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-300'
               }`}
             >
-              {label}
+              {translateUI(label)}
             </button>
           ))}
         </div>
@@ -191,7 +193,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             <input
               type="password"
               className={inputCls}
-              placeholder="Access Token"
+              placeholder={translateUI("Access Token")}
               value={token}
               onChange={(e) => setTokenValue(e.target.value)}
               autoFocus
@@ -199,7 +201,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             />
             <button type="submit" disabled={loading}
               className={primaryBtnCls}>
-              {loading ? 'Verifying...' : 'Login'}
+              {loading ? translateUI("Verifying...") : translateUI("Login")}
             </button>
           </form>
         )}
@@ -210,7 +212,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             <input
               type="email"
               className={inputCls}
-              placeholder="Email"
+              placeholder={translateUI("Email")}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoFocus
@@ -219,14 +221,14 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             <input
               type="password"
               className={inputCls}
-              placeholder="Password"
+              placeholder={translateUI("Password")}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
             />
             <button type="submit" disabled={loading}
               className={primaryBtnCls}>
-              {loading ? 'Logging in...' : 'Login'}
+              {loading ? translateUI("Logging in...") : translateUI("Login")}
             </button>
           </form>
         )}
@@ -237,7 +239,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             <input
               type="text"
               className={inputCls}
-              placeholder="Name"
+              placeholder={translateUI("Name")}
               value={name}
               onChange={(e) => setName(e.target.value)}
               autoFocus
@@ -247,7 +249,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               <input
                 type="email"
                 className={`${inputCls} flex-1`}
-                placeholder="Email"
+                placeholder={translateUI("Email")}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -258,13 +260,13 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                 disabled={!email || codeCooldown > 0}
                 className="shrink-0 bg-gray-600 hover:bg-gray-500 text-foreground px-3 py-2 rounded-lg text-xs font-medium disabled:opacity-50 whitespace-nowrap transition-colors"
               >
-                {codeCooldown > 0 ? `${codeCooldown}s` : codeSent ? 'Resend' : 'Send Code'}
+                {codeCooldown > 0 ? translateUI("{0}s", [codeCooldown]) : codeSent ? translateUI("Resend") : translateUI("Send Code")}
               </button>
             </div>
             <input
               type="text"
               className={inputCls}
-              placeholder="Verification Code"
+              placeholder={translateUI("Verification Code")}
               value={code}
               onChange={(e) => setCode(e.target.value)}
               required
@@ -272,7 +274,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             <input
               type="password"
               className={inputCls}
-              placeholder="Password"
+              placeholder={translateUI("Password")}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -280,14 +282,14 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             <input
               type="password"
               className={inputCls}
-              placeholder="Bootstrap Token (first admin only)"
+              placeholder={translateUI("Bootstrap Token (first admin only)")}
               value={bootstrapToken}
               onChange={(e) => setBootstrapToken(e.target.value)}
               autoComplete="off"
             />
             <button type="submit" disabled={loading || !codeSent}
               className={primaryBtnCls}>
-              {loading ? 'Registering...' : 'Register'}
+              {loading ? translateUI("Registering...") : translateUI("Register")}
             </button>
           </form>
         )}
@@ -300,13 +302,12 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors"
           >
             {showServer ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-            Server URL
-          </button>
+            {translateUI("Server URL ")}</button>
           {showServer && (
             <input
               type="url"
               className={`${inputCls} mt-1`}
-              placeholder="https://your-server.com"
+              placeholder={translateUI("https://your-server.com")}
               value={serverUrl}
               onChange={(e) => setServerUrlValue(e.target.value)}
             />

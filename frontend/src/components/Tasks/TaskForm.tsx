@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { api } from '../../api/client';
 import type {
@@ -57,6 +58,7 @@ function readStoredTaskDefaults(): StoredTaskDefaults | null {
 }
 
 export function TaskForm({ onCreated }: TaskFormProps) {
+  useLanguage();
   const ccUser = JSON.parse(localStorage.getItem('cc_user') || '{}');
   const isAdmin = ccUser.role === 'admin' || ccUser.role === 'super_admin' || !ccUser.id;
   const [description, setDescription] = useState('');
@@ -755,7 +757,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
 
   return (
     <form ref={formRef} onSubmit={handleSubmit} className="bg-gray-800 border border-gray-700/60 rounded-xl p-4 space-y-3 overflow-visible shadow-sm">
-      <h3 className="text-sm font-semibold text-gray-300">New Task</h3>
+      <h3 className="text-sm font-semibold text-gray-300">{translateUI("New Task")}</h3>
       {dropError && (
         <div className="bg-yellow-900/50 border border-yellow-700 text-yellow-300 text-xs rounded px-3 py-2 flex items-center justify-between">
           <span>{dropError}</span>
@@ -777,10 +779,10 @@ export function TaskForm({ onCreated }: TaskFormProps) {
           className="flex-1 bg-gray-700 text-foreground rounded-lg px-3 py-2 text-sm h-24 resize-none border border-gray-600/50 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/25 transition-colors"
           placeholder={
             mode === 'loop'
-              ? 'Background / context (optional)'
+              ? translateUI("Background / context (optional)")
               : mode === 'delivery_loop'
-                ? 'Delivery requirements (Plan → Code → Review → PR Monitor)'
-                : `Prompt / Description (this will be sent to ${provider === 'codex' ? 'Codex' : 'Claude Code'})`
+                ? translateUI("Delivery requirements (Plan → Code → Review → PR Monitor)")
+                : translateUI("Prompt / Description (this will be sent to {0})", [provider === 'codex' ? 'Codex' : 'Claude Code'])
           }
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -816,7 +818,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
                 <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-800 text-xs text-gray-300 max-w-[120px]">
                   <Paperclip size={12} className="shrink-0" />
                   <span className="truncate">
-                    {upload.file?.name || upload.result?.filename || 'attachment'}
+                    {upload.file?.name || upload.result?.filename || translateUI("attachment")}
                   </span>
                 </div>
               )}
@@ -826,7 +828,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
                 </div>
               )}
               {upload.status === 'failed' && (
-                <div className="absolute inset-0 bg-red-900/50 flex items-center justify-center cursor-pointer" onClick={() => fileUpload.retryFile(upload.id)} title="Click to retry">
+                <div className="absolute inset-0 bg-red-900/50 flex items-center justify-center cursor-pointer" onClick={() => fileUpload.retryFile(upload.id)} title={translateUI("Click to retry")}>
                   <AlertCircle size={16} className="text-red-400" />
                 </div>
               )}
@@ -846,7 +848,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
           projects={projects.filter((p) => p.show_in_selector)}
           value={isNewProject ? NEW_PROJECT_VALUE : projectId || undefined}
           onChange={handleProjectChange}
-          placeholder="Select project..."
+          placeholder={translateUI("Select project...")}
           extraOptions={hasWorker ? [{ value: NEW_PROJECT_VALUE, label: '+ New project' }] : []}
           className="w-full"
           showStatus
@@ -856,14 +858,14 @@ export function TaskForm({ onCreated }: TaskFormProps) {
           <div className="flex flex-col sm:flex-row gap-2">
             <input
               className="flex-1 bg-gray-700 text-foreground rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              placeholder="Project name (required)"
+              placeholder={translateUI("Project name (required)")}
               value={newProjectName}
               onChange={(e) => setNewProjectName(e.target.value)}
               required
             />
             <input
               className="flex-1 min-w-0 bg-gray-700 text-foreground rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              placeholder="Remote repo URL (optional)"
+              placeholder={translateUI("Remote repo URL (optional)")}
               value={newProjectUrl}
               onChange={(e) => setNewProjectUrl(e.target.value)}
             />
@@ -872,16 +874,16 @@ export function TaskForm({ onCreated }: TaskFormProps) {
       </div>
       {mode !== 'delivery_loop' && provider === 'claude' && contextTasks.length > 0 && (
         <div className="flex items-center gap-2 min-w-0">
-          <label className="text-sm text-gray-400 whitespace-nowrap shrink-0">Copy context from:</label>
+          <label className="text-sm text-gray-400 whitespace-nowrap shrink-0">{translateUI("Copy context from:")}</label>
           <select
             className="flex-1 min-w-0 bg-gray-700 text-foreground rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             value={cloneFromTaskId}
             onChange={(e) => setCloneFromTaskId(e.target.value ? Number(e.target.value) : '')}
           >
-            <option value="">None (start fresh)</option>
+            <option value="">{translateUI("None (start fresh)")}</option>
             {contextTasks.map((t) => (
               <option key={t.id} value={t.id}>
-                #{t.id} {t.description ? t.description.slice(0, 60) : t.title || '(no description)'}
+                #{t.id} {t.description ? t.description.slice(0, 60) : t.title || translateUI("(no description)")}
                 {t.description && t.description.length > 60 ? '…' : ''}
               </option>
             ))}
@@ -892,9 +894,9 @@ export function TaskForm({ onCreated }: TaskFormProps) {
       {mode === 'delivery_loop' && (
         <div className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 p-3 space-y-2">
           <label className="block space-y-1">
-            <span className="text-xs text-indigo-200">PR Monitor repository</span>
+            <span className="text-xs text-indigo-200">{translateUI("PR Monitor repository")}</span>
             <select
-              aria-label="Delivery PR Monitor repository"
+              aria-label={translateUI("Delivery PR Monitor repository")}
               className="w-full bg-gray-700 text-foreground rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               value={deliveryRepoId}
               onChange={(e) => setDeliveryRepoId(e.target.value ? Number(e.target.value) : '')}
@@ -902,29 +904,25 @@ export function TaskForm({ onCreated }: TaskFormProps) {
               disabled={deliveryReposLoading || compatibleDeliveryRepos.length === 0}
             >
               <option value="">
-                {deliveryReposLoading ? 'Loading repositories…' : 'Select a compatible repository…'}
+                {deliveryReposLoading ? translateUI("Loading repositories…") : translateUI("Select a compatible repository…")}
               </option>
               {compatibleDeliveryRepos.map((repo) => (
                 <option key={repo.id} value={repo.id}>
-                  {repo.repo_full_name} · {repo.auto_merge ? 'auto merge' : 'ready to merge only'}
+                  {repo.repo_full_name} · {repo.auto_merge ? translateUI("auto merge") : translateUI("ready to merge only")}
                 </option>
               ))}
             </select>
           </label>
           <p className="text-[11px] leading-relaxed text-indigo-200/70">
-            Requires a local project and an enabled PR Monitor using panel review,
-            exact-head required CI checks, and no Merge Queue. Merge behavior is
-            inherited from the selected PR Monitor.
-          </p>
+            {translateUI("Requires a local project and an enabled PR Monitor using panel review, exact-head required CI checks, and no Merge Queue. Merge behavior is inherited from the selected PR Monitor. ")}</p>
           {selectedDeliveryRepo && (
             <p className="text-[11px] leading-relaxed text-indigo-200/90">
-              PR Monitor Auto Merge is {selectedDeliveryRepo.auto_merge ? 'ON: CCM will finish only after GitHub confirms the merge.' : 'OFF: CCM will stop when the PR is ready to merge.'}
+              {translateUI("PR Monitor Auto Merge is ")}{selectedDeliveryRepo.auto_merge ? translateUI("ON: CCM will finish only after GitHub confirms the merge.") : translateUI("OFF: CCM will stop when the PR is ready to merge.")}
             </p>
           )}
           {!deliveryReposLoading && selectedProject && compatibleDeliveryRepos.length === 0 && (
             <p className="text-xs text-amber-300">
-              No compatible PR Monitor configuration is bound to this project.
-            </p>
+              {translateUI("No compatible PR Monitor configuration is bound to this project. ")}</p>
           )}
         </div>
       )}
@@ -932,12 +930,12 @@ export function TaskForm({ onCreated }: TaskFormProps) {
         <div className="flex items-center gap-2 flex-wrap">
           <input
             className="flex-1 min-w-0 bg-gray-700 text-foreground rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            placeholder="Todo file path (e.g. TODO.md)"
+            placeholder={translateUI("Todo file path (e.g. TODO.md)")}
             value={todoFilePath}
             onChange={(e) => setTodoFilePath(e.target.value)}
             required
           />
-          <label className="text-xs text-gray-400 whitespace-nowrap">Max iter:</label>
+          <label className="text-xs text-gray-400 whitespace-nowrap">{translateUI("Max iter:")}</label>
           <input
             type="text"
             inputMode="numeric"
@@ -956,20 +954,19 @@ export function TaskForm({ onCreated }: TaskFormProps) {
               onChange={(e) => setMustComplete(e.target.checked)}
               className="accent-indigo-500"
             />
-            Must complete
-          </label>
+            {translateUI("Must complete ")}</label>
         </div>
       )}
       {mode === 'goal' && (
         <div className="flex items-center gap-2 flex-wrap">
           <input
             className="flex-1 min-w-0 bg-gray-700 text-foreground rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            placeholder="Goal condition (e.g. all tests pass and lint is clean)"
+            placeholder={translateUI("Goal condition (e.g. all tests pass and lint is clean)")}
             value={goalCondition}
             onChange={(e) => setGoalCondition(e.target.value)}
             required
           />
-          <label className="text-xs text-gray-400 whitespace-nowrap">Max turns:</label>
+          <label className="text-xs text-gray-400 whitespace-nowrap">{translateUI("Max turns:")}</label>
           <input
             type="text"
             inputMode="numeric"
@@ -985,7 +982,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
       )}
       {mode === 'pr_loop' && (
         <div className="flex items-center gap-2 flex-wrap">
-          <label className="text-xs text-gray-400 whitespace-nowrap">Max turns:</label>
+          <label className="text-xs text-gray-400 whitespace-nowrap">{translateUI("Max turns:")}</label>
           <input
             type="text"
             inputMode="numeric"
@@ -997,7 +994,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
               setGoalMaxTurns(String((!n || n < 1) ? 1 : n));
             }}
           />
-          <label className="text-xs text-gray-400 whitespace-nowrap">Poll interval (s):</label>
+          <label className="text-xs text-gray-400 whitespace-nowrap">{translateUI("Poll interval (s):")}</label>
           <input
             type="text"
             inputMode="numeric"
@@ -1018,7 +1015,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
             className="flex items-center gap-1 text-xs px-2 py-1.5 rounded border transition-colors bg-gray-700 text-gray-400 border-gray-600 hover:bg-gray-600 hover:text-gray-300 disabled:opacity-40"
           >
             <Paperclip size={13} />
-            <span className="hidden sm:inline">{fileUpload.uploads.length > 0 ? `${fileUpload.uploads.length}/10 files` : 'Attach files'}</span>
+            <span className="hidden sm:inline">{fileUpload.uploads.length > 0 ? translateUI("{0}/10 files", [fileUpload.uploads.length]) : translateUI("Attach files")}</span>
             {fileUpload.uploads.length > 0 && <span className="sm:hidden">{fileUpload.uploads.length}</span>}
           </button>
         )}
@@ -1034,14 +1031,14 @@ export function TaskForm({ onCreated }: TaskFormProps) {
             }`}
           >
             <Settings size={13} />
-            <span className="hidden sm:inline">Config</span>
+            <span className="hidden sm:inline">{translateUI("Config")}</span>
           </button>
           {showConfigPanel && (
             <div className="absolute top-full mt-1 left-0 bg-gray-800 border border-gray-600 rounded shadow-lg z-20 p-3 min-w-[280px]">
               <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 items-center text-xs">
                 {mode !== 'delivery_loop' && (
                   <>
-                    <span className="text-gray-400">Priority</span>
+                    <span className="text-gray-400">{translateUI("Priority")}</span>
                     <select
                       className="bg-gray-700 text-foreground rounded px-2 py-1 text-xs"
                       value={priority}
@@ -1054,7 +1051,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
                   </>
                 )}
 
-                <span className="text-gray-400">Mode</span>
+                <span className="text-gray-400">{translateUI("Mode")}</span>
                 <select
                   className="bg-gray-700 text-foreground rounded px-2 py-1 text-xs"
                   value={mode}
@@ -1076,33 +1073,32 @@ export function TaskForm({ onCreated }: TaskFormProps) {
                     }
                   }}
                 >
-                  <option value="auto">Auto</option>
-                  <option value="loop">Loop</option>
-                  <option value="goal">Goal</option>
-                  <option value="pr_loop">PR Loop</option>
+                  <option value="auto">{translateUI("Auto")}</option>
+                  <option value="loop">{translateUI("Loop")}</option>
+                  <option value="goal">{translateUI("Goal")}</option>
+                  <option value="pr_loop">{translateUI("PR Loop")}</option>
                   {deliveryLoopEnabled && deliveryProviders.length > 0 && (
-                    <option value="delivery_loop">Delivery Loop</option>
+                    <option value="delivery_loop">{translateUI("Delivery Loop")}</option>
                   )}
                 </select>
 
                 {autoCapabilityEligible && (
                   <>
-                    <span className="text-gray-400 self-start pt-1">Auto help</span>
+                    <span className="text-gray-400 self-start pt-1">{translateUI("Auto help")}</span>
                     <div className="space-y-1.5 rounded border border-indigo-500/25 bg-indigo-500/10 p-2">
                       <div className="flex items-center justify-between gap-2">
                         <label className="flex items-center gap-1.5 text-indigo-200">
                           <input
                             type="checkbox"
-                            aria-label="Allow automatic Plan"
+                            aria-label={translateUI("Allow automatic Plan")}
                             checked={autoPlanBudget > 0}
                             onChange={(e) => setAutoPlanBudget(e.target.checked ? 1 : 0)}
                             className="accent-indigo-500"
                           />
-                          Plan
-                        </label>
+                          {translateUI("Plan ")}</label>
                         {autoPlanBudget > 0 && (
                           <select
-                            aria-label="Automatic Plan budget"
+                            aria-label={translateUI("Automatic Plan budget")}
                             value={autoPlanBudget}
                             onChange={(e) => setAutoPlanBudget(Number(e.target.value))}
                             className="bg-gray-700 text-foreground rounded px-1.5 py-0.5 text-xs"
@@ -1117,16 +1113,15 @@ export function TaskForm({ onCreated }: TaskFormProps) {
                         <label className="flex items-center gap-1.5 text-indigo-200">
                           <input
                             type="checkbox"
-                            aria-label="Allow automatic Code Review"
+                            aria-label={translateUI("Allow automatic Code Review")}
                             checked={autoReviewBudget > 0}
                             onChange={(e) => setAutoReviewBudget(e.target.checked ? 1 : 0)}
                             className="accent-indigo-500"
                           />
-                          Code Review
-                        </label>
+                          {translateUI("Code Review ")}</label>
                         {autoReviewBudget > 0 && (
                           <select
-                            aria-label="Automatic Code Review budget"
+                            aria-label={translateUI("Automatic Code Review budget")}
                             value={autoReviewBudget}
                             onChange={(e) => setAutoReviewBudget(Number(e.target.value))}
                             className="bg-gray-700 text-foreground rounded px-1.5 py-0.5 text-xs"
@@ -1139,9 +1134,9 @@ export function TaskForm({ onCreated }: TaskFormProps) {
                       </div>
                       {autoCapabilityBudgetSum > 0 && (
                         <label className="flex items-center justify-between gap-2 border-t border-indigo-500/20 pt-1.5 text-indigo-200">
-                          <span>Total limit</span>
+                          <span>{translateUI("Total limit")}</span>
                           <select
-                            aria-label="Automatic capability total limit"
+                            aria-label={translateUI("Automatic capability total limit")}
                             value={normalizedAutoCapabilityMaxInvocations}
                             onChange={(e) => setAutoCapabilityMaxInvocations(Number(e.target.value))}
                             className="bg-gray-700 text-foreground rounded px-1.5 py-0.5 text-xs"
@@ -1158,9 +1153,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
                         </label>
                       )}
                       <p className="max-w-56 text-[10px] leading-relaxed text-indigo-200/65">
-                        Lets the coding agent yield to these advisory capabilities,
-                        then resume the same Task. Budgets are non-refundable.
-                      </p>
+                        {translateUI("Lets the coding agent yield to these advisory capabilities, then resume the same Task. Budgets are non-refundable. ")}</p>
                     </div>
                   </>
                 )}
@@ -1168,15 +1161,15 @@ export function TaskForm({ onCreated }: TaskFormProps) {
                 {false && (
                   <>
                     {/* Run on removed — Task inherits from Project */}
-                    <span className="text-gray-400">Run on</span>
+                    <span className="text-gray-400">{translateUI("Run on")}</span>
                     <select className="hidden" value={workerId} onChange={(e) => setWorkerId(e.target.value)}>
                     </select>
                   </>
                 )}
 
-                <span className="text-gray-400">CLI</span>
+                <span className="text-gray-400">{translateUI("CLI")}</span>
                 <select
-                  aria-label="Task provider"
+                  aria-label={translateUI("Task provider")}
                   className="bg-gray-700 text-foreground rounded px-2 py-1 text-xs"
                   value={provider}
                   onChange={(e) => {
@@ -1188,11 +1181,11 @@ export function TaskForm({ onCreated }: TaskFormProps) {
                   }}
                 >
                   {(mode === 'delivery_loop' ? deliveryProviders : providerOptions).map((p) => (
-                    <option key={p} value={p}>{p === 'claude' ? 'Claude' : p === 'codex' ? 'Codex' : p}</option>
+                    <option key={p} value={p}>{p === 'claude' ? translateUI("Claude") : p === 'codex' ? translateUI("Codex") : p}</option>
                   ))}
                 </select>
 
-                <span className="text-gray-400">Model</span>
+                <span className="text-gray-400">{translateUI("Model")}</span>
                 <select
                   className="bg-gray-700 text-foreground rounded px-2 py-1 text-xs"
                   value={model}
@@ -1210,19 +1203,19 @@ export function TaskForm({ onCreated }: TaskFormProps) {
                     }
                   }}
                 >
-                  <option value="">{activeDefaultModel} (default)</option>
+                  <option value="">{activeDefaultModel} {translateUI("(default)")}</option>
                   {activeModelOptions.map((m) => (
                     <option key={m} value={m}>{m}</option>
                   ))}
                 </select>
 
-                <span className="text-gray-400">Effort</span>
+                <span className="text-gray-400">{translateUI("Effort")}</span>
                 <select
                   className="bg-gray-700 text-foreground rounded px-2 py-1 text-xs"
                   value={effort}
                   onChange={(e) => setEffort(e.target.value)}
                 >
-                  <option value="">{defaultEffort} (default)</option>
+                  <option value="">{defaultEffort} {translateUI("(default)")}</option>
                   {activeEffortOptions.filter((e) => e !== defaultEffort).map((e) => (
                     <option key={e} value={e}>{e}</option>
                   ))}
@@ -1230,15 +1223,15 @@ export function TaskForm({ onCreated }: TaskFormProps) {
 
                 {provider === 'codex' && (
                   <>
-                    <span className="text-gray-400">Speed</span>
+                    <span className="text-gray-400">{translateUI("Speed")}</span>
                     <select
-                      aria-label="Codex speed"
+                      aria-label={translateUI("Codex speed")}
                       className="bg-gray-700 text-foreground rounded px-2 py-1 text-xs"
                       value={codexServiceTier}
                       onChange={(e) => setCodexServiceTier(e.target.value as CodexServiceTier)}
                     >
-                      <option value="default">Standard</option>
-                      <option value="priority" disabled={!activeCodexModelSupportsFast}>Fast</option>
+                      <option value="default">{translateUI("Standard")}</option>
+                      <option value="priority" disabled={!activeCodexModelSupportsFast}>{translateUI("Fast")}</option>
                     </select>
                     <span
                       className={`col-span-2 text-[10px] ${
@@ -1246,8 +1239,8 @@ export function TaskForm({ onCreated }: TaskFormProps) {
                       }`}
                     >
                       {activeCodexModelSupportsFast
-                        ? 'Fast 约 1.5×，会消耗更多额度；实际计价取决于账号来源'
-                        : `${activeCodexModel} 不支持 Fast`}
+                        ? translateUI("Fast 约 1.5×，会消耗更多额度；实际计价取决于账号来源")
+                        : translateUI("{0} 不支持 Fast", [activeCodexModel])}
                     </span>
                   </>
                 )}
@@ -1256,51 +1249,51 @@ export function TaskForm({ onCreated }: TaskFormProps) {
                     （codex 的推理强度就是上面的 Effort）——codex 下隐藏幽灵选项 */}
                 {mode !== 'delivery_loop' && provider === 'claude' && (
                   <>
-                    <span className="text-gray-400">Thinking</span>
+                    <span className="text-gray-400">{translateUI("Thinking")}</span>
                     <select
                       className="bg-gray-700 text-foreground rounded px-2 py-1 text-xs"
                       value={thinkingBudget}
                       onChange={(e) => setThinkingBudget(e.target.value)}
                     >
-                      <option value="">default</option>
-                      <option value="4096">4k</option>
-                      <option value="8192">8k</option>
-                      <option value="16384">16k</option>
-                      <option value="32768">32k</option>
-                      <option value="65536">64k</option>
-                      <option value="131072">128k</option>
+                      <option value="">{translateUI("default")}</option>
+                      <option value="4096">{translateUI("4k")}</option>
+                      <option value="8192">{translateUI("8k")}</option>
+                      <option value="16384">{translateUI("16k")}</option>
+                      <option value="32768">{translateUI("32k")}</option>
+                      <option value="65536">{translateUI("64k")}</option>
+                      <option value="131072">{translateUI("128k")}</option>
                     </select>
                   </>
                 )}
 
-                <span className="text-gray-400">Timeout</span>
+                <span className="text-gray-400">{translateUI("Timeout")}</span>
                 <select
                   className="bg-gray-700 text-foreground rounded px-2 py-1 text-xs"
                   value={timeoutHours}
                   onChange={(e) => setTimeoutHours(e.target.value)}
                 >
-                  <option value="">default</option>
-                  <option value="0.5">30 min</option>
-                  <option value="1">1 hour</option>
-                  <option value="2">2 hours</option>
-                  <option value="4">4 hours</option>
-                  <option value="8">8 hours</option>
-                  <option value="12">12 hours</option>
-                  <option value="24">24 hours</option>
-                  <option value="0">No limit</option>
+                  <option value="">{translateUI("default")}</option>
+                  <option value="0.5">{translateUI("30 min")}</option>
+                  <option value="1">{translateUI("1 hour")}</option>
+                  <option value="2">{translateUI("2 hours")}</option>
+                  <option value="4">{translateUI("4 hours")}</option>
+                  <option value="8">{translateUI("8 hours")}</option>
+                  <option value="12">{translateUI("12 hours")}</option>
+                  <option value="24">{translateUI("24 hours")}</option>
+                  <option value="0">{translateUI("No limit")}</option>
                 </select>
 
                 {mode !== 'delivery_loop' && (
                   <>
-                    <span className="text-gray-400">System Prompt</span>
+                    <span className="text-gray-400">{translateUI("System Prompt")}</span>
                     <select
                       className="bg-gray-700 text-foreground rounded px-2 py-1 text-xs"
                       value={systemPromptMode}
                       onChange={(e) => setSystemPromptMode(e.target.value)}
                     >
-                      <option value="">Off</option>
-                      <option value="append">Fable 5 (Append)</option>
-                      <option value="replace">Fable 5 (Replace)</option>
+                      <option value="">{translateUI("Off")}</option>
+                      <option value="append">{translateUI("Fable 5 (Append)")}</option>
+                      <option value="replace">{translateUI("Fable 5 (Replace)")}</option>
                     </select>
                   </>
                 )}
@@ -1311,7 +1304,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
                   onClick={saveAsDefault}
                   className="text-xs px-2 py-1 rounded bg-indigo-600/30 text-indigo-300 hover:bg-indigo-600/50 transition-colors"
                 >
-                  {defaultSaved ? '✓ 已保存' : '设为默认配置'}
+                  {defaultSaved ? translateUI("✓ 已保存") : translateUI("设为默认配置")}
                 </button>
                 {hasStoredDefault && !defaultSaved && (
                   <button
@@ -1319,8 +1312,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
                     onClick={clearDefault}
                     className="text-xs px-2 py-1 rounded text-gray-500 hover:text-gray-300 transition-colors"
                   >
-                    清除默认
-                  </button>
+                    {translateUI("清除默认 ")}</button>
                 )}
               </div>
             </div>
@@ -1352,13 +1344,13 @@ export function TaskForm({ onCreated }: TaskFormProps) {
               }`}
             >
               <span className="text-xs">📝</span>
-              <span className="hidden sm:inline">Skills{enabledUserSkillCount > 0 ? ` (${enabledUserSkillCount})` : ''}</span>
+              <span className="hidden sm:inline">{translateUI("Skills")}{enabledUserSkillCount > 0 ? ` (${enabledUserSkillCount})` : ''}</span>
               {enabledUserSkillCount > 0 && <span className="sm:hidden">{enabledUserSkillCount}</span>}
             </button>
             {showSkillsDropdown && (
               <div className="absolute top-full mt-1 left-0 bg-gray-800 border border-gray-600 rounded shadow-lg z-20 min-w-[180px]">
                 {userSkills.length === 0 ? (
-                  <div className="px-3 py-2 text-xs text-gray-500">暂无 Skill，去 Skills 页面创建</div>
+                  <div className="px-3 py-2 text-xs text-gray-500">{translateUI("暂无 Skill，去 Skills 页面创建")}</div>
                 ) : userSkills.map((skill) => (
                   <label
                     key={skill.id}
@@ -1379,10 +1371,10 @@ export function TaskForm({ onCreated }: TaskFormProps) {
                     type="button"
                     onClick={saveSkillsAsDefault}
                     className="flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-300 transition-colors"
-                    title="Save current Skills & Plugins selection as default for new tasks"
+                    title={translateUI("Save current Skills & Plugins selection as default for new tasks")}
                   >
                     <Pin size={11} />
-                    {skillsDefaultSaved ? '已保存为默认' : '设为默认'}
+                    {skillsDefaultSaved ? translateUI("已保存为默认") : translateUI("设为默认")}
                   </button>
                 </div>
               </div>
@@ -1393,20 +1385,20 @@ export function TaskForm({ onCreated }: TaskFormProps) {
           <span
             className="text-xs text-gray-500 px-1 py-1.5 whitespace-nowrap"
             title={!codexTaskSkillsEnabled
-              ? 'Codex 主任务 MCP 已关闭；仅 Sub-Agent 可用'
+              ? translateUI("Codex 主任务 MCP 已关闭；仅 Sub-Agent 可用")
               : remoteTaskScope
-                ? 'Codex Monitor 当前仅支持本地、非共享任务'
+                ? translateUI("Codex Monitor 当前仅支持本地、非共享任务")
                 : codexMonitorEnabled
-                  ? 'Codex Monitor 已对本地任务开放'
-                  : '当前后端尚未声明 Codex Monitor capability'}
+                  ? translateUI("Codex Monitor 已对本地任务开放")
+                  : translateUI("当前后端尚未声明 Codex Monitor capability")}
           >
             {!codexTaskSkillsEnabled
-              ? '主任务 MCP 已关闭 · 仅 Sub-Agent 可用'
+              ? translateUI("主任务 MCP 已关闭 · 仅 Sub-Agent 可用")
               : remoteTaskScope
-                ? 'Monitor 仅支持本地 Codex'
+                ? translateUI("Monitor 仅支持本地 Codex")
                 : codexMonitorEnabled
-                  ? '本地 Codex Monitor 已启用'
-                  : 'Codex Monitor capability 未知'}
+                  ? translateUI("本地 Codex Monitor 已启用")
+                  : translateUI("Codex Monitor capability 未知")}
           </span>
         )}
         {/* Plugins dropdown */}
@@ -1422,7 +1414,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
               }`}
             >
               <Wrench size={13} />
-              <span className="hidden sm:inline">Plugins{enabledPluginCount > 0 ? ` (${enabledPluginCount})` : ''}</span>
+              <span className="hidden sm:inline">{translateUI("Plugins")}{enabledPluginCount > 0 ? ` (${enabledPluginCount})` : ''}</span>
               {enabledPluginCount > 0 && <span className="sm:hidden">{enabledPluginCount}</span>}
             </button>
             {showPluginsDropdown && (
@@ -1442,7 +1434,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
                         disabled={locked}
                         className="accent-indigo-500"
                       />
-                      {tool.label}
+                      {translateUI(tool.label)}
                     </label>
                   );
                 })}
@@ -1451,10 +1443,10 @@ export function TaskForm({ onCreated }: TaskFormProps) {
                     type="button"
                     onClick={saveSkillsAsDefault}
                     className="flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-300 transition-colors"
-                    title="Save current Skills & Plugins selection as default for new tasks"
+                    title={translateUI("Save current Skills & Plugins selection as default for new tasks")}
                   >
                     <Pin size={11} />
-                    {skillsDefaultSaved ? '已保存为默认' : '设为默认'}
+                    {skillsDefaultSaved ? translateUI("已保存为默认") : translateUI("设为默认")}
                   </button>
                 </div>
               </div>
@@ -1468,7 +1460,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
           className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded text-xs font-medium disabled:opacity-50 ml-auto"
         >
           <Plus size={14} />
-          <span className="hidden sm:inline">{loading ? 'Creating...' : 'Create'}</span>
+          <span className="hidden sm:inline">{loading ? translateUI("Creating...") : translateUI("Create")}</span>
         </button>
       </div>
     </form>

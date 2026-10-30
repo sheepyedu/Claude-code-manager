@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../../api/client';
 import type { QuickPhrase } from '../../api/client';
@@ -9,6 +10,7 @@ interface QuickPhraseDropdownProps {
 }
 
 export function QuickPhraseDropdown({ onSelect, disabled }: QuickPhraseDropdownProps) {
+  useLanguage();
   const [open, setOpen] = useState(false);
   const [phrases, setPhrases] = useState<QuickPhrase[]>([]);
   const [editing, setEditing] = useState<number | null>(null);
@@ -113,7 +115,7 @@ export function QuickPhraseDropdown({ onSelect, disabled }: QuickPhraseDropdownP
         onClick={() => setOpen(!open)}
         disabled={disabled}
         className="p-2.5 text-gray-500 hover:text-amber-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        title="常用语"
+        title={translateUI("常用语")}
       >
         <Zap size={18} />
       </button>
@@ -121,7 +123,7 @@ export function QuickPhraseDropdown({ onSelect, disabled }: QuickPhraseDropdownP
       {open && (
         <div className="absolute bottom-full left-0 mb-2 w-80 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
           <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700">
-            <span className="text-xs font-medium text-gray-400">常用语</span>
+            <span className="text-xs font-medium text-gray-400">{translateUI("常用语")}</span>
             <button
               onClick={() => {
                 setAdding(true);
@@ -131,13 +133,13 @@ export function QuickPhraseDropdown({ onSelect, disabled }: QuickPhraseDropdownP
               className="flex items-center gap-1 text-xs text-gray-500 hover:text-emerald-400 transition-colors"
             >
               <Plus size={12} />
-              <span>添加</span>
+              <span>{translateUI("添加")}</span>
             </button>
           </div>
 
           <div className="max-h-64 overflow-y-auto">
             {phrases.length === 0 && !adding && (
-              <p className="text-xs text-gray-600 px-3 py-4 text-center">暂无常用语，点击上方「添加」创建</p>
+              <p className="text-xs text-gray-600 px-3 py-4 text-center">{translateUI("暂无常用语，点击上方「添加」创建")}</p>
             )}
 
             {phrases.map((phrase) => (
@@ -148,14 +150,14 @@ export function QuickPhraseDropdown({ onSelect, disabled }: QuickPhraseDropdownP
                       type="text"
                       value={editLabel}
                       onChange={(e) => setEditLabel(e.target.value)}
-                      placeholder="标题"
+                      placeholder={translateUI("标题")}
                       className="w-full bg-gray-700 text-foreground rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       autoFocus
                     />
                     <textarea
                       value={editContent}
                       onChange={(e) => setEditContent(e.target.value)}
-                      placeholder="内容"
+                      placeholder={translateUI("内容")}
                       rows={2}
                       className="w-full bg-gray-700 text-foreground rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
                     />
@@ -199,14 +201,14 @@ export function QuickPhraseDropdown({ onSelect, disabled }: QuickPhraseDropdownP
                   type="text"
                   value={editLabel}
                   onChange={(e) => setEditLabel(e.target.value)}
-                  placeholder="标题（如：继续推进）"
+                  placeholder={translateUI("标题（如：继续推进）")}
                   className="w-full bg-gray-700 text-foreground rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   autoFocus
                 />
                 <textarea
                   value={editContent}
                   onChange={(e) => setEditContent(e.target.value)}
-                  placeholder="发送内容"
+                  placeholder={translateUI("发送内容")}
                   rows={2}
                   className="w-full bg-gray-700 text-foreground rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
                 />

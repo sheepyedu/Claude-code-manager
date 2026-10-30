@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useState, type MouseEvent, type ReactNode } from 'react';
 
 import { api } from '../../api/client';
@@ -52,6 +53,7 @@ export function TaskArtifactLink({
   linkTitle?: string;
   children: ReactNode;
 }) {
+  useLanguage();
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -90,7 +92,7 @@ export function TaskArtifactLink({
         href={href}
         onClick={download}
         className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 underline"
-        title={downloading ? '正在下载…' : '下载任务文件'}
+        title={downloading ? translateUI("正在下载…") : translateUI("下载任务文件")}
         aria-busy={downloading}
       >
         {children}

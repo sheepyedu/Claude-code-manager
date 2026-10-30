@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../config/language";
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { api } from '../api/client';
 import type { SharedTaskReceived } from '../api/client';
@@ -5,6 +6,7 @@ import { RefreshCw, MessageCircle, X, Search } from '../components/icons';
 import { SharedChatView } from '../components/Chat/SharedChatView';
 
 export default function SharesPage() {
+  useLanguage();
   const [tasks, setTasks] = useState<SharedTaskReceived[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +30,7 @@ export default function SharesPage() {
   useEffect(() => { load(); }, [load]);
 
   const handleLeave = async (id: number) => {
-    if (!confirm('Leave this shared task?')) return;
+    if (!confirm(translateUI("Leave this shared task?"))) return;
     try {
       await api.leaveSharedTask(id);
       setTasks(prev => prev.filter(t => t.id !== id));
@@ -71,14 +73,13 @@ export default function SharesPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">Shared with me</h1>
+        <h1 className="text-2xl font-bold text-foreground">{translateUI("Shared with me")}</h1>
         <button
           onClick={load}
           disabled={loading}
           className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg disabled:opacity-50"
         >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
-        </button>
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> {translateUI("Refresh ")}</button>
       </div>
 
       {tasks.length > 0 && (
@@ -88,7 +89,7 @@ export default function SharesPage() {
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search tasks..."
+              placeholder={translateUI("Search tasks...")}
               className="w-full bg-gray-800 text-foreground rounded-lg pl-9 pr-3 py-2 text-sm border border-gray-700 focus:outline-none focus:border-blue-500"
             />
           </div>
@@ -98,7 +99,7 @@ export default function SharesPage() {
               onChange={(e) => setOwnerFilter(e.target.value)}
               className="bg-gray-800 text-foreground rounded-lg px-3 py-2 text-sm border border-gray-700 focus:outline-none focus:border-blue-500"
             >
-              <option value="">All owners</option>
+              <option value="">{translateUI("All owners")}</option>
               {owners.map(o => <option key={o} value={o}>{o}</option>)}
             </select>
           )}
@@ -109,13 +110,13 @@ export default function SharesPage() {
 
       {!loading && tasks.length === 0 && (
         <div className="text-center py-16 text-gray-500">
-          <p className="text-lg">No shared tasks yet</p>
-          <p className="text-sm mt-2">When someone shares a task with you, it will appear here.</p>
+          <p className="text-lg">{translateUI("No shared tasks yet")}</p>
+          <p className="text-sm mt-2">{translateUI("When someone shares a task with you, it will appear here.")}</p>
         </div>
       )}
 
       {tasks.length > 0 && filtered.length === 0 && (
-        <p className="text-gray-500 text-sm text-center py-8">No tasks match your search.</p>
+        <p className="text-gray-500 text-sm text-center py-8">{translateUI("No tasks match your search.")}</p>
       )}
 
       <div className="grid gap-3">
@@ -125,7 +126,7 @@ export default function SharesPage() {
               <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setOpenTask(task)}>
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-xs text-gray-500 bg-gray-700 px-2 py-0.5 rounded">
-                    from {task.owner_name || 'Unknown'}
+                    {translateUI("from ")}{task.owner_name || translateUI("Unknown")}
                   </span>
                   {task.project_name && (
                     <span className="text-xs text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded">
@@ -134,14 +135,14 @@ export default function SharesPage() {
                   )}
                 </div>
                 <h3 className="text-foreground font-medium truncate">
-                  {task.task_title || `Task #${task.remote_task_id}`}
+                  {task.task_title || translateUI("Task #{0}", [task.remote_task_id])}
                 </h3>
                 {task.task_description && (
                   <p className="text-gray-400 text-sm mt-1 line-clamp-2">{task.task_description}</p>
                 )}
                 {task.received_at && (
                   <p className="text-gray-500 text-xs mt-2">
-                    Received {new Date(task.received_at).toLocaleString()}
+                    {translateUI("Received ")}{new Date(task.received_at).toLocaleString()}
                   </p>
                 )}
               </div>
@@ -150,8 +151,7 @@ export default function SharesPage() {
                   onClick={() => setOpenTask(task)}
                   className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg"
                 >
-                  <MessageCircle size={14} /> Open
-                </button>
+                  <MessageCircle size={14} /> {translateUI("Open ")}</button>
                 <button
                   onClick={() => handleLeave(task.id)}
                   className="p-1.5 text-gray-400 hover:text-red-400 rounded-lg hover:bg-gray-700"

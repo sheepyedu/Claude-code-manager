@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api/client';
 import type {
@@ -45,6 +46,7 @@ export function SSHGrantPicker({
   onSave,
   dirty = false,
 }: SSHGrantPickerProps) {
+  useLanguage();
   const [open, setOpen] = useState(false);
   const [profiles, setProfiles] = useState<SSHProfile[]>([]);
   const [loadingProfiles, setLoadingProfiles] = useState(false);
@@ -159,13 +161,13 @@ export function SSHGrantPicker({
         type="button"
         onClick={toggleOpen}
         disabled={Boolean(disabledReason)}
-        title={disabledReason || 'Manage Task SSH access'}
+        title={disabledReason || translateUI("Manage Task SSH access")}
         className={compact
           ? `text-xs px-1.5 rounded flex items-center gap-0.5 transition-colors ${invalidCount ? 'bg-red-600/25 text-red-300' : 'bg-cyan-600/25 text-cyan-300'} disabled:opacity-50`
           : `flex items-center gap-1 text-xs px-2 py-1.5 rounded border transition-colors ${value.length ? 'bg-cyan-600/20 text-cyan-300 border-cyan-500/40' : 'bg-gray-700 text-gray-400 border-gray-600 hover:bg-gray-600'} disabled:opacity-50`}
       >
         <Server size={12} />
-        <span>{compact ? `SSH ${value.length}` : `SSH access${value.length ? ` (${value.length})` : ''}`}</span>
+        <span>{compact ? translateUI("SSH {0}", [value.length]) : translateUI("SSH access{0}", [value.length ? ` (${value.length})` : ''])}</span>
         {!compact && <ChevronDown size={11} />}
       </button>
 
@@ -173,8 +175,8 @@ export function SSHGrantPicker({
         <div className={`absolute top-full mt-1 ${compact ? 'right-0' : 'left-0'} z-40 w-[min(26rem,calc(100vw-1rem))] rounded-lg border border-gray-600 bg-gray-800 p-3 shadow-xl`}>
           <div className="mb-2 flex items-start justify-between gap-3">
             <div>
-              <div className="text-sm font-medium text-gray-200">Task SSH authorization</div>
-              <div className="text-xs text-gray-500">Keys remain on the Manager. Grants apply only to this Task.</div>
+              <div className="text-sm font-medium text-gray-200">{translateUI("Task SSH authorization")}</div>
+              <div className="text-xs text-gray-500">{translateUI("Keys remain on the Manager. Grants apply only to this Task.")}</div>
             </div>
             {busy && <Loader2 size={14} className="animate-spin text-cyan-400" />}
           </div>
@@ -185,11 +187,11 @@ export function SSHGrantPicker({
             </div>
           )}
           {loadingProfiles && (
-            <div className="flex items-center gap-2 py-4 text-xs text-gray-500"><Loader2 size={13} className="animate-spin" />Loading SSH profiles…</div>
+            <div className="flex items-center gap-2 py-4 text-xs text-gray-500"><Loader2 size={13} className="animate-spin" />{translateUI("Loading SSH profiles…")}</div>
           )}
           {!loadingProfiles && visibleProfiles.length === 0 && (
             <div className="rounded border border-dashed border-gray-700 px-3 py-4 text-center text-xs text-gray-500">
-              No SSH connections are currently exposed to Tasks. Enable Task access in <a href="#/files" className="text-indigo-400 hover:text-indigo-300">Files → SSH workspace</a>.
+              {translateUI("No SSH connections are currently exposed to Tasks. Enable Task access in ")}<a href="#/files" className="text-indigo-400 hover:text-indigo-300">{translateUI("Files → SSH workspace")}</a>.
             </div>
           )}
 
@@ -202,7 +204,7 @@ export function SSHGrantPicker({
                   <label className="flex items-start gap-2 text-xs">
                     <input
                       type="checkbox"
-                      aria-label={`Grant ${profile.name}`}
+                      aria-label={translateUI("Grant {0}", [profile.name])}
                       checked={Boolean(grant)}
                       disabled={readOnly || busy || ((!profile.enabled || !profile.taskAccessEnabled) && !grant)}
                       onChange={() => toggleProfile(profile.id)}
@@ -212,15 +214,15 @@ export function SSHGrantPicker({
                       <span className="block truncate font-medium text-gray-200">{profile.name}</span>
                       <span className="block truncate text-gray-500">{profile.username}@{profile.host}:{profile.port}</span>
                       <span className="block truncate font-mono text-[10px] text-violet-300" title={profile.allowedRoots.join(', ')}>
-                        Files: {profile.allowedRoots.join(', ')}
+                        {translateUI("Files: ")}{profile.allowedRoots.join(', ')}
                       </span>
                     </span>
-                    {snapshot && !snapshot.valid && <span className="text-[10px] text-red-300">re-authorize</span>}
+                    {snapshot && !snapshot.valid && <span className="text-[10px] text-red-300">{translateUI("re-authorize")}</span>}
                   </label>
                   {grant && (
                     <div className="mt-2 grid gap-1 pl-6 sm:grid-cols-3">
                       {CAPABILITIES.map((capability) => (
-                        <label key={capability.key} className={`flex items-start gap-1.5 rounded bg-gray-800 px-2 py-1.5 text-[11px] ${profile.taskCapabilities.includes(capability.key) ? 'text-gray-300' : 'text-gray-600'}`} title={profile.taskCapabilities.includes(capability.key) ? capability.description : 'This connection does not expose this capability to Tasks'}>
+                        <label key={capability.key} className={`flex items-start gap-1.5 rounded bg-gray-800 px-2 py-1.5 text-[11px] ${profile.taskCapabilities.includes(capability.key) ? 'text-gray-300' : 'text-gray-600'}`} title={profile.taskCapabilities.includes(capability.key) ? capability.description : translateUI("This connection does not expose this capability to Tasks")}>
                           <input
                             type="checkbox"
                             aria-label={`${profile.name}: ${capability.label}`}
@@ -229,13 +231,13 @@ export function SSHGrantPicker({
                             onChange={() => toggleCapability(profile.id, capability.key)}
                             className="mt-0.5 accent-cyan-500"
                           />
-                          <span>{capability.label}</span>
+                          <span>{translateUI(capability.label)}</span>
                         </label>
                       ))}
                     </div>
                   )}
                   {snapshot && !snapshot.valid && (
-                    <div className="mt-1 pl-6 text-[10px] text-red-300">Invalid: {snapshot.invalid_reason?.replaceAll('_', ' ')}</div>
+                    <div className="mt-1 pl-6 text-[10px] text-red-300">{translateUI("Invalid: ")}{snapshot.invalid_reason?.replaceAll('_', ' ')}</div>
                   )}
                 </div>
               );
@@ -243,7 +245,7 @@ export function SSHGrantPicker({
           </div>
 
           {!readOnly && value.some((grant) => grant.capabilities.includes('exec')) && (
-            <div className="mt-2 text-[10px] text-amber-300">Run commands grants broad access as the configured remote user; allowed file roots do not restrict command execution.</div>
+            <div className="mt-2 text-[10px] text-amber-300">{translateUI("Run commands grants broad access as the configured remote user; allowed file roots do not restrict command execution.")}</div>
           )}
           {!readOnly && onSave && (
             <div className="mt-3 flex justify-end border-t border-gray-700 pt-2">
@@ -253,11 +255,11 @@ export function SSHGrantPicker({
                 disabled={!dirty || busy}
                 className="rounded bg-cyan-600 px-3 py-1.5 text-xs text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {busy ? 'Saving…' : 'Save SSH grants'}
+                {busy ? translateUI("Saving…") : translateUI("Save SSH grants")}
               </button>
             </div>
           )}
-          {readOnly && <div className="mt-2 text-[10px] text-gray-500">Read-only view. Only an administrator can change SSH grants.</div>}
+          {readOnly && <div className="mt-2 text-[10px] text-gray-500">{translateUI("Read-only view. Only an administrator can change SSH grants.")}</div>}
         </div>
       )}
     </div>
@@ -266,6 +268,7 @@ export function SSHGrantPicker({
 
 
 export function TaskSSHAccessBadge({ task }: { task: Task }) {
+  useLanguage();
   const cachedUser = JSON.parse(localStorage.getItem('cc_user') || '{}');
   const isAdmin = cachedUser.role === 'admin' || cachedUser.role === 'super_admin' || !cachedUser.id;
   const [snapshots, setSnapshots] = useState<TaskSSHGrant[]>([]);

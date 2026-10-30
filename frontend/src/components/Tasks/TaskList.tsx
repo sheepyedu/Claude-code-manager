@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 
 import { api } from '../../api/client';
@@ -52,6 +53,7 @@ function canRetryTask(task: Task): boolean {
 }
 
 export function TaskList({ tasks, projects, onRefresh, onTaskUpdated, onOpenChat, activeTaskId, autoSortOnAccess, onBeforeArchive, onReorder }: TaskListProps) {
+  useLanguage();
   const projectMap = useMemo(() => {
     const map: Record<number, { name: string; color: string | null }> = {};
     for (const p of projects) map[p.id] = { name: p.name, color: p.badge_color };
@@ -162,7 +164,7 @@ export function TaskList({ tasks, projects, onRefresh, onTaskUpdated, onOpenChat
   const { draggingId, overIndex, targetProps, pointerHandleProps, ghost } = useTaskReorder(tasks, handleReordered, autoSortOnAccess);
 
   if (tasks.length === 0) {
-    return <p className="text-gray-500 text-sm text-center py-8">No tasks yet</p>;
+    return <p className="text-gray-500 text-sm text-center py-8">{translateUI("No tasks yet")}</p>;
   }
 
   return (
@@ -189,7 +191,7 @@ export function TaskList({ tasks, projects, onRefresh, onTaskUpdated, onOpenChat
             <span
               {...pointerHandleProps(t, idx)}
               className="absolute bottom-1.5 right-1.5 p-1 cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-400 select-none"
-              title="按住拖动排序"
+              title={translateUI("按住拖动排序")}
             >
               <GripVertical size={16} />
             </span>
@@ -212,7 +214,7 @@ export function TaskList({ tasks, projects, onRefresh, onTaskUpdated, onOpenChat
               {t.mode === 'delivery_loop' && t.attention_tag ? (
                 <span
                   className="inline-flex min-w-0 max-w-[min(16rem,55vw)] items-center gap-1 rounded-md border border-amber-400/25 bg-amber-500/15 px-1.5 py-0.5 text-xs font-medium text-amber-300"
-                  title="Delivery-owned Task attention tag"
+                  title={translateUI("Delivery-owned Task attention tag")}
                 >
                   <Pin size={11} className="shrink-0" />
                   <span className="truncate">{t.attention_tag}</span>
@@ -229,7 +231,7 @@ export function TaskList({ tasks, projects, onRefresh, onTaskUpdated, onOpenChat
                 />
               )}
               {t.shared_from_id && (
-                <span className="text-xs bg-orange-600/30 text-orange-300 px-1.5 rounded font-medium">Shared</span>
+                <span className="text-xs bg-orange-600/30 text-orange-300 px-1.5 rounded font-medium">{translateUI("Shared")}</span>
               )}
               {t.project_id && projectMap[t.project_id] && (() => {
                 const proj = projectMap[t.project_id!];
@@ -239,7 +241,7 @@ export function TaskList({ tasks, projects, onRefresh, onTaskUpdated, onOpenChat
                 return <span className={`text-xs ${bg} ${text} px-1.5 rounded font-medium whitespace-nowrap`}>{proj.name}</span>;
               })()}
               {t.priority > 0 && (
-                <span className="text-xs bg-indigo-600/30 text-indigo-300 px-1.5 rounded">P{t.priority}</span>
+                <span className="text-xs bg-indigo-600/30 text-indigo-300 px-1.5 rounded">{translateUI("P")}{t.priority}</span>
               )}
               <span className={`text-xs text-gray-500 ${
                 (t.mode === 'plan' && ['in_progress', 'executing'].includes(t.status))
@@ -257,9 +259,9 @@ export function TaskList({ tasks, projects, onRefresh, onTaskUpdated, onOpenChat
                   ))}
                   aria-expanded={openDeliveryRunId === t.delivery_run_id}
                   className="rounded bg-indigo-600/20 px-1.5 text-[10px] font-medium text-indigo-300 hover:bg-indigo-600/30"
-                  title={`Delivery Run #${t.delivery_run_id}`}
+                  title={translateUI("Delivery Run #{0}", [t.delivery_run_id])}
                 >
-                  Delivery #{t.delivery_run_id}
+                  {translateUI("Delivery #")}{t.delivery_run_id}
                 </button>
               )}
               {t.mode === 'plan' ? (
@@ -269,9 +271,9 @@ export function TaskList({ tasks, projects, onRefresh, onTaskUpdated, onOpenChat
                       type="button"
                       onClick={() => { window.location.hash = `#/plans/${t.canonical_plan_id}`; }}
                       className="rounded bg-teal-600/20 px-1.5 text-[10px] font-medium text-teal-300 hover:bg-teal-600/30"
-                      title={`This historical Task has migrated to Plan #${t.canonical_plan_id}`}
+                      title={translateUI("This historical Task has migrated to Plan #{0}", [t.canonical_plan_id])}
                     >
-                      Plan #{t.canonical_plan_id}
+                      {translateUI("Plan #")}{t.canonical_plan_id}
                     </button>
                   )}
                   <PlanPipelineBadge task={t} />
@@ -280,7 +282,7 @@ export function TaskList({ tasks, projects, onRefresh, onTaskUpdated, onOpenChat
               ) : (
                 <>
                   <span className={`hidden sm:inline text-xs px-1.5 rounded font-medium ${t.provider === 'codex' ? 'bg-green-600/30 text-green-300' : 'bg-blue-600/30 text-blue-300'}`}>
-                    {t.provider === 'codex' ? 'Codex' : 'Claude'}
+                    {t.provider === 'codex' ? translateUI("Codex") : translateUI("Claude")}
                   </span>
                   <FastModeBadge task={t} />
                   {t.mode !== 'delivery_loop' && (
@@ -298,14 +300,14 @@ export function TaskList({ tasks, projects, onRefresh, onTaskUpdated, onOpenChat
               <button
                 onClick={() => handleStar(t.id)}
                 className={`p-1.5 transition-colors ${t.starred ? 'text-yellow-400 hover:text-yellow-300' : 'text-gray-600 hover:text-yellow-400'}`}
-                title={t.starred ? "Unstar" : "Star"}
+                title={t.starred ? translateUI("Unstar") : translateUI("Star")}
               >
                 <Star size={16} fill={t.starred ? 'currentColor' : 'none'} />
               </button>
               <button
                 onClick={() => handleToggleUnread(t.id, t.has_unread)}
                 className={`p-1.5 transition-colors ${t.has_unread ? 'text-indigo-400 hover:text-indigo-300' : 'text-gray-600 hover:text-indigo-400'}`}
-                title={t.has_unread ? "Mark as read" : "Mark as unread"}
+                title={t.has_unread ? translateUI("Mark as read") : translateUI("Mark as unread")}
               >
                 {t.has_unread ? <MailOpen size={16} /> : <Mail size={16} />}
               </button>
@@ -313,15 +315,15 @@ export function TaskList({ tasks, projects, onRefresh, onTaskUpdated, onOpenChat
                 <button
                   onClick={() => onOpenChat(t)}
                   className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30"
-                  title="Chat"
+                  title={translateUI("Chat")}
                 >
-                  <MessageCircle size={14} /><span className="hidden sm:inline"> Chat</span>
+                  <MessageCircle size={14} /><span className="hidden sm:inline"> {translateUI("Chat")}</span>
                 </button>
               )}
               <button
                 onClick={() => handleCopy(t)}
                 className="p-1.5 text-gray-600 hover:text-gray-300 transition-colors"
-                title="Copy prompt"
+                title={translateUI("Copy prompt")}
               >
                 {copiedId === t.id ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
               </button>
@@ -332,7 +334,7 @@ export function TaskList({ tasks, projects, onRefresh, onTaskUpdated, onOpenChat
                     setMenuOpenId(menuOpenId === t.id ? null : t.id);
                   }}
                   className="p-1.5 text-gray-600 hover:text-gray-300 transition-colors"
-                  title="More actions"
+                  title={translateUI("More actions")}
                 >
                   <MoreVertical size={16} />
                 </button>
@@ -342,15 +344,13 @@ export function TaskList({ tasks, projects, onRefresh, onTaskUpdated, onOpenChat
                       onClick={() => { setTitleDraft(t.title || ''); setEditingTitleId(t.id); setMenuOpenId(null); }}
                       className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-800 text-left"
                     >
-                      <Pencil size={14} /> Edit title
-                    </button>
+                      <Pencil size={14} /> {translateUI("Edit title ")}</button>
                     {!t.attention_tag && (
                       <button
                         onClick={() => { setEditingAttentionTagId(t.id); setMenuOpenId(null); }}
                         className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-amber-300 hover:bg-gray-800 text-left"
                       >
-                        <Pin size={14} /> Add attention tag
-                      </button>
+                        <Pin size={14} /> {translateUI("Add attention tag ")}</button>
                     )}
 
                     <button
@@ -361,38 +361,34 @@ export function TaskList({ tasks, projects, onRefresh, onTaskUpdated, onOpenChat
                       }}
                       className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-800 text-left"
                     >
-                      <UserPlus size={14} /> Team Share
-                    </button>
+                      <UserPlus size={14} /> {translateUI("Team Share ")}</button>
                     {(t.background_active || ['in_progress', 'executing', 'waiting_capability'].includes(t.status)) && (
                       <button
                         onClick={() => { handleCancel(t); setMenuOpenId(null); }}
                         className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-yellow-400 hover:bg-gray-800 text-left"
                       >
-                        <XCircle size={14} /> Cancel
-                      </button>
+                        <XCircle size={14} /> {translateUI("Cancel ")}</button>
                     )}
                     {canRetryTask(t) && (
                       <button
                         onClick={() => { handleRetry(t); setMenuOpenId(null); }}
                         className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-blue-400 hover:bg-gray-800 text-left"
                       >
-                        <RotateCcw size={14} /> Retry
-                      </button>
+                        <RotateCcw size={14} /> {translateUI("Retry ")}</button>
                     )}
                     <button
                       onClick={() => { handleArchive(t.id); setMenuOpenId(null); }}
                       className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-amber-400 hover:bg-gray-800 text-left"
                     >
                       {t.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
-                      {t.archived ? 'Unarchive' : 'Archive'}
+                      {t.archived ? translateUI("Unarchive") : translateUI("Archive")}
                     </button>
                     {!t.background_active && ['pending', 'failed', 'cancelled', 'completed'].includes(t.status) && (
                       <button
                         onClick={() => { handleDelete(t.id); setMenuOpenId(null); }}
                         className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-400 hover:bg-gray-800 text-left"
                       >
-                        <Trash2 size={14} /> Delete
-                      </button>
+                        <Trash2 size={14} /> {translateUI("Delete ")}</button>
                     )}
                   </div>
                 )}
@@ -424,7 +420,7 @@ export function TaskList({ tasks, projects, onRefresh, onTaskUpdated, onOpenChat
                   if (e.key === 'Escape') setEditingTitleId(null);
                 }}
                 className="w-full bg-gray-700 text-foreground text-sm rounded px-2 py-0.5 mt-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                placeholder="Enter title..."
+                placeholder={translateUI("Enter title...")}
               />
             ) : (
               t.title ? (
@@ -442,14 +438,14 @@ export function TaskList({ tasks, projects, onRefresh, onTaskUpdated, onOpenChat
               />
             ) : null}
             {t.mode === 'goal' && t.goal_condition && (
-              <p className="text-emerald-500/70 text-xs mt-0.5 line-clamp-1">Goal: {t.goal_condition}</p>
+              <p className="text-emerald-500/70 text-xs mt-0.5 line-clamp-1">{translateUI("Goal: ")}{t.goal_condition}</p>
             )}
             {t.mode === 'loop' && t.loop_progress && (
               <p className="text-indigo-400 text-xs mt-0.5">⟳ {t.loop_progress}</p>
             )}
             {t.mode === 'goal' && t.goal_turns_used > 0 && (
               <p className="text-emerald-400 text-xs mt-0.5">
-                ◎ Turn {t.goal_turns_used}/{t.goal_max_turns}
+                {translateUI("◎ Turn ")}{t.goal_turns_used}/{t.goal_max_turns}
                 {t.goal_last_reason && <span className="text-gray-500 ml-1">— {t.goal_last_reason}</span>}
               </p>
             )}

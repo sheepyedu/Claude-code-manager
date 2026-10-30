@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUpCircle, RefreshCw } from '../icons';
@@ -146,6 +147,7 @@ function shortRevision(value: string | null | undefined) {
 }
 
 export function UpdateButton() {
+  useLanguage();
   const [phase, setPhase] = useState<Phase>('idle');
   const [steps, setSteps] = useState<StepInfo[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
@@ -517,7 +519,7 @@ export function UpdateButton() {
       // database restore is unnecessary.
       const restoreDatabase =
         status.database_migration_applied !== false;
-      if (!confirm('确定要回滚到上一个版本吗？')) return;
+      if (!confirm(translateUI("确定要回滚到上一个版本吗？"))) return;
       if (
         restoreDatabase
         && !confirm(
@@ -579,7 +581,7 @@ export function UpdateButton() {
       <button
         onClick={handleCheck}
         className="relative p-2 rounded text-gray-400 hover:text-foreground hover:bg-gray-800 transition-colors"
-        title="更新并重启"
+        title={translateUI("更新并重启")}
       >
         <ArrowUpCircle size={18} />
       </button>
@@ -590,12 +592,12 @@ export function UpdateButton() {
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
               <h3 className="text-sm font-semibold text-foreground">
-                {phase === 'checking' && '检查更新...'}
-                {phase === 'confirming' && '确认更新'}
-                {phase === 'running' && '更新中...'}
-                {phase === 'restarting' && '重启中...'}
-                {phase === 'completed' && '更新完成'}
-                {phase === 'failed' && '更新失败'}
+                {phase === 'checking' && translateUI("检查更新...")}
+                {phase === 'confirming' && translateUI("确认更新")}
+                {phase === 'running' && translateUI("更新中...")}
+                {phase === 'restarting' && translateUI("重启中...")}
+                {phase === 'completed' && translateUI("更新完成")}
+                {phase === 'failed' && translateUI("更新失败")}
               </h3>
               {(phase === 'completed' || phase === 'failed' || phase === 'confirming') && (
                 <button onClick={handleClose} className="text-gray-400 hover:text-foreground text-lg">✕</button>
@@ -608,8 +610,7 @@ export function UpdateButton() {
               {phase === 'checking' && (
                 <div className="flex items-center gap-2 text-gray-400 text-sm">
                   <RefreshCw size={14} className="animate-spin" />
-                  正在检查是否有新版本...
-                </div>
+                  {translateUI("正在检查是否有新版本... ")}</div>
               )}
 
               {/* Confirm phase */}
@@ -617,30 +618,28 @@ export function UpdateButton() {
                 <div className="space-y-3">
                   {/* Branch selector */}
                   <div className="flex items-center gap-2">
-                    <label className="text-xs text-gray-400 shrink-0">分支:</label>
+                    <label className="text-xs text-gray-400 shrink-0">{translateUI("分支:")}</label>
                     <input
                       value={branch}
                       onChange={e => setBranch(e.target.value)}
-                      placeholder="main"
+                      placeholder={translateUI("main")}
                       className="flex-1 bg-gray-800 text-foreground text-xs rounded px-2 py-1 border border-gray-700 focus:outline-none focus:border-indigo-500"
                     />
                     <button
                       onClick={handleCheck}
                       className="px-2 py-1 text-xs rounded bg-gray-800 text-gray-300 hover:bg-gray-700 shrink-0"
                     >
-                      重新检查
-                    </button>
+                      {translateUI("重新检查 ")}</button>
                   </div>
                   {branch && branch !== 'main' && (
-                    <p className="text-xs text-amber-400">⚠️ 将从分支 <span className="font-mono">{branch}</span> 更新（非 main）</p>
+                    <p className="text-xs text-amber-400">{translateUI("⚠️ 将从分支 ")}<span className="font-mono">{branch}</span> {translateUI("更新（非 main）")}</p>
                   )}
 
                   {updateBlocked && (
                     <div className="rounded border border-amber-700/60 bg-amber-950/30 p-3 text-xs text-amber-200" role="alert">
                       <p className="font-medium">
-                        当前有 {activeTaskCount} 个{hasRuntimeBlockers ? '运行阻断项' : '任务正在执行'}，暂不能更新或重启。
-                      </p>
-                      <p className="mt-1 text-amber-300/80">请等待任务完成，或重新核对实际运行状态。系统不会中断仍在运行的任务。</p>
+                        {translateUI("当前有 ")}{activeTaskCount} {translateUI("个")}{hasRuntimeBlockers ? translateUI("运行阻断项") : translateUI("任务正在执行")}{translateUI("，暂不能更新或重启。 ")}</p>
+                      <p className="mt-1 text-amber-300/80">{translateUI("请等待任务完成，或重新核对实际运行状态。系统不会中断仍在运行的任务。")}</p>
                       {activeTasks.length > 0 && (
                         <ul className="mt-2 space-y-1 text-amber-300/80">
                           {activeTasks.slice(0, 5).map(task => (
@@ -660,7 +659,7 @@ export function UpdateButton() {
                         className="mt-3 inline-flex items-center gap-1.5 rounded border border-amber-600/60 bg-amber-900/40 px-2.5 py-1.5 text-amber-100 hover:bg-amber-900/60 disabled:cursor-wait disabled:opacity-60"
                       >
                         <RefreshCw size={13} className={reconciling ? 'animate-spin' : ''} />
-                        {reconciling ? '正在核对运行状态...' : '重新核对运行状态'}
+                        {reconciling ? translateUI("正在核对运行状态...") : translateUI("重新核对运行状态")}
                       </button>
                     </div>
                   )}
@@ -677,39 +676,39 @@ export function UpdateButton() {
 
                   {(dryRunResult.running_commit || dryRunResult.disk_commit || dryRunResult.db_current_revision || dryRunResult.db_head_revision) && (
                     <div className="grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-1 rounded border border-gray-800 bg-gray-950/60 p-2 text-xs">
-                      <span className="text-gray-500">运行版本</span>
+                      <span className="text-gray-500">{translateUI("运行版本")}</span>
                       <span className="font-mono text-gray-300">{shortRevision(dryRunResult.running_commit)}</span>
                       <span className={dryRunResult.needs_restart ? 'text-yellow-300' : 'text-green-400'}>
-                        {dryRunResult.needs_restart ? '待重启' : '已加载'}
+                        {dryRunResult.needs_restart ? translateUI("待重启") : translateUI("已加载")}
                       </span>
-                      <span className="text-gray-500">磁盘版本</span>
+                      <span className="text-gray-500">{translateUI("磁盘版本")}</span>
                       <span className="font-mono text-gray-300">{shortRevision(dryRunResult.disk_commit || dryRunResult.current_commit)}</span>
-                      <span className="text-gray-500">已拉取</span>
-                      <span className="text-gray-500">数据库</span>
+                      <span className="text-gray-500">{translateUI("已拉取")}</span>
+                      <span className="text-gray-500">{translateUI("数据库")}</span>
                       <span className="font-mono text-gray-300">
                         {shortRevision(dryRunResult.db_current_revision)} → {shortRevision(dryRunResult.db_head_revision)}
                       </span>
                       <span className={dbInSync === false ? 'text-red-300' : dbInSync === true ? 'text-green-400' : 'text-gray-500'}>
-                        {dbInSync === false ? '待迁移' : dbInSync === true ? '已同步' : '无法确认'}
+                        {dbInSync === false ? translateUI("待迁移") : dbInSync === true ? translateUI("已同步") : translateUI("无法确认")}
                       </span>
                     </div>
                   )}
 
                   {action === 'none' ? (
-                    <p className="text-sm text-gray-300">已是最新版本，无需更新。</p>
+                    <p className="text-sm text-gray-300">{translateUI("已是最新版本，无需更新。")}</p>
                   ) : action === 'restart' ? (
                     <div className="space-y-1 text-sm text-yellow-300">
-                      <p>代码已是最新，但服务正在运行旧版本，需要重启。</p>
+                      <p>{translateUI("代码已是最新，但服务正在运行旧版本，需要重启。")}</p>
                       {dryRunResult.error && (
-                        <p className="text-xs text-yellow-400/80">远端更新检查失败，但不影响重启并加载磁盘上的代码。</p>
+                        <p className="text-xs text-yellow-400/80">{translateUI("远端更新检查失败，但不影响重启并加载磁盘上的代码。")}</p>
                       )}
                     </div>
                   ) : action === 'repair' ? (
                     <div className="rounded border border-red-800/50 bg-red-900/20 p-3 text-sm text-red-200">
                       <p>
                         {dryRunResult.needs_restart && !dryRunResult.repair_required
-                          ? '磁盘代码尚未完整部署，需要同步依赖、重建前端并确认数据库后再重启。'
-                          : '当前部署未完整完成，需要修复后再重启服务。'}
+                          ? translateUI("磁盘代码尚未完整部署，需要同步依赖、重建前端并确认数据库后再重启。")
+                          : translateUI("当前部署未完整完成，需要修复后再重启服务。")}
                       </p>
                       {(dryRunResult.repair_reasons || []).length > 0 && (
                         <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-red-300">
@@ -721,8 +720,8 @@ export function UpdateButton() {
                       {dryRunResult.error && (
                         <p className="mt-2 break-words text-xs text-red-400">
                           {dryRunResult.needs_restart && !dryRunResult.repair_required
-                            ? '远端更新检查失败：'
-                            : '检查详情：'}
+                            ? translateUI("远端更新检查失败：")
+                            : translateUI("检查详情：")}
                           {dryRunResult.error}
                         </p>
                       )}
@@ -730,15 +729,15 @@ export function UpdateButton() {
                   ) : (
                     <>
                       <div className="text-sm text-gray-300 space-y-1">
-                        <p>发现 <span className="text-indigo-400 font-medium">{dryRunResult.commits_behind}</span> 个新提交</p>
+                        <p>{translateUI("发现 ")}<span className="text-indigo-400 font-medium">{dryRunResult.commits_behind}</span> {translateUI("个新提交")}</p>
                         <p className="text-xs text-gray-500">{dryRunResult.current_commit} → {dryRunResult.latest_commit}</p>
                         {dryRunResult.remote && (
-                          <p className="text-xs text-gray-600">来源：{dryRunResult.remote}/{dryRunResult.branch || 'main'}</p>
+                          <p className="text-xs text-gray-600">{translateUI("来源：")}{dryRunResult.remote}/{dryRunResult.branch || translateUI("main")}</p>
                         )}
                       </div>
 
                       {dryRunResult.needs_restart && (
-                        <p className="text-xs text-yellow-400">⚠️ 磁盘上还有尚未加载的手动更新，本次会一并完成部署。</p>
+                        <p className="text-xs text-yellow-400">{translateUI("⚠️ 磁盘上还有尚未加载的手动更新，本次会一并完成部署。")}</p>
                       )}
 
                       {(dryRunResult.commit_messages || []).length > 0 && (
@@ -752,21 +751,19 @@ export function UpdateButton() {
                       <div className="flex flex-wrap gap-2 text-xs">
                         {dryRunResult.has_new_migrations && (
                           <span className="px-2 py-0.5 rounded bg-yellow-900/50 text-yellow-300">
-                            {dryRunResult.migration_count} 个迁移
-                          </span>
+                            {dryRunResult.migration_count} {translateUI("个迁移 ")}</span>
                         )}
                         {dryRunResult.has_frontend_changes && (
-                          <span className="px-2 py-0.5 rounded bg-blue-900/50 text-blue-300">前端变更</span>
+                          <span className="px-2 py-0.5 rounded bg-blue-900/50 text-blue-300">{translateUI("前端变更")}</span>
                         )}
                         {dryRunResult.has_package_changes && (
-                          <span className="px-2 py-0.5 rounded bg-purple-900/50 text-purple-300">依赖变更</span>
+                          <span className="px-2 py-0.5 rounded bg-purple-900/50 text-purple-300">{translateUI("依赖变更")}</span>
                         )}
                       </div>
 
                       {dryRunResult.has_new_migrations && (
                         <p className="text-xs text-yellow-400">
-                          ⚠️ 包含数据库迁移，更新时会短暂停服。数据库将自动备份。
-                        </p>
+                          {translateUI("⚠️ 包含数据库迁移，更新时会短暂停服。数据库将自动备份。 ")}</p>
                       )}
                     </>
                   )}
@@ -779,8 +776,7 @@ export function UpdateButton() {
                         onChange={e => setSkipFrontend(e.target.checked)}
                         className="rounded border-gray-600"
                       />
-                      跳过前端构建（仅后端更新）
-                    </label>
+                      {translateUI("跳过前端构建（仅后端更新） ")}</label>
                   )}
                 </div>
               )}
@@ -798,7 +794,7 @@ export function UpdateButton() {
                         )}
                       </span>
                       {step.duration_ms != null && (
-                        <span className="text-gray-600 text-[10px]">{(step.duration_ms / 1000).toFixed(1)}s</span>
+                        <span className="text-gray-600 text-[10px]">{(step.duration_ms / 1000).toFixed(1)}{translateUI("s")}</span>
                       )}
                     </div>
                   ))}
@@ -809,22 +805,21 @@ export function UpdateButton() {
               {phase === 'restarting' && (
                 <div className="flex flex-col items-center gap-3 py-6">
                   <RefreshCw size={24} className="animate-spin text-indigo-400" />
-                  <p className="text-sm text-gray-300">服务正在重启...</p>
+                  <p className="text-sm text-gray-300">{translateUI("服务正在重启...")}</p>
                   <p className="text-xs text-gray-500">
                     {reconnectSlow
-                      ? `等待服务恢复（每 5 秒检测，已等待 ${Math.round((60 * 2 + (reconnectCount - 60) * 5))}秒）`
-                      : `每 2 秒检测一次（${reconnectCount}/60）`
+                      ? translateUI("等待服务恢复（每 5 秒检测，已等待 {0}秒）", [Math.round((60 * 2 + (reconnectCount - 60) * 5))])
+                      : translateUI("每 2 秒检测一次（{0}/60）", [reconnectCount])
                     }
                   </p>
                   {reconnectSlow && (
                     <>
-                      <p className="text-xs text-yellow-400">重启时间超过预期，可能正在执行数据库迁移...</p>
+                      <p className="text-xs text-yellow-400">{translateUI("重启时间超过预期，可能正在执行数据库迁移...")}</p>
                       <button
                         onClick={() => window.location.reload()}
                         className="px-3 py-1.5 text-xs rounded bg-gray-800 text-gray-300 hover:bg-gray-700"
                       >
-                        手动刷新页面
-                      </button>
+                        {translateUI("手动刷新页面 ")}</button>
                     </>
                   )}
                 </div>
@@ -833,8 +828,7 @@ export function UpdateButton() {
               {/* Completed */}
               {phase === 'completed' && (
                 <div className="bg-green-900/20 border border-green-800/50 rounded p-3 text-sm text-green-300">
-                  ✅ 更新完成
-                  {oldCommit && newCommit && oldCommit !== newCommit && (
+                  {translateUI("✅ 更新完成 ")}{oldCommit && newCommit && oldCommit !== newCommit && (
                     <span className="text-xs text-gray-500 ml-2">{oldCommit.slice(0, 7)} → {newCommit.slice(0, 7)}</span>
                   )}
                 </div>
@@ -862,62 +856,62 @@ export function UpdateButton() {
             <div className="flex justify-end gap-2 px-4 py-3 border-t border-gray-700">
               {phase === 'confirming' && dryRunResult && action === 'update' && (
                 <>
-                  <button onClick={handleClose} className="px-3 py-1.5 text-xs rounded bg-gray-800 text-gray-300 hover:bg-gray-700">取消</button>
+                  <button onClick={handleClose} className="px-3 py-1.5 text-xs rounded bg-gray-800 text-gray-300 hover:bg-gray-700">{translateUI("取消")}</button>
                   <button
                     onClick={handleConfirm}
                     disabled={actionDisabled}
                     className="px-3 py-1.5 text-xs rounded bg-indigo-600 text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {updateBlocked ? '等待任务完成' : '确认更新'}
+                    {updateBlocked ? translateUI("等待任务完成") : translateUI("确认更新")}
                   </button>
                 </>
               )}
               {phase === 'confirming' && dryRunResult && action === 'repair' && (
                 <>
-                  <button onClick={handleClose} className="px-3 py-1.5 text-xs rounded bg-gray-800 text-gray-300 hover:bg-gray-700">取消</button>
+                  <button onClick={handleClose} className="px-3 py-1.5 text-xs rounded bg-gray-800 text-gray-300 hover:bg-gray-700">{translateUI("取消")}</button>
                   <button
                     onClick={handleRepair}
                     disabled={actionDisabled}
                     className="px-3 py-1.5 text-xs rounded bg-red-700 text-white hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {updateBlocked ? '等待任务完成' : '修复并重新部署'}
+                    {updateBlocked ? translateUI("等待任务完成") : translateUI("修复并重新部署")}
                   </button>
                 </>
               )}
               {phase === 'confirming' && dryRunResult && action === 'restart' && (
                 <>
-                  <button onClick={handleClose} className="px-3 py-1.5 text-xs rounded bg-gray-800 text-gray-300 hover:bg-gray-700">取消</button>
+                  <button onClick={handleClose} className="px-3 py-1.5 text-xs rounded bg-gray-800 text-gray-300 hover:bg-gray-700">{translateUI("取消")}</button>
                   <button
                     onClick={handleRestart}
                     disabled={actionDisabled}
                     className="px-3 py-1.5 text-xs rounded bg-indigo-600 text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {updateBlocked ? '等待任务完成' : '重启服务'}
+                    {updateBlocked ? translateUI("等待任务完成") : translateUI("重启服务")}
                   </button>
                 </>
               )}
               {phase === 'confirming' && dryRunResult && action === 'none' && (
                 <>
-                  <button onClick={handleClose} className="px-3 py-1.5 text-xs rounded bg-gray-800 text-gray-300 hover:bg-gray-700">关闭</button>
+                  <button onClick={handleClose} className="px-3 py-1.5 text-xs rounded bg-gray-800 text-gray-300 hover:bg-gray-700">{translateUI("关闭")}</button>
                   <button
                     onClick={handleRestart}
                     disabled={actionDisabled}
                     className="px-3 py-1.5 text-xs rounded border border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {updateBlocked ? '等待任务完成' : '手动重启'}
+                    {updateBlocked ? translateUI("等待任务完成") : translateUI("手动重启")}
                   </button>
                 </>
               )}
               {phase === 'completed' && (
                 <>
-                  {canRollback && <button onClick={handleRollback} className="px-3 py-1.5 text-xs rounded bg-gray-800 text-gray-300 hover:bg-gray-700">回滚</button>}
-                  <button onClick={() => window.location.reload()} className="px-3 py-1.5 text-xs rounded bg-indigo-600 text-white hover:bg-indigo-500">刷新页面</button>
+                  {canRollback && <button onClick={handleRollback} className="px-3 py-1.5 text-xs rounded bg-gray-800 text-gray-300 hover:bg-gray-700">{translateUI("回滚")}</button>}
+                  <button onClick={() => window.location.reload()} className="px-3 py-1.5 text-xs rounded bg-indigo-600 text-white hover:bg-indigo-500">{translateUI("刷新页面")}</button>
                 </>
               )}
               {phase === 'failed' && (
                 <>
-                  {canRollback && <button onClick={handleRollback} className="px-3 py-1.5 text-xs rounded bg-red-900/50 text-red-300 hover:bg-red-900/70">回滚</button>}
-                  <button onClick={handleClose} className="px-3 py-1.5 text-xs rounded bg-gray-800 text-gray-300 hover:bg-gray-700">关闭</button>
+                  {canRollback && <button onClick={handleRollback} className="px-3 py-1.5 text-xs rounded bg-red-900/50 text-red-300 hover:bg-red-900/70">{translateUI("回滚")}</button>}
+                  <button onClick={handleClose} className="px-3 py-1.5 text-xs rounded bg-gray-800 text-gray-300 hover:bg-gray-700">{translateUI("关闭")}</button>
                 </>
               )}
             </div>

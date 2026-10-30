@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../config/language";
 import { useState, useEffect } from 'react';
 import { X, Check, Users } from './icons';
 import { api } from '../api/client';
@@ -17,6 +18,7 @@ interface TeamShareModalProps {
 }
 
 export function TeamShareModal({ type, itemId, itemTitle, onClose }: TeamShareModalProps) {
+  useLanguage();
   const [users, setUsers] = useState<TeamUser[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [shares, setShares] = useState<{ target_id: number; target_type: string }[]>([]);
@@ -87,19 +89,19 @@ export function TeamShareModal({ type, itemId, itemTitle, onClose }: TeamShareMo
       <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700">
           <h3 className="text-foreground font-semibold text-sm">
-            Share {type === 'project' ? 'Project' : 'Task'}: {itemTitle}
+            {translateUI("Share ")}{type === 'project' ? translateUI("Project") : translateUI("Task")}: {itemTitle}
           </h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-200"><X size={18} /></button>
         </div>
         <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
           {loading ? (
-            <p className="text-gray-400 text-sm">Loading...</p>
+            <p className="text-gray-400 text-sm">{translateUI("Loading...")}</p>
           ) : (
             <>
               {/* Groups */}
               {groups.length > 0 && (
                 <div>
-                  <p className="text-xs text-gray-500 mb-1.5">Groups</p>
+                  <p className="text-xs text-gray-500 mb-1.5">{translateUI("Groups")}</p>
                   <div className="space-y-1">
                     {groups.map(g => (
                       <div
@@ -111,7 +113,7 @@ export function TeamShareModal({ type, itemId, itemTitle, onClose }: TeamShareMo
                           <Users size={16} className="text-indigo-400" />
                           <div>
                             <div className="text-sm text-foreground">{g.name}</div>
-                            <div className="text-xs text-gray-500">{g.members.length} members</div>
+                            <div className="text-xs text-gray-500">{g.members.length} {translateUI("members")}</div>
                           </div>
                         </div>
                         <div className="shrink-0 ml-2">
@@ -134,7 +136,7 @@ export function TeamShareModal({ type, itemId, itemTitle, onClose }: TeamShareMo
               {/* Users */}
               {filteredUsers.length > 0 && (
                 <div>
-                  {groups.length > 0 && <p className="text-xs text-gray-500 mb-1.5">Users</p>}
+                  {groups.length > 0 && <p className="text-xs text-gray-500 mb-1.5">{translateUI("Users")}</p>}
                   <div className="space-y-1">
                     {filteredUsers.map(u => (
                       <div
@@ -173,7 +175,7 @@ export function TeamShareModal({ type, itemId, itemTitle, onClose }: TeamShareMo
               )}
 
               {filteredUsers.length === 0 && groups.length === 0 && (
-                <p className="text-gray-500 text-sm">No users or groups to share with.</p>
+                <p className="text-gray-500 text-sm">{translateUI("No users or groups to share with.")}</p>
               )}
             </>
           )}

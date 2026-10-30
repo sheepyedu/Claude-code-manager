@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../config/language";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 
 import { api, type PlanResource, type Project } from '../api/client';
@@ -57,6 +58,7 @@ interface Props {
 }
 
 export function PlansPage({ selectedPlanId, onSelectedPlanChange, onNavigateTask, onNavigateSettings }: Props) {
+  useLanguage();
   const [plans, setPlans] = useState<PlanResource[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<PlanResource | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -174,29 +176,29 @@ export function PlansPage({ selectedPlanId, onSelectedPlanChange, onNavigateTask
   return <div className="space-y-6">
     <PlanCreateForm onCreated={created} onNavigateSettings={onNavigateSettings} />
 
-    <section className={needsInputVisible || reviewVisible ? 'space-y-4' : ''} aria-label={needsInputVisible || reviewVisible ? 'Plans requiring action' : undefined}>
-      {(needsInputVisible || reviewVisible) && <h2 className="text-base font-semibold text-gray-200">Plans requiring action</h2>}
+    <section className={needsInputVisible || reviewVisible ? 'space-y-4' : ''} aria-label={needsInputVisible || reviewVisible ? translateUI("Plans requiring action") : undefined}>
+      {(needsInputVisible || reviewVisible) && <h2 className="text-base font-semibold text-gray-200">{translateUI("Plans requiring action")}</h2>}
       <PlanNeedsInputPanel onVisibilityChange={setNeedsInputVisible} />
       <VersionedPlanPanel onVisibilityChange={setReviewVisible} onNavigateTask={onNavigateTask} />
     </section>
 
-    <section className="space-y-3" aria-label="All Plans">
+    <section className="space-y-3" aria-label={translateUI("All Plans")}>
       <div className="flex flex-wrap items-center gap-2">
-        <select aria-label="Plan kind" value={kind} onChange={(event) => setKind(event.target.value as KindFilter)} className="h-9 rounded-lg border border-gray-700 bg-gray-800 px-3 text-xs text-gray-300">
-          <option value="all">All Plans</option>
-          <option value="standalone">Standalone</option>
-          <option value="related">Related</option>
+        <select aria-label={translateUI("Plan kind")} value={kind} onChange={(event) => setKind(event.target.value as KindFilter)} className="h-9 rounded-lg border border-gray-700 bg-gray-800 px-3 text-xs text-gray-300">
+          <option value="all">{translateUI("All Plans")}</option>
+          <option value="standalone">{translateUI("Standalone")}</option>
+          <option value="related">{translateUI("Related")}</option>
         </select>
-        <ProjectSelect projects={projects.filter((project) => project.show_in_selector)} value={projectId} onChange={(value) => setProjectId(value ? Number(value) : undefined)} placeholder="All Projects" className="[&>button]:h-9 [&>button]:rounded-lg" />
-        <div className="relative h-9 min-w-[180px] flex-1 sm:max-w-sm"><Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search Plans" className="h-9 w-full rounded-lg border border-gray-700 bg-gray-800 pl-8 pr-8 text-xs text-gray-200 outline-none focus:border-indigo-500" />{search && <button type="button" onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500" aria-label="Clear Plan search"><X size={13} /></button>}</div>
-        <button type="button" onClick={() => setArchivedOnly((value) => !value)} aria-pressed={archivedOnly} className={`flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs ${archivedOnly ? 'border-amber-500/50 bg-amber-500/15 text-amber-300' : 'border-gray-700 bg-gray-800 text-gray-400 hover:text-gray-200'}`}><Archive size={13} /> Archived only</button>
+        <ProjectSelect projects={projects.filter((project) => project.show_in_selector)} value={projectId} onChange={(value) => setProjectId(value ? Number(value) : undefined)} placeholder={translateUI("All Projects")} className="[&>button]:h-9 [&>button]:rounded-lg" />
+        <div className="relative h-9 min-w-[180px] flex-1 sm:max-w-sm"><Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={translateUI("Search Plans")} className="h-9 w-full rounded-lg border border-gray-700 bg-gray-800 pl-8 pr-8 text-xs text-gray-200 outline-none focus:border-indigo-500" />{search && <button type="button" onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500" aria-label={translateUI("Clear Plan search")}><X size={13} /></button>}</div>
+        <button type="button" onClick={() => setArchivedOnly((value) => !value)} aria-pressed={archivedOnly} className={`flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs ${archivedOnly ? 'border-amber-500/50 bg-amber-500/15 text-amber-300' : 'border-gray-700 bg-gray-800 text-gray-400 hover:text-gray-200'}`}><Archive size={13} /> {translateUI("Archived only")}</button>
       </div>
-      <div className="flex gap-1 overflow-x-auto pb-1">{STATUS_OPTIONS.map((option) => <button key={option.value} type="button" onClick={() => setStatus(option.value)} aria-pressed={status === option.value} className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs ${status === option.value ? 'bg-indigo-500/20 text-indigo-300' : 'text-gray-500 hover:bg-gray-800 hover:text-gray-300'}`}>{option.label} <span className="tabular-nums">{statusCounts[option.value]}</span></button>)}</div>
+      <div className="flex gap-1 overflow-x-auto pb-1">{STATUS_OPTIONS.map((option) => <button key={option.value} type="button" onClick={() => setStatus(option.value)} aria-pressed={status === option.value} className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs ${status === option.value ? 'bg-indigo-500/20 text-indigo-300' : 'text-gray-500 hover:bg-gray-800 hover:text-gray-300'}`}>{translateUI(option.label)} <span className="tabular-nums">{statusCounts[option.value]}</span></button>)}</div>
       {error && <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">{error}</div>}
-      {loading ? <div className="py-12 text-center text-sm text-gray-500">Loading Plans…</div> : <PlanCatalog plans={plans} projects={projects} selectedPlanId={selectedPlanId} onSelectPlan={selectPlan} onNavigateTask={onNavigateTask} onSetArchived={setArchived} />}
-      {totalPages > 1 && <div className="flex items-center justify-center gap-3 py-2"><button type="button" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={page <= 1} className="rounded p-1.5 text-gray-400 disabled:opacity-30" aria-label="Previous Plans page"><ChevronLeft size={17} /></button><span className="text-xs text-gray-500">{page} / {totalPages} · {total} Plans</span><button type="button" onClick={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={page >= totalPages} className="rounded p-1.5 text-gray-400 disabled:opacity-30" aria-label="Next Plans page"><ChevronRight size={17} /></button></div>}
+      {loading ? <div className="py-12 text-center text-sm text-gray-500">{translateUI("Loading Plans…")}</div> : <PlanCatalog plans={plans} projects={projects} selectedPlanId={selectedPlanId} onSelectPlan={selectPlan} onNavigateTask={onNavigateTask} onSetArchived={setArchived} />}
+      {totalPages > 1 && <div className="flex items-center justify-center gap-3 py-2"><button type="button" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={page <= 1} className="rounded p-1.5 text-gray-400 disabled:opacity-30" aria-label={translateUI("Previous Plans page")}><ChevronLeft size={17} /></button><span className="text-xs text-gray-500">{page} / {totalPages} · {total} {translateUI("Plans")}</span><button type="button" onClick={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={page >= totalPages} className="rounded p-1.5 text-gray-400 disabled:opacity-30" aria-label={translateUI("Next Plans page")}><ChevronRight size={17} /></button></div>}
     </section>
 
-    {selectedPlan && <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/65 sm:items-center sm:p-5" onMouseDown={(event) => event.target === event.currentTarget && close()}><div ref={dialogRef} role="dialog" aria-modal="true" aria-label={`Plan #${selectedPlan.id}`} className={`min-w-0 w-full overflow-hidden border border-gray-700 bg-gray-900 shadow-2xl transition-[height] sm:h-[min(88vh,860px)] sm:max-w-5xl sm:rounded-2xl ${expanded ? 'h-[100dvh]' : 'h-[70dvh]'}`}><button type="button" onClick={() => setExpanded((value) => !value)} className="absolute left-1/2 top-2 z-10 h-1.5 w-12 -translate-x-1/2 rounded-full bg-gray-600 transition-colors hover:bg-gray-500 sm:hidden" aria-label={expanded ? 'Collapse Plan detail' : 'Expand Plan detail'} /><PlanDetail key={selectedPlan.id} plan={selectedPlan} onRefresh={() => refresh()} onClose={close} onNavigateTask={onNavigateTask} /></div></div>}
+    {selectedPlan && <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/65 sm:items-center sm:p-5" onMouseDown={(event) => event.target === event.currentTarget && close()}><div ref={dialogRef} role="dialog" aria-modal="true" aria-label={translateUI("Plan #{0}", [selectedPlan.id])} className={`min-w-0 w-full overflow-hidden border border-gray-700 bg-gray-900 shadow-2xl transition-[height] sm:h-[min(88vh,860px)] sm:max-w-5xl sm:rounded-2xl ${expanded ? 'h-[100dvh]' : 'h-[70dvh]'}`}><button type="button" onClick={() => setExpanded((value) => !value)} className="absolute left-1/2 top-2 z-10 h-1.5 w-12 -translate-x-1/2 rounded-full bg-gray-600 transition-colors hover:bg-gray-500 sm:hidden" aria-label={expanded ? translateUI("Collapse Plan detail") : translateUI("Expand Plan detail")} /><PlanDetail key={selectedPlan.id} plan={selectedPlan} onRefresh={() => refresh()} onClose={close} onNavigateTask={onNavigateTask} /></div></div>}
   </div>;
 }

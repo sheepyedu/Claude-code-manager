@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -12,6 +13,7 @@ export function CollapsiblePlanningRequest({
   content,
   children,
 }: CollapsiblePlanningRequestProps) {
+  useLanguage();
   const contentId = useId();
   const contentRef = useRef<HTMLDivElement>(null);
   const [expandedContent, setExpandedContent] = useState<string | null>(null);
@@ -40,8 +42,7 @@ export function CollapsiblePlanningRequest({
         className={expanded ? undefined : 'max-h-[200px] overflow-hidden'}
       >
         <div className="text-[10px] font-medium uppercase tracking-wide text-gray-600">
-          Planning request
-        </div>
+          {translateUI("Planning request ")}</div>
         <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-gray-400">
           {content}
         </p>
@@ -57,7 +58,7 @@ export function CollapsiblePlanningRequest({
           ))}
           className="mt-2 text-xs font-medium text-indigo-300 hover:text-indigo-200"
         >
-          {expanded ? 'Show less' : 'Show more'}
+          {expanded ? translateUI("Show less") : translateUI("Show more")}
         </button>
       )}
     </div>

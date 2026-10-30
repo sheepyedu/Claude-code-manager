@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../config/language";
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../api/client';
 import type { TagItem } from '../api/client';
@@ -10,6 +11,7 @@ interface TagManagerProps {
 }
 
 export function TagManager({ onClose, onChanged }: TagManagerProps) {
+  useLanguage();
   const [tags, setTags] = useState<TagItem[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
@@ -77,7 +79,7 @@ export function TagManager({ onClose, onChanged }: TagManagerProps) {
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700">
-          <h3 className="text-foreground font-semibold">Manage Tags</h3>
+          <h3 className="text-foreground font-semibold">{translateUI("Manage Tags")}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-200"><X size={18} /></button>
         </div>
 
@@ -90,7 +92,7 @@ export function TagManager({ onClose, onChanged }: TagManagerProps) {
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-              placeholder="New tag name..."
+              placeholder={translateUI("New tag name...")}
               className="flex-1 bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
             />
             <ColorPicker value={newColor} onChange={setNewColor} />
@@ -99,13 +101,12 @@ export function TagManager({ onClose, onChanged }: TagManagerProps) {
               disabled={!newName.trim()}
               className="flex items-center gap-1 px-3 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-500 disabled:opacity-50"
             >
-              <Plus size={14} /> Add
-            </button>
+              <Plus size={14} /> {translateUI("Add ")}</button>
           </div>
 
           {/* Tag list */}
           {tags.length === 0 ? (
-            <p className="text-gray-500 text-sm text-center py-4">No tags yet. Tags are created when you add them to projects.</p>
+            <p className="text-gray-500 text-sm text-center py-4">{translateUI("No tags yet. Tags are created when you add them to projects.")}</p>
           ) : (
             <div className="space-y-1">
               {tags.map((tag) => {
@@ -162,6 +163,7 @@ export function TagManager({ onClose, onChanged }: TagManagerProps) {
 }
 
 function ColorPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  useLanguage();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const current = TAG_COLOR_OPTIONS.find((c) => c.key === value) || TAG_COLOR_OPTIONS[0];
@@ -181,7 +183,7 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (v: string)
         type="button"
         onClick={() => setOpen(!open)}
         className="w-8 h-8 rounded-lg border-2 border-gray-600 bg-gray-800 flex items-center justify-center hover:border-gray-500"
-        title={current.label}
+        title={translateUI(current.label)}
       >
         <span className={`w-4 h-4 rounded-full ${current.dot}`} />
       </button>
@@ -195,7 +197,7 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (v: string)
               className={`w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-110 ${
                 value === c.key ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-800' : ''
               }`}
-              title={c.label}
+              title={translateUI(c.label)}
             >
               <span className={`w-6 h-6 rounded-full ${c.dot}`} />
             </button>

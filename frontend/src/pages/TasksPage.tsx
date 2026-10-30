@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../config/language";
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../api/client';
 import type { Task, Project, TagItem } from '../api/client';
@@ -40,6 +41,7 @@ interface TasksPageProps {
 }
 
 export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
+  useLanguage();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -443,8 +445,7 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
             }`}
           >
             <Filter size={12} />
-            Filter
-            {activeFilterCount > 0 && (
+            {translateUI("Filter ")}{activeFilterCount > 0 && (
               <span className="bg-white/20 text-white px-1.5 rounded-full text-[10px]">{activeFilterCount}</span>
             )}
             <ChevronDown size={12} className={`transition-transform ${showFilterDropdown ? 'rotate-180' : ''}`} />
@@ -452,7 +453,7 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
           {showFilterDropdown && (
             <div className="absolute top-full mt-1 left-0 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-30 min-w-[180px] py-1 max-h-72 overflow-y-auto">
               {/* Status section */}
-              <div className="px-3 py-1 text-[10px] text-gray-500 uppercase tracking-wider">Status</div>
+              <div className="px-3 py-1 text-[10px] text-gray-500 uppercase tracking-wider">{translateUI("Status")}</div>
               {statusOptions.map((f) => {
                 const checked = statusFilters.includes(f);
                 return (
@@ -478,7 +479,7 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
               <div className="border-t border-gray-700 my-1" />
 
               {/* Toggle filters */}
-              <div className="px-3 py-1 text-[10px] text-gray-500 uppercase tracking-wider">Filters</div>
+              <div className="px-3 py-1 text-[10px] text-gray-500 uppercase tracking-wider">{translateUI("Filters")}</div>
               <button
                 onClick={() => {
                   prepareFilterChange();
@@ -491,8 +492,7 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
                 <span className={`w-3 h-3 rounded border flex items-center justify-center text-[8px] ${starredFilter ? 'bg-yellow-500 border-yellow-500 text-white' : 'border-gray-600'}`}>
                   {starredFilter && '✓'}
                 </span>
-                ★ Starred
-              </button>
+                {translateUI("★ Starred ")}</button>
               <button
                 onClick={() => {
                   prepareFilterChange();
@@ -505,8 +505,7 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
                 <span className={`w-3 h-3 rounded border flex items-center justify-center text-[8px] ${unreadFilter ? 'bg-indigo-500 border-indigo-500 text-white' : 'border-gray-600'}`}>
                   {unreadFilter && '✓'}
                 </span>
-                Unread
-              </button>
+                {translateUI("Unread ")}</button>
               <button
                 onClick={() => {
                   prepareFilterChange();
@@ -519,14 +518,13 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
                 <span className={`w-3 h-3 rounded border flex items-center justify-center text-[8px] ${showArchived ? 'bg-amber-500 border-amber-500 text-white' : 'border-gray-600'}`}>
                   {showArchived && '✓'}
                 </span>
-                Archived
-              </button>
+                {translateUI("Archived ")}</button>
 
               {/* Tags section */}
               {allProjectTags.length > 0 && (
                 <>
                   <div className="border-t border-gray-700 my-1" />
-                  <div className="px-3 py-1 text-[10px] text-gray-500 uppercase tracking-wider">Tags</div>
+                  <div className="px-3 py-1 text-[10px] text-gray-500 uppercase tracking-wider">{translateUI("Tags")}</div>
                   {allProjectTags.map((tag) => {
                     const c = resolveTagColor(tag, tagColorMap[tag]);
                     const active = tagFilters.includes(tag);
@@ -574,8 +572,7 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
                     }}
                     className="w-full px-3 py-1.5 text-xs text-red-400 hover:bg-gray-800 text-left"
                   >
-                    Clear all filters
-                  </button>
+                    {translateUI("Clear all filters ")}</button>
                 </>
               )}
             </div>
@@ -595,7 +592,7 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
               ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50 hover:bg-indigo-600/40'
               : 'bg-gray-700 text-gray-400 border-gray-600 hover:bg-gray-600 hover:text-gray-300'
           }`}
-          title="Search task titles (regex)"
+          title={translateUI("Search task titles (regex)")}
         >
           <Search size={13} />
         </button>
@@ -606,7 +603,7 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Escape') { setSearchQuery(''); setShowSearch(false); } }}
-              placeholder="Regex search titles..."
+              placeholder={translateUI("Regex search titles...")}
               className="w-full px-3 py-2 pr-8 rounded-lg bg-gray-900 border border-gray-700 text-sm text-gray-200 placeholder-gray-600 focus:border-indigo-500 focus:outline-none"
             />
             {searchQuery && (
@@ -620,7 +617,7 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
           </div>
         )}
         {filteredSearchResults !== null && (
-          <span className="text-xs text-gray-500 whitespace-nowrap">{filteredSearchResults.length} match{filteredSearchResults.length === 1 ? '' : 'es'}</span>
+          <span className="text-xs text-gray-500 whitespace-nowrap">{filteredSearchResults.length} {translateUI("match")}{filteredSearchResults.length === 1 ? '' : translateUI("es")}</span>
         )}
 
         <ProjectSelect
@@ -630,7 +627,7 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
             prepareFilterChange();
             setProjectFilter(v ? Number(v) : undefined);
           }}
-          placeholder="Projects"
+          placeholder={translateUI("Projects")}
           tagColorMap={tagColorMap}
         />
       </div>
@@ -665,8 +662,7 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
           <span className="text-xs text-gray-400">
             {page} / {totalPages}
             <span className="ml-2 text-gray-600">
-              ({totalCount} tasks)
-            </span>
+              ({totalCount} {translateUI("tasks) ")}</span>
           </span>
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
@@ -754,11 +750,11 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
         {sidebarOpen && (
           <div className="shrink-0 flex flex-col border-r border-gray-800 bg-gray-900/50" style={{ width: sidebarWidth }}>
             <div className="px-3 py-2 border-b border-gray-800 flex items-center justify-between shrink-0">
-              <span className="text-xs font-medium text-gray-400">Tasks</span>
+              <span className="text-xs font-medium text-gray-400">{translateUI("Tasks")}</span>
               <button
                 onClick={() => setSidebarOpen(false)}
                 className="p-1 text-gray-500 hover:text-gray-300 transition-colors"
-                title="Collapse sidebar"
+                title={translateUI("Collapse sidebar")}
               >
                 <PanelLeftClose size={14} />
               </button>
@@ -796,7 +792,7 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
                       title={getTaskStatusLabel(t)}
                     />
                     <span className={`text-xs truncate flex-1 ${chatTask?.id === t.id ? 'text-foreground font-medium' : 'text-gray-300'}`}>
-                      {t.title || t.description?.slice(0, 50) || `Task #${t.id}`}
+                      {t.title || t.description?.slice(0, 50) || translateUI("Task #{0}", [t.id])}
                     </span>
                     {t.has_unread && <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />}
                   </div>
@@ -826,7 +822,7 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
                     <button
                       onClick={async () => { await api.starTask(t.id); refresh(); }}
                       className={`p-1 transition-colors ${t.starred ? 'text-yellow-400 hover:text-yellow-300' : 'text-gray-600 hover:text-yellow-400'}`}
-                      title={t.starred ? 'Unstar' : 'Star'}
+                      title={t.starred ? translateUI("Unstar") : translateUI("Star")}
                     >
                       <Star size={13} fill={t.starred ? 'currentColor' : 'none'} />
                     </button>
@@ -835,14 +831,14 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
                         <button
                           onClick={() => window.dispatchEvent(new CustomEvent('ccm-share-task', { detail: { task: t } }))}
                           className="p-1 text-gray-600 hover:text-blue-400 transition-colors"
-                          title="Share"
+                          title={translateUI("Share")}
                         >
                           <Share2 size={13} />
                         </button>
                         <button
                           onClick={async () => { await api.archiveTask(t.id); skipFreezeOnce.current = true; refresh(); }}
                           className="p-1 text-gray-600 hover:text-amber-400 transition-colors"
-                          title={t.archived ? 'Unarchive' : 'Archive'}
+                          title={t.archived ? translateUI("Unarchive") : translateUI("Archive")}
                         >
                           {t.archived ? <ArchiveRestore size={13} /> : <Archive size={13} />}
                         </button>
@@ -884,7 +880,7 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
             <button
               onClick={() => setSidebarOpen(true)}
               className="p-1.5 text-gray-500 hover:text-gray-300 transition-colors"
-              title="Expand sidebar"
+              title={translateUI("Expand sidebar")}
             >
               <PanelLeftOpen size={16} />
             </button>

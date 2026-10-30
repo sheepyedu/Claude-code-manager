@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../config/language";
 import { memo, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
@@ -7,6 +8,7 @@ import { copyToClipboard } from './clipboard';
 import { Check, Copy } from './icons';
 
 function CopyButton({ text }: { text: string }) {
+  useLanguage();
   const [copied, setCopied] = useState(false);
   const handleCopy = () => {
     copyToClipboard(text).then(() => {
@@ -18,7 +20,7 @@ function CopyButton({ text }: { text: string }) {
     <button
       onClick={handleCopy}
       className="copy-btn absolute right-2 top-2 rounded bg-gray-700/80 p-1 text-gray-400 opacity-0 transition-opacity hover:bg-gray-600 hover:text-gray-200 group-hover:pointer-events-auto group-hover:opacity-100 pointer-events-none"
-      title="Copy"
+      title={translateUI("Copy")}
     >
       {copied ? <Check size={12} /> : <Copy size={12} />}
     </button>

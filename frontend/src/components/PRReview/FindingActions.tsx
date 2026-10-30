@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useEffect, useState } from 'react';
 import { api } from '../../api/client';
 import { useVisibilityAwareInterval } from '../../hooks/useVisibilityAwareInterval';
@@ -13,6 +14,7 @@ export function FindingActions({ finding, currentSnapshot, onChanged }: {
   currentSnapshot: boolean;
   onChanged: () => Promise<void>;
 }) {
+  useLanguage();
   const [action, setAction] = useState<PRFindingAction | null>(finding.latest_action);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,48 +138,48 @@ export function FindingActions({ finding, currentSnapshot, onChanged }: {
 
   return (
     <div className="mt-3 border-t border-gray-700/60 pt-3">
-      {action && <p className="mb-2 text-gray-500">Action: {action.action_type} · {action.status}</p>}
+      {action && <p className="mb-2 text-gray-500">{translateUI("Action: ")}{action.action_type} · {translateUI(action.status)}</p>}
       {error && <p role="alert" className="mb-2 text-red-400">{error}</p>}
-      {!currentSnapshot && <p className="mb-2 text-gray-500">Historical snapshot — new actions are locked.</p>}
-      {activeFix && <p className="mb-2 text-gray-500">Finish the active AI fix before recording another action.</p>}
+      {!currentSnapshot && <p className="mb-2 text-gray-500">{translateUI("Historical snapshot — new actions are locked.")}</p>}
+      {activeFix && <p className="mb-2 text-gray-500">{translateUI("Finish the active AI fix before recording another action.")}</p>}
       {canConfirm && action && (
         <div className="mb-2 rounded border border-amber-700/50 bg-amber-950/20 p-2 text-xs text-gray-300">
-          <div>Target: {targetRepo}#{prNumber} · {targetRef}</div>
-          <div>Head: {action.expected_head_sha}</div>
-          <div>Files: {allowedFiles.join(', ')}</div>
-          <div>Patch SHA-256: {action.patch_sha256}</div>
+          <div>{translateUI("Target: ")}{targetRepo}#{prNumber} · {targetRef}</div>
+          <div>{translateUI("Head: ")}{action.expected_head_sha}</div>
+          <div>{translateUI("Files: ")}{allowedFiles.join(', ')}</div>
+          <div>{translateUI("Patch SHA-256: ")}{action.patch_sha256}</div>
         </div>
       )}
       <div className="flex flex-wrap gap-2">
         {canStart && (
           <>
             <button disabled={busy} className="rounded bg-gray-700 px-2 py-1 disabled:opacity-50" onClick={() => {
-              if (window.confirm('Ignore this finding in CCM? The Panel gate remains authoritative.')) {
+              if (window.confirm(translateUI("Ignore this finding in CCM? The Panel gate remains authoritative."))) {
                 void run(() => api.ignoreReviewFinding(finding.id, actionKey('ignore', finding.id)));
               }
-            }}>Ignore</button>
+            }}>{translateUI("Ignore")}</button>
             <button disabled={busy} className="rounded bg-gray-700 px-2 py-1 disabled:opacity-50" onClick={() => {
-              const advice = window.prompt('Human repair advice');
+              const advice = window.prompt(translateUI("Human repair advice"));
               if (advice?.trim()) {
                 void run(() => api.saveReviewFindingAdvice(finding.id, advice.trim(), actionKey('advice', finding.id)));
               }
-            }}>Human advice</button>
+            }}>{translateUI("Human advice")}</button>
             <button disabled={busy} className="rounded bg-indigo-600 px-2 py-1 text-white disabled:opacity-50" onClick={() => {
               void run(() => api.createReviewFindingFix(finding.id, actionKey('fix', finding.id)));
-            }}>Generate AI fix</button>
+            }}>{translateUI("Generate AI fix")}</button>
           </>
         )}
         {canCancel && action && (
           <button disabled={busy} className="rounded bg-red-700 px-2 py-1 text-white disabled:opacity-50" onClick={() => {
-            if (window.confirm('Cancel this active AI fix? Any unconfirmed generated patch will be discarded.')) {
+            if (window.confirm(translateUI("Cancel this active AI fix? Any unconfirmed generated patch will be discarded."))) {
               setReviewedDiff(null);
               void run(() => api.cancelPRFindingAction(action.id));
             }
-          }}>Cancel AI fix</button>
+          }}>{translateUI("Cancel AI fix")}</button>
         )}
         {canConfirm && (
           <>
-            <button disabled={busy} className="rounded bg-gray-700 px-2 py-1 disabled:opacity-50" onClick={() => void downloadDiff()}>Download diff</button>
+            <button disabled={busy} className="rounded bg-gray-700 px-2 py-1 disabled:opacity-50" onClick={() => void downloadDiff()}>{translateUI("Download diff")}</button>
             <button disabled={busy || !diffIsCurrent} className="rounded bg-amber-600 px-2 py-1 text-white disabled:opacity-50" onClick={() => {
               if (!action || !reviewedDiff || !diffIsCurrent) return;
               const confirmation = [
@@ -195,7 +197,7 @@ export function FindingActions({ finding, currentSnapshot, onChanged }: {
                 reviewedDiff.patchSha256,
                 reviewedDiff.receipt,
               ));
-            }}>Confirm and push</button>
+            }}>{translateUI("Confirm and push")}</button>
           </>
         )}
       </div>

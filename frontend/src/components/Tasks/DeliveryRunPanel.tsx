@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useCallback, useEffect, useState } from 'react';
 
 import { api } from '../../api/client';
@@ -55,6 +56,7 @@ export function DeliveryRunPanel({
   runId,
   className = '',
 }: DeliveryRunPanelProps) {
+  useLanguage();
   const [run, setRun] = useState<DeliveryRun | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -111,10 +113,10 @@ export function DeliveryRunPanel({
     if (!run || !pendingAction || acting) return;
     const normalizedReason = reason.trim();
     if (pendingAction !== 'resume' && !normalizedReason) {
-      setError(`${actionLabels[pendingAction]} requires a reason.`);
+      setError(translateUI("{0} requires a reason.", [actionLabels[pendingAction]]));
       return;
     }
-    if (!window.confirm(`Confirm ${actionLabels[pendingAction].toLowerCase()} for Delivery Run #${run.id}?`)) {
+    if (!window.confirm(translateUI("Confirm {0} for Delivery Run #{1}?", [actionLabels[pendingAction].toLowerCase(), run.id]))) {
       return;
     }
 
@@ -141,13 +143,13 @@ export function DeliveryRunPanel({
 
   return (
     <section
-      aria-label={`Delivery Run #${runId}`}
+      aria-label={translateUI("Delivery Run #{0}", [runId])}
       className={`rounded-lg border border-indigo-500/30 bg-indigo-500/5 p-3 ${className}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold text-indigo-200">Delivery Run #{runId}</span>
+            <span className="text-sm font-semibold text-indigo-200">{translateUI("Delivery Run #")}{runId}</span>
             {run && (
               <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
                 run.activity === 'terminal'
@@ -164,7 +166,7 @@ export function DeliveryRunPanel({
           </div>
           {run && (
             <p className="mt-1 text-xs text-gray-400">
-              Cycle {run.cycle_count}/{run.max_cycles} · {run.turn_count} developer turn{run.turn_count === 1 ? '' : 's'}
+              {translateUI("Cycle ")}{run.cycle_count}/{run.max_cycles} · {run.turn_count} {translateUI("developer turn")}{run.turn_count === 1 ? '' : translateUI("s")}
             </p>
           )}
         </div>
@@ -173,7 +175,7 @@ export function DeliveryRunPanel({
           onClick={() => void load(true)}
           disabled={loading || refreshing}
           className="rounded p-1.5 text-gray-500 hover:bg-gray-800 hover:text-indigo-300 disabled:opacity-40"
-          title="Refresh Delivery Run"
+          title={translateUI("Refresh Delivery Run")}
         >
           <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
         </button>
@@ -181,32 +183,31 @@ export function DeliveryRunPanel({
 
       {loading && !run && (
         <div className="flex items-center gap-2 py-3 text-xs text-gray-500">
-          <Loader2 size={13} className="animate-spin" /> Loading Delivery Run…
-        </div>
+          <Loader2 size={13} className="animate-spin" /> {translateUI("Loading Delivery Run… ")}</div>
       )}
 
       {run && (
         <>
           <dl className="mt-2 grid gap-x-4 gap-y-1 text-xs sm:grid-cols-2">
             <div className="min-w-0">
-              <dt className="inline text-gray-500">Branch: </dt>
+              <dt className="inline text-gray-500">{translateUI("Branch: ")}</dt>
               <dd className="inline break-all text-gray-300">{run.delivery_branch}</dd>
             </div>
             {run.wait_reason && (
               <div className="min-w-0">
-                <dt className="inline text-gray-500">Waiting: </dt>
+                <dt className="inline text-gray-500">{translateUI("Waiting: ")}</dt>
                 <dd className="inline break-words text-gray-300">{titleCase(run.wait_reason)}</dd>
               </div>
             )}
             {run.pause_reason && (
               <div className="min-w-0 sm:col-span-2">
-                <dt className="inline text-gray-500">Paused: </dt>
+                <dt className="inline text-gray-500">{translateUI("Paused: ")}</dt>
                 <dd className="inline break-words text-amber-300">{run.pause_reason}</dd>
               </div>
             )}
             {run.error_message && (
               <div className="min-w-0 sm:col-span-2">
-                <dt className="inline text-gray-500">Error{run.error_code ? ` (${run.error_code})` : ''}: </dt>
+                <dt className="inline text-gray-500">{translateUI("Error")}{run.error_code ? ` (${run.error_code})` : ''}: </dt>
                 <dd className="inline break-words text-red-300">{run.error_message}</dd>
               </div>
             )}
@@ -220,7 +221,7 @@ export function DeliveryRunPanel({
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 rounded bg-emerald-600/20 px-2 py-1 text-xs font-medium text-emerald-300 hover:bg-emerald-600/30"
               >
-                <GitPullRequest size={13} /> PR #{run.pr_number ?? '?'}
+                <GitPullRequest size={13} /> {translateUI("PR #")}{run.pr_number ?? '?'}
               </a>
             )}
             {allowedActions.includes('pause') && (
@@ -229,8 +230,7 @@ export function DeliveryRunPanel({
                 onClick={() => chooseAction('pause')}
                 className="inline-flex items-center gap-1 rounded bg-amber-600/20 px-2 py-1 text-xs font-medium text-amber-300 hover:bg-amber-600/30"
               >
-                <StopCircle size={13} /> Pause
-              </button>
+                <StopCircle size={13} /> {translateUI("Pause ")}</button>
             )}
             {allowedActions.includes('resume') && (
               <button
@@ -238,8 +238,7 @@ export function DeliveryRunPanel({
                 onClick={() => chooseAction('resume')}
                 className="inline-flex items-center gap-1 rounded bg-indigo-600/20 px-2 py-1 text-xs font-medium text-indigo-300 hover:bg-indigo-600/30"
               >
-                <Play size={13} /> Resume
-              </button>
+                <Play size={13} /> {translateUI("Resume ")}</button>
             )}
             {allowedActions.includes('cancel') && (
               <button
@@ -247,15 +246,14 @@ export function DeliveryRunPanel({
                 onClick={() => chooseAction('cancel')}
                 className="inline-flex items-center gap-1 rounded bg-red-600/20 px-2 py-1 text-xs font-medium text-red-300 hover:bg-red-600/30"
               >
-                <XCircle size={13} /> Cancel
-              </button>
+                <XCircle size={13} /> {translateUI("Cancel ")}</button>
             )}
             {allowedActions.length === 0
               && (isObservationOnly(run) || run.activity !== 'terminal') && (
               <span className="text-[11px] text-gray-500">
                 {isObservationOnly(run)
-                  ? 'Publishing and PR monitoring are observation-only; controls are no longer available.'
-                  : 'Controls become available at the next safe point.'}
+                  ? translateUI("Publishing and PR monitoring are observation-only; controls are no longer available.")
+                  : translateUI("Controls become available at the next safe point.")}
               </span>
             )}
           </div>
@@ -263,9 +261,9 @@ export function DeliveryRunPanel({
           {pendingAction && (
             <div className="mt-3 rounded border border-gray-700 bg-gray-900/60 p-2">
               <label className="block text-xs text-gray-300">
-                {actionLabels[pendingAction]} reason{pendingAction === 'resume' ? ' (optional)' : ''}
+                {actionLabels[pendingAction]} {translateUI("reason")}{pendingAction === 'resume' ? translateUI(" (optional)") : ''}
                 <textarea
-                  aria-label={`${actionLabels[pendingAction]} reason`}
+                  aria-label={translateUI("{0} reason", [actionLabels[pendingAction]])}
                   value={reason}
                   onChange={(event) => setReason(event.target.value)}
                   maxLength={2000}
@@ -280,8 +278,7 @@ export function DeliveryRunPanel({
                   disabled={acting}
                   className="rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-800 hover:text-gray-200 disabled:opacity-40"
                 >
-                  Back
-                </button>
+                  {translateUI("Back ")}</button>
                 <button
                   type="button"
                   onClick={() => void submitAction()}
@@ -292,7 +289,7 @@ export function DeliveryRunPanel({
                       : 'bg-indigo-600 hover:bg-indigo-500'
                   }`}
                 >
-                  {acting ? 'Applying…' : `Confirm ${actionLabels[pendingAction]}`}
+                  {acting ? translateUI("Applying…") : translateUI("Confirm {0}", [actionLabels[pendingAction]])}
                 </button>
               </div>
             </div>

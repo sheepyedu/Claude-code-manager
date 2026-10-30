@@ -27,7 +27,15 @@ cd frontend && npx tsc --noEmit
 
 ## 自动化测试
 
+### 语言切换
+
+`cd frontend && npx vitest run src/components/Layout/LanguageSelect.test.tsx src/components/System/SystemMetricsPanel.test.tsx`
+覆盖实时中英文切换、表单状态和原始 API 值保留、不重新挂载或重复请求、浏览器持久化、跨标签页同步、非法保存值回退及存储被禁止时的会话内切换。资源面板验证中文文案和缓存秒数转分钟。手动验证：在齿轮或 Settings 页面切换后刷新，导航和资源面板应使用选择的语言，聊天/代码内容不应变化。
+
 ### 系统资源面板
+
+`uv run python -m pytest backend/tests/test_system_metrics.py backend/tests/test_api_system.py -q` 覆盖无 `/proc` 环境、CPU 采样不阻塞事件循环、内存/swap 统计、零 swap 和缓存隔离/刷新。
+
 
 `backend/tests/test_api_system.py::test_system_metrics_returns_host_snapshot`
 验证管理员系统资源接口返回 CPU、内存、swap、根磁盘和 `/tmp` 的结构化快照，并确认 `refresh=true` 会传递强制刷新参数。`frontend/src/components/System/SystemMetricsPanel.test.tsx` 验证初始缓存读取和按钮强制刷新。前端面板使用 `npm run build` 做 TypeScript 类型检查和生产构建验证。

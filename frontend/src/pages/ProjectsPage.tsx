@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../config/language";
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../api/client';
 import type { Project, GlobalSettings, TagItem } from '../api/client';
@@ -12,19 +13,20 @@ import { useVisibilityAwareInterval } from '../hooks/useVisibilityAwareInterval'
 // ── Shared: identity warning ──────────────────────────────────────────────────
 
 function IdentityWarning({ name, email }: { name: string; email: string }) {
+  useLanguage();
   const hasName = name.trim() !== '';
   const hasEmail = email.trim() !== '';
   if ((hasName && hasEmail) || (!hasName && !hasEmail)) return null;
   return (
     <p className="col-span-2 text-xs text-amber-400">
-      姓名和邮箱必须同时填写才会生效，否则将使用全局配置
-    </p>
+      {translateUI("姓名和邮箱必须同时填写才会生效，否则将使用全局配置 ")}</p>
   );
 }
 
 // ── Badge color picker ───────────────────────────────────────────────────────
 
 function BadgeColorPicker({ value, onChange }: { value: string | null; onChange: (color: string | null) => void }) {
+  useLanguage();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -45,28 +47,28 @@ function BadgeColorPicker({ value, onChange }: { value: string | null; onChange:
         type="button"
         onClick={() => setOpen(!open)}
         className="flex items-center gap-1.5 px-2 py-1 text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-700 rounded transition-colors"
-        title="Badge color"
+        title={translateUI("Badge color")}
       >
         {current ? (
           <span className={`w-3 h-3 rounded-full ${current.dot}`} />
         ) : (
           <Palette size={14} />
         )}
-        <span className="hidden sm:inline">{current ? current.label : 'Color'}</span>
+        <span className="hidden sm:inline">{current ? translateUI(current.label) : translateUI("Color")}</span>
       </button>
       {open && (
         <div className="absolute top-full left-0 mt-1 bg-gray-700 border border-gray-600 rounded-lg shadow-lg z-20 p-2 flex flex-wrap gap-1.5 w-48">
           <button
             onClick={() => { onChange(null); setOpen(false); }}
             className={`w-6 h-6 rounded-full border-2 bg-emerald-600/30 ${!value ? 'border-white' : 'border-transparent hover:border-gray-400'}`}
-            title="Default (emerald)"
+            title={translateUI("Default (emerald)")}
           />
           {TAG_COLOR_OPTIONS.map((c) => (
             <button
               key={c.key}
               onClick={() => { onChange(c.key); setOpen(false); }}
               className={`w-6 h-6 rounded-full border-2 ${c.dot} ${value === c.key ? 'border-white' : 'border-transparent hover:border-gray-400'}`}
-              title={c.label}
+              title={translateUI(c.label)}
             />
           ))}
         </div>
@@ -88,6 +90,7 @@ function TagEditor({
   onSave: (tags: string[]) => void;
   tagColorMap?: Record<string, string>;
 }) {
+  useLanguage();
   const [input, setInput] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -146,7 +149,7 @@ function TagEditor({
           onKeyDown={handleKeyDown}
           onFocus={() => setShowSuggestions(true)}
           onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-          placeholder="+ tag"
+          placeholder={translateUI("+ tag")}
           className="w-16 bg-transparent text-xs text-gray-400 placeholder-gray-600 outline-none focus:placeholder-gray-500"
         />
         {showSuggestions && suggestions.length > 0 && (
@@ -170,6 +173,7 @@ function TagEditor({
 // ── Global Git Config Modal ───────────────────────────────────────────────────
 
 function GlobalGitConfigModal({ onClose }: { onClose: () => void }) {
+  useLanguage();
   const [form, setForm] = useState<Omit<GlobalSettings, never>>({
     git_author_name: null,
     git_author_email: null,
@@ -224,57 +228,57 @@ function GlobalGitConfigModal({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700">
-          <h3 className="text-foreground font-semibold">Global Git Config</h3>
+          <h3 className="text-foreground font-semibold">{translateUI("Global Git Config")}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-200"><X size={18} /></button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {error && <p className="text-red-400 text-sm">{error}</p>}
           {loading ? (
-            <p className="text-gray-400 text-sm">Loading...</p>
+            <p className="text-gray-400 text-sm">{translateUI("Loading...")}</p>
           ) : (
             <>
-              <p className="text-xs text-gray-500">项目未配置时使用此全局默认值。</p>
+              <p className="text-xs text-gray-500">{translateUI("项目未配置时使用此全局默认值。")}</p>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Author name</label>
+                  <label className="block text-xs text-gray-400 mb-1">{translateUI("Author name")}</label>
                   <input
                     className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                     value={name} onChange={(e) => set('git_author_name', e.target.value)}
-                    placeholder="Zhang San"
+                    placeholder={translateUI("Zhang San")}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Author email</label>
+                  <label className="block text-xs text-gray-400 mb-1">{translateUI("Author email")}</label>
                   <input
                     className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                     value={email} onChange={(e) => set('git_author_email', e.target.value)}
-                    placeholder="zhang@example.com"
+                    placeholder={translateUI("zhang@example.com")}
                   />
                 </div>
                 <IdentityWarning name={name} email={email} />
               </div>
 
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Credential type</label>
+                <label className="block text-xs text-gray-400 mb-1">{translateUI("Credential type")}</label>
                 <select
                   className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                   value={credType} onChange={(e) => set('git_credential_type', e.target.value)}
                 >
-                  <option value="">None</option>
-                  <option value="ssh">SSH key</option>
-                  <option value="https">HTTPS token</option>
+                  <option value="">{translateUI("None")}</option>
+                  <option value="ssh">{translateUI("SSH key")}</option>
+                  <option value="https">{translateUI("HTTPS token")}</option>
                 </select>
               </div>
 
               {credType === 'ssh' && (
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">SSH private key path</label>
+                  <label className="block text-xs text-gray-400 mb-1">{translateUI("SSH private key path")}</label>
                   <input
                     className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                     value={form.git_ssh_key_path ?? ''} onChange={(e) => set('git_ssh_key_path', e.target.value)}
-                    placeholder="/home/alice/.ssh/id_ed25519"
+                    placeholder={translateUI("/home/alice/.ssh/id_ed25519")}
                   />
                 </div>
               )}
@@ -282,20 +286,20 @@ function GlobalGitConfigModal({ onClose }: { onClose: () => void }) {
               {credType === 'https' && (
                 <div className="space-y-2">
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Username</label>
+                    <label className="block text-xs text-gray-400 mb-1">{translateUI("Username")}</label>
                     <input
                       className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                       value={form.git_https_username ?? ''} onChange={(e) => set('git_https_username', e.target.value)}
-                      placeholder="github-username"
+                      placeholder={translateUI("github-username")}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Personal access token</label>
+                    <label className="block text-xs text-gray-400 mb-1">{translateUI("Personal access token")}</label>
                     <input
                       type="password"
                       className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                       value={form.git_https_token ?? ''} onChange={(e) => set('git_https_token', e.target.value)}
-                      placeholder="ghp_..."
+                      placeholder={translateUI("ghp_...")}
                     />
                   </div>
                 </div>
@@ -304,13 +308,13 @@ function GlobalGitConfigModal({ onClose }: { onClose: () => void }) {
           )}
 
           <div className="flex justify-end gap-2 pt-1">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-300 hover:text-foreground">Cancel</button>
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-300 hover:text-foreground">{translateUI("Cancel")}</button>
             <button
               type="submit"
               disabled={submitting || loading}
               className="px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-500 disabled:opacity-50"
             >
-              {submitting ? 'Saving...' : 'Save'}
+              {submitting ? translateUI("Saving...") : translateUI("Save")}
             </button>
           </div>
         </form>
@@ -346,6 +350,7 @@ const emptyForm = (): CreateForm => ({
 });
 
 function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  useLanguage();
   const [form, setForm] = useState<CreateForm>(emptyForm());
   const [showGit, setShowGit] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -396,7 +401,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700">
-          <h3 className="text-foreground font-semibold">New Project</h3>
+          <h3 className="text-foreground font-semibold">{translateUI("New Project")}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-200"><X size={18} /></button>
         </div>
 
@@ -406,27 +411,27 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
           {/* Basic */}
           <div className="space-y-3">
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Project name *</label>
+              <label className="block text-xs text-gray-400 mb-1">{translateUI("Project name *")}</label>
               <input
                 className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                 value={form.name} onChange={(e) => set('name', e.target.value)}
-                placeholder="my-project" required
+                placeholder={translateUI("my-project")} required
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Git URL (leave empty for local-only)</label>
+              <label className="block text-xs text-gray-400 mb-1">{translateUI("Git URL (leave empty for local-only)")}</label>
               <input
                 className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                 value={form.git_url} onChange={(e) => set('git_url', e.target.value)}
-                placeholder="https://github.com/org/repo.git"
+                placeholder={translateUI("https://github.com/org/repo.git")}
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Default branch</label>
+              <label className="block text-xs text-gray-400 mb-1">{translateUI("Default branch")}</label>
               <input
                 className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                 value={form.default_branch} onChange={(e) => set('default_branch', e.target.value)}
-                placeholder="main"
+                placeholder={translateUI("main")}
               />
             </div>
           </div>
@@ -434,13 +439,13 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
           {/* Worker selection */}
           {workerList.length > 0 && (
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Run on</label>
+              <label className="block text-xs text-gray-400 mb-1">{translateUI("Run on")}</label>
               <select
                 className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                 value={selectedWorkerId}
                 onChange={(e) => setSelectedWorkerId(e.target.value)}
               >
-                {modalIsAdmin && <option value="">本机</option>}
+                {modalIsAdmin && <option value="">{translateUI("本机")}</option>}
                 {workerList.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
             </div>
@@ -453,53 +458,53 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
               className="w-full flex items-center justify-between px-4 py-3 text-sm text-gray-300 hover:bg-gray-700/50"
               onClick={() => setShowGit(!showGit)}
             >
-              <span className="flex items-center gap-2"><Settings size={14} /> Git identity &amp; credentials</span>
+              <span className="flex items-center gap-2"><Settings size={14} /> {translateUI("Git identity & credentials")}</span>
               {showGit ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
 
             {showGit && (
               <div className="px-4 pb-4 space-y-3 border-t border-gray-700">
-                <p className="text-xs text-gray-500 pt-3">Optional. Overrides the machine's global git config for this project.</p>
+                <p className="text-xs text-gray-500 pt-3">{translateUI("Optional. Overrides the machine's global git config for this project.")}</p>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Author name</label>
+                    <label className="block text-xs text-gray-400 mb-1">{translateUI("Author name")}</label>
                     <input
                       className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                       value={form.git_author_name} onChange={(e) => set('git_author_name', e.target.value)}
-                      placeholder="Zhang San"
+                      placeholder={translateUI("Zhang San")}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Author email</label>
+                    <label className="block text-xs text-gray-400 mb-1">{translateUI("Author email")}</label>
                     <input
                       className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                       value={form.git_author_email} onChange={(e) => set('git_author_email', e.target.value)}
-                      placeholder="zhang@example.com"
+                      placeholder={translateUI("zhang@example.com")}
                     />
                   </div>
                   <IdentityWarning name={identityName} email={identityEmail} />
                 </div>
 
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Credential type</label>
+                  <label className="block text-xs text-gray-400 mb-1">{translateUI("Credential type")}</label>
                   <select
                     className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                     value={form.git_credential_type} onChange={(e) => set('git_credential_type', e.target.value)}
                   >
-                    <option value="">System default</option>
-                    <option value="ssh">SSH key</option>
-                    <option value="https">HTTPS token</option>
+                    <option value="">{translateUI("System default")}</option>
+                    <option value="ssh">{translateUI("SSH key")}</option>
+                    <option value="https">{translateUI("HTTPS token")}</option>
                   </select>
                 </div>
 
                 {form.git_credential_type === 'ssh' && (
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">SSH private key path</label>
+                    <label className="block text-xs text-gray-400 mb-1">{translateUI("SSH private key path")}</label>
                     <input
                       className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                       value={form.git_ssh_key_path} onChange={(e) => set('git_ssh_key_path', e.target.value)}
-                      placeholder="/home/alice/.ssh/id_ed25519_work"
+                      placeholder={translateUI("/home/alice/.ssh/id_ed25519_work")}
                     />
                   </div>
                 )}
@@ -507,20 +512,20 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
                 {form.git_credential_type === 'https' && (
                   <div className="space-y-2">
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">Username</label>
+                      <label className="block text-xs text-gray-400 mb-1">{translateUI("Username")}</label>
                       <input
                         className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                         value={form.git_https_username} onChange={(e) => set('git_https_username', e.target.value)}
-                        placeholder="github-username"
+                        placeholder={translateUI("github-username")}
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">Personal access token</label>
+                      <label className="block text-xs text-gray-400 mb-1">{translateUI("Personal access token")}</label>
                       <input
                         type="password"
                         className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                         value={form.git_https_token} onChange={(e) => set('git_https_token', e.target.value)}
-                        placeholder="ghp_..."
+                        placeholder={translateUI("ghp_...")}
                       />
                     </div>
                   </div>
@@ -530,13 +535,13 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
           </div>
 
           <div className="flex justify-end gap-2 pt-1">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-300 hover:text-foreground">Cancel</button>
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-300 hover:text-foreground">{translateUI("Cancel")}</button>
             <button
               type="submit"
               disabled={submitting || !form.name.trim()}
               className="px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-500 disabled:opacity-50"
             >
-              {submitting ? 'Creating...' : 'Create'}
+              {submitting ? translateUI("Creating...") : translateUI("Create")}
             </button>
           </div>
         </form>
@@ -548,6 +553,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
 // ── Git Config Edit Modal ─────────────────────────────────────────────────────
 
 function GitConfigModal({ project, onClose, onSaved }: { project: Project; onClose: () => void; onSaved: () => void }) {
+  useLanguage();
   const [form, setForm] = useState({
     git_author_name: project.git_author_name ?? '',
     git_author_email: project.git_author_email ?? '',
@@ -588,53 +594,53 @@ function GitConfigModal({ project, onClose, onSaved }: { project: Project; onClo
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700">
-          <h3 className="text-foreground font-semibold">Git config — {project.name}</h3>
+          <h3 className="text-foreground font-semibold">{translateUI("Git config — ")}{project.name}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-200"><X size={18} /></button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {error && <p className="text-red-400 text-sm">{error}</p>}
-          <p className="text-xs text-gray-500">Overrides the machine's global git config for this project only. Leave blank to use system default.</p>
+          <p className="text-xs text-gray-500">{translateUI("Overrides the machine's global git config for this project only. Leave blank to use system default.")}</p>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Author name</label>
+              <label className="block text-xs text-gray-400 mb-1">{translateUI("Author name")}</label>
               <input
                 className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                 value={form.git_author_name} onChange={(e) => set('git_author_name', e.target.value)}
-                placeholder="Zhang San"
+                placeholder={translateUI("Zhang San")}
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Author email</label>
+              <label className="block text-xs text-gray-400 mb-1">{translateUI("Author email")}</label>
               <input
                 className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                 value={form.git_author_email} onChange={(e) => set('git_author_email', e.target.value)}
-                placeholder="zhang@example.com"
+                placeholder={translateUI("zhang@example.com")}
               />
             </div>
             <IdentityWarning name={form.git_author_name} email={form.git_author_email} />
           </div>
 
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Credential type</label>
+            <label className="block text-xs text-gray-400 mb-1">{translateUI("Credential type")}</label>
             <select
               className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
               value={form.git_credential_type} onChange={(e) => set('git_credential_type', e.target.value)}
             >
-              <option value="">System default</option>
-              <option value="ssh">SSH key</option>
-              <option value="https">HTTPS token</option>
+              <option value="">{translateUI("System default")}</option>
+              <option value="ssh">{translateUI("SSH key")}</option>
+              <option value="https">{translateUI("HTTPS token")}</option>
             </select>
           </div>
 
           {form.git_credential_type === 'ssh' && (
             <div>
-              <label className="block text-xs text-gray-400 mb-1">SSH private key path</label>
+              <label className="block text-xs text-gray-400 mb-1">{translateUI("SSH private key path")}</label>
               <input
                 className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                 value={form.git_ssh_key_path} onChange={(e) => set('git_ssh_key_path', e.target.value)}
-                placeholder="/home/alice/.ssh/id_ed25519_work"
+                placeholder={translateUI("/home/alice/.ssh/id_ed25519_work")}
               />
             </div>
           )}
@@ -642,33 +648,33 @@ function GitConfigModal({ project, onClose, onSaved }: { project: Project; onClo
           {form.git_credential_type === 'https' && (
             <div className="space-y-2">
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Username</label>
+                <label className="block text-xs text-gray-400 mb-1">{translateUI("Username")}</label>
                 <input
                   className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                   value={form.git_https_username} onChange={(e) => set('git_https_username', e.target.value)}
-                  placeholder="github-username"
+                  placeholder={translateUI("github-username")}
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Personal access token</label>
+                <label className="block text-xs text-gray-400 mb-1">{translateUI("Personal access token")}</label>
                 <input
                   type="password"
                   className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                   value={form.git_https_token} onChange={(e) => set('git_https_token', e.target.value)}
-                  placeholder="ghp_..."
+                  placeholder={translateUI("ghp_...")}
                 />
               </div>
             </div>
           )}
 
           <div className="flex justify-end gap-2 pt-1">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-300 hover:text-foreground">Cancel</button>
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-300 hover:text-foreground">{translateUI("Cancel")}</button>
             <button
               type="submit"
               disabled={submitting}
               className="px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-500 disabled:opacity-50"
             >
-              {submitting ? 'Saving...' : 'Save'}
+              {submitting ? translateUI("Saving...") : translateUI("Save")}
             </button>
           </div>
         </form>
@@ -680,6 +686,7 @@ function GitConfigModal({ project, onClose, onSaved }: { project: Project; onClo
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export function ProjectsPage() {
+  useLanguage();
   const [projects, setProjects] = useState<Project[]>([]);
   const [allTags, setAllTags] = useState<string[]>([]);
   const [tagFilter, setTagFilter] = useState<string>('');
@@ -752,7 +759,7 @@ export function ProjectsPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Delete this project?')) return;
+    if (!confirm(translateUI("Delete this project?"))) return;
     try {
       await api.deleteProject(id);
       await refresh();
@@ -916,32 +923,30 @@ export function ProjectsPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-foreground font-semibold text-lg">Projects</h2>
+        <h2 className="text-foreground font-semibold text-lg">{translateUI("Projects")}</h2>
         <div className="flex items-center gap-2">
           {isAdmin && (
             <button
               onClick={() => setShowGlobalGit(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-300 border border-gray-600 rounded hover:bg-gray-700"
-              title="Global Git Config"
+              title={translateUI("Global Git Config")}
             >
-              <Settings size={14} /><span className="hidden sm:inline"> Global Git</span> Config
-            </button>
+              <Settings size={14} /><span className="hidden sm:inline"> {translateUI("Global Git")}</span> {translateUI("Config ")}</button>
           )}
           {isAdmin && (
             <button
               onClick={() => setShowTagManager(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-300 border border-gray-600 rounded hover:bg-gray-700"
-              title="Manage Tags"
+              title={translateUI("Manage Tags")}
             >
-              <Tag size={14} /> Tags
-            </button>
+              <Tag size={14} /> {translateUI("Tags ")}</button>
           )}
           {hasWorker && (
             <button
               onClick={() => setShowCreate(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-500"
             >
-              <Plus size={14} /><span className="hidden sm:inline"> New project</span><span className="sm:hidden"> New</span>
+              <Plus size={14} /><span className="hidden sm:inline"> {translateUI("New project")}</span><span className="sm:hidden"> {translateUI("New")}</span>
             </button>
           )}
         </div>
@@ -951,8 +956,7 @@ export function ProjectsPage() {
       {allTags.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="flex items-center gap-1 text-xs text-gray-500">
-            <Tag size={12} /> Tags:
-          </span>
+            <Tag size={12} /> {translateUI("Tags: ")}</span>
           <button
             onClick={() => setTagFilter('')}
             className={`px-2 py-0.5 rounded text-xs transition-colors border ${
@@ -961,8 +965,7 @@ export function ProjectsPage() {
                 : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700'
             }`}
           >
-            All
-          </button>
+            {translateUI("All ")}</button>
           {allTags.map((tag) => {
             const c = resolveTagColor(tag, tagColorMap[tag]);
             return (
@@ -982,12 +985,12 @@ export function ProjectsPage() {
 
       {error && (
         <div className="bg-red-500/20 text-red-400 px-4 py-2 rounded text-sm">
-          Error: {error}
+          {translateUI("Error: ")}{error}
         </div>
       )}
 
       {filteredProjects.length === 0 ? (
-        <p className="text-gray-400 text-sm">{projects.length === 0 ? 'No projects yet.' : 'No projects match this tag.'}</p>
+        <p className="text-gray-400 text-sm">{projects.length === 0 ? translateUI("No projects yet.") : translateUI("No projects match this tag.")}</p>
       ) : (() => {
         const groups = new Map<string, typeof filteredProjects>();
         for (const p of filteredProjects) {
@@ -1002,7 +1005,7 @@ export function ProjectsPage() {
               <div key={loc}>
                 {groups.size > 1 && (
                   <h3 className="text-xs text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    {loc === 'local' ? '📍 本机' : `🖥 ${loc}`}
+                    {loc === 'local' ? translateUI("📍 本机") : `🖥 ${loc}`}
                   </h3>
                 )}
                 <div className="space-y-3">
@@ -1027,7 +1030,7 @@ export function ProjectsPage() {
                 {/* Drag handle */}
                 <div
                   className="mt-1 text-gray-600 hover:text-gray-400 cursor-grab active:cursor-grabbing select-none touch-none"
-                  title="Drag to reorder"
+                  title={translateUI("Drag to reorder")}
                   onTouchStart={handleTouchStart(p.id)}
                   onTouchMove={handleTouchMove}
                   onTouchEnd={handleTouchEnd}
@@ -1045,20 +1048,18 @@ export function ProjectsPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-foreground font-medium">{p.name}</span>
                     <BadgeColorPicker value={p.badge_color} onChange={(c) => handleBadgeColor(p, c)} />
-                    <span className={`inline-block w-2 h-2 rounded-full ${statusColor[p.status] || 'bg-gray-500'}`} title={p.status} />
-                    <span className="text-xs text-gray-500 capitalize">{p.status}</span>
+                    <span className={`inline-block w-2 h-2 rounded-full ${statusColor[p.status] || 'bg-gray-500'}`} title={translateUI(p.status)} />
+                    <span className="text-xs text-gray-500 capitalize">{translateUI(p.status)}</span>
                     {p.has_remote ? (
                       <span className="flex items-center gap-1 text-xs text-sky-400">
-                        <Globe size={12} /> Remote
-                      </span>
+                        <Globe size={12} /> {translateUI("Remote ")}</span>
                     ) : (
                       <span className="flex items-center gap-1 text-xs text-gray-500">
-                        <HardDrive size={12} /> Local
-                      </span>
+                        <HardDrive size={12} /> {translateUI("Local ")}</span>
                     )}
                     {(workerTaskCounts[p.id] || 0) > 0 && (
-                      <span className="flex items-center gap-1 text-xs text-indigo-400" title="在 Worker 上运行的任务数">
-                        <Server size={12} /> Worker ×{workerTaskCounts[p.id]}
+                      <span className="flex items-center gap-1 text-xs text-indigo-400" title={translateUI("在 Worker 上运行的任务数")}>
+                        <Server size={12} /> {translateUI("Worker ×")}{workerTaskCounts[p.id]}
                       </span>
                     )}
                   </div>
@@ -1074,10 +1075,10 @@ export function ProjectsPage() {
                   )}
 
                   <div className="flex items-center gap-4 text-xs text-gray-500">
-                    <span>Branch: {p.default_branch}</span>
-                    {p.git_author_name && <span>Author: {p.git_author_name}</span>}
-                    {p.git_credential_type && <span>Creds: {p.git_credential_type}</span>}
-                    <span>Created: {new Date(p.created_at).toLocaleDateString()}</span>
+                    <span>{translateUI("Branch: ")}{p.default_branch}</span>
+                    {p.git_author_name && <span>{translateUI("Author: ")}{p.git_author_name}</span>}
+                    {p.git_credential_type && <span>{translateUI("Creds: ")}{p.git_credential_type}</span>}
+                    <span>{translateUI("Created: ")}{new Date(p.created_at).toLocaleDateString()}</span>
                   </div>
 
                   {/* Tags row */}
@@ -1097,8 +1098,8 @@ export function ProjectsPage() {
               {/* Actions */}
               <div className="flex items-center gap-3 pl-10 sm:pl-0 sm:justify-end">
                 {/* Show in selector toggle */}
-                <label className="flex items-center gap-2 cursor-pointer select-none" title="Show in task project dropdown">
-                  <span className="text-xs text-gray-400">Selector</span>
+                <label className="flex items-center gap-2 cursor-pointer select-none" title={translateUI("Show in task project dropdown")}>
+                  <span className="text-xs text-gray-400">{translateUI("Selector")}</span>
                   <button
                     onClick={() => toggleSelector(p)}
                     disabled={loading[p.id]}
@@ -1120,14 +1121,14 @@ export function ProjectsPage() {
                     <button
                       onClick={() => setEditingGit(p)}
                       className="p-2 text-gray-400 hover:text-indigo-400 hover:bg-gray-700 rounded transition-colors"
-                      title="Edit git config"
+                      title={translateUI("Edit git config")}
                     >
                       <Settings size={16} />
                     </button>
                     <button
                       onClick={() => setEditingEnvFiles(p)}
                       className="p-2 text-gray-400 hover:text-green-400 hover:bg-gray-700 rounded transition-colors"
-                      title="Manage env files"
+                      title={translateUI("Manage env files")}
                     >
                       <FileKey size={16} />
                     </button>
@@ -1142,7 +1143,7 @@ export function ProjectsPage() {
                           }
                         }}
                         className="min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-400 hover:text-sky-400 hover:bg-gray-700 rounded transition-colors"
-                        title="Re-clone"
+                        title={translateUI("Re-clone")}
                       >
                         <RotateCcw size={16} />
                       </button>
@@ -1150,14 +1151,14 @@ export function ProjectsPage() {
                     <button
                       onClick={() => setTeamSharingProject(p)}
                       className="min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-400 hover:text-indigo-400 hover:bg-gray-700 rounded transition-colors"
-                      title="Share to team members"
+                      title={translateUI("Share to team members")}
                     >
                       <UserPlus size={16} />
                     </button>
                     <button
                       onClick={() => handleDelete(p.id)}
                       className="min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-gray-700 rounded transition-colors"
-                      title="Delete project"
+                      title={translateUI("Delete project")}
                     >
                       <Trash2 size={16} />
                     </button>
@@ -1179,7 +1180,7 @@ export function ProjectsPage() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700 flex-shrink-0">
-              <h3 className="text-foreground font-semibold">Env files — {editingEnvFiles.name}</h3>
+              <h3 className="text-foreground font-semibold">{translateUI("Env files — ")}{editingEnvFiles.name}</h3>
               <button onClick={() => setEditingEnvFiles(null)} className="text-gray-400 hover:text-gray-200">
                 <X size={18} />
               </button>

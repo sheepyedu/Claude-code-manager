@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useEffect, useState, type SyntheticEvent } from 'react';
 
 import { api } from '../../api/client';
@@ -25,6 +26,7 @@ export function AttentionTag({
   showAddButton = false,
   className = '',
 }: AttentionTagProps) {
+  useLanguage();
   const [displayValue, setDisplayValue] = useState<string | null>(value || null);
   const [draft, setDraft] = useState(value || '');
   const [saving, setSaving] = useState(false);
@@ -88,7 +90,7 @@ export function AttentionTag({
         <button
           type="button"
           onClick={onEdit}
-          title="Edit attention tag"
+          title={translateUI("Edit attention tag")}
           className={`inline-flex min-w-0 max-w-full items-center gap-1 rounded-md border border-amber-400/25 bg-amber-500/15 px-1.5 py-0.5 text-xs font-medium text-amber-300 transition-colors hover:border-amber-400/45 hover:bg-amber-500/25 ${className}`}
         >
           <Pin size={11} className="shrink-0" />
@@ -101,11 +103,11 @@ export function AttentionTag({
       <button
         type="button"
         onClick={onEdit}
-        title="Add attention tag"
+        title={translateUI("Add attention tag")}
         className={`inline-flex items-center gap-1 rounded-md border border-dashed border-amber-400/25 px-1.5 py-0.5 text-xs text-amber-400/70 transition-colors hover:border-amber-400/50 hover:bg-amber-500/10 hover:text-amber-300 ${className}`}
       >
         <Pin size={11} />
-        <span className="hidden sm:inline">Tag</span>
+        <span className="hidden sm:inline">{translateUI("Tag")}</span>
       </button>
     );
   }
@@ -122,7 +124,7 @@ export function AttentionTag({
         <Pin size={13} className="ml-1 shrink-0 text-amber-400" />
         <input
           autoFocus
-          aria-label="Attention tag"
+          aria-label={translateUI("Attention tag")}
           value={draft}
           maxLength={80}
           disabled={saving}
@@ -134,14 +136,14 @@ export function AttentionTag({
             }
             if (event.key === 'Escape') cancel();
           }}
-          placeholder="例如：等任务结束后再看"
+          placeholder={translateUI("例如：等任务结束后再看")}
           className="min-w-0 flex-1 bg-transparent px-1 py-0.5 text-xs text-foreground outline-none placeholder:text-gray-600"
         />
         <button
           type="button"
           onClick={() => void save()}
           disabled={saving}
-          title="Save attention tag"
+          title={translateUI("Save attention tag")}
           className="rounded p-1 text-amber-300 transition-colors hover:bg-amber-400/15 disabled:opacity-50"
         >
           {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
@@ -150,7 +152,7 @@ export function AttentionTag({
           type="button"
           onClick={cancel}
           disabled={saving}
-          title="Cancel attention tag editing"
+          title={translateUI("Cancel attention tag editing")}
           className="rounded p-1 text-gray-500 transition-colors hover:bg-gray-700 hover:text-gray-300 disabled:opacity-50"
         >
           <X size={13} />

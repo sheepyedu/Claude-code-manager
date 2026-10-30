@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../api/client';
 import type { MonitorSession, MonitorCheck } from '../../api/client';
@@ -14,6 +15,7 @@ interface MonitorPanelProps {
 }
 
 function StatusBadge({ status }: { status: string }) {
+  useLanguage();
   const styles: Record<string, string> = {
     running: 'bg-emerald-900/50 text-emerald-400 border-emerald-700',
     completed: 'bg-blue-900/50 text-blue-400 border-blue-700',
@@ -22,13 +24,14 @@ function StatusBadge({ status }: { status: string }) {
   };
   return (
     <span className={`px-1.5 py-0.5 text-xs rounded border ${styles[status] || styles.cancelled}`}>
-      {status}
+      {translateUI(status)}
     </span>
   );
 }
 
 /** 类别小徽章：monitor / sub_agent / native-agent / native-monitor */
 function TypeChip({ agentType, source }: { agentType: string; source: string }) {
+  useLanguage();
   const isNative = source === 'native';
   const isSubAgent = agentType === 'sub_agent';
   return (
@@ -41,17 +44,18 @@ function TypeChip({ agentType, source }: { agentType: string; source: string }) 
             : 'bg-teal-900/40 text-teal-300 border-teal-700'
       }`}
       title={
-        isNative ? '模型原生子 agent（Provider 生命周期观测）'
-          : isSubAgent ? 'CCM Sub-Agent（一次性任务）'
-            : 'CCM $monitor 子 agent'
+        isNative ? translateUI("模型原生子 agent（Provider 生命周期观测）")
+          : isSubAgent ? translateUI("CCM Sub-Agent（一次性任务）")
+            : translateUI("CCM $monitor 子 agent")
       }
     >
-      {agentType === 'sub_agent' ? 'sub-agent' : agentType}
+      {agentType === 'sub_agent' ? translateUI("sub-agent") : agentType}
     </span>
   );
 }
 
 function MonitorSessionRow({ session, taskId, onStopped }: { session: MonitorSession; taskId: number; onStopped: () => void }) {
+  useLanguage();
   const [expanded, setExpanded] = useState(false);
   const [checks, setChecks] = useState<MonitorCheck[]>([]);
   const [stopping, setStopping] = useState(false);
@@ -104,10 +108,9 @@ function MonitorSessionRow({ session, taskId, onStopped }: { session: MonitorSes
             {session.direct_ssh && (
               <span
                 className="rounded border border-amber-700 bg-amber-950/50 px-1.5 py-0.5 text-[10px] text-amber-300"
-                title="This Monitor may read the Manager user's ~/.ssh and run direct SSH observation commands"
+                title={translateUI("This Monitor may read the Manager user's ~/.ssh and run direct SSH observation commands")}
               >
-                direct SSH
-              </span>
+                {translateUI("direct SSH ")}</span>
             )}
           </div>
           <div className="text-xs text-gray-500 mt-0.5">
@@ -115,14 +118,14 @@ function MonitorSessionRow({ session, taskId, onStopped }: { session: MonitorSes
               ? (session.checks_done > 0 ? `${session.checks_done} updates` : null)
               : session.agent_type === 'sub_agent'
                 ? (session.checks_done > 0 ? `${session.checks_done} progress updates` : 'running...')
-                : `${session.checks_done}/${session.max_checks} checks`}
+                : translateUI("{0}/{1} checks", [session.checks_done, session.max_checks])}
             {session.last_summary && (
               <span className="ml-2 text-gray-400">— {session.last_summary}</span>
             )}
           </div>
           {cleanupPending && (
             <div className="mt-1 text-xs text-amber-300">
-              <span>Codex runtime cleanup pending</span>
+              <span>{translateUI("Codex runtime cleanup pending")}</span>
               {session.codex_cleanup_error && (
                 <span
                   className="ml-1 text-amber-400"
@@ -140,10 +143,10 @@ function MonitorSessionRow({ session, taskId, onStopped }: { session: MonitorSes
             onClick={handleStop}
             disabled={stopping}
             title={cleanupPending
-              ? 'Retry Codex cleanup'
+              ? translateUI("Retry Codex cleanup")
               : session.agent_type === 'sub_agent'
-                ? 'Stop sub-agent'
-                : 'Stop monitor'}
+                ? translateUI("Stop sub-agent")
+                : translateUI("Stop monitor")}
           >
             <StopCircle size={16} />
           </button>
@@ -181,6 +184,7 @@ export function MonitorPanel({
   provider,
   monitorSupported,
 }: MonitorPanelProps) {
+  useLanguage();
   const refresh = useCallback(() => {
     api.listAllSubAgentSessions(taskId).then(onSessionsChange).catch(() => {});
   }, [taskId, onSessionsChange]);
@@ -194,8 +198,7 @@ export function MonitorPanel({
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700">
         <div className="flex items-center gap-2 text-sm font-medium text-gray-300">
           <Activity size={14} className="text-emerald-400" />
-          Sub-Agents
-          <span className="text-xs text-gray-500">({sessions.length})</span>
+          {translateUI("Sub-Agents ")}<span className="text-xs text-gray-500">({sessions.length})</span>
         </div>
         <button className="text-gray-400 hover:text-gray-200" onClick={onClose}>
           <X size={16} />
@@ -203,12 +206,11 @@ export function MonitorPanel({
       </div>
       {provider === 'codex' && monitorSupported !== true && (
         <div className="mx-2 mt-2 rounded border border-amber-700/50 bg-amber-900/20 px-2 py-1.5 text-xs text-amber-300">
-          Codex Monitor 当前仅支持 capability 已确认的本地、非共享任务
-        </div>
+          {translateUI("Codex Monitor 当前仅支持 capability 已确认的本地、非共享任务 ")}</div>
       )}
       <div className="p-2 space-y-2 max-h-64 overflow-y-auto">
         {sessions.length === 0 ? (
-          <div className="text-xs text-gray-500 text-center py-3">No sub-agents</div>
+          <div className="text-xs text-gray-500 text-center py-3">{translateUI("No sub-agents")}</div>
         ) : (
           sessions.map((s) => (
             <MonitorSessionRow

@@ -192,6 +192,9 @@ claude-manager/
 
 ## 关键约定
 
+- **界面语言**：`frontend/src/config/language.ts` 保存浏览器级 `ccm-language`（`en` / `zh-CN`），`useLanguage()` 订阅切换；仅通过 `t()` 翻译界面文案，译表在 `config/translations/zh-CN.ts`，不得翻译用户输入、模型回复、代码、路径或 API 枚举值。新增界面文案应同步译表。
+- **宿主资源监控**：`system_metrics.py` 用 psutil 原生计数器兼容 macOS/Linux，CPU 采样必须在线程执行，禁止依赖 Linux `/proc`；保留小时缓存与手动刷新契约。
+
 - **Claude 默认目录**: `CLAUDE_CONFIG_DIR` 可指定 CCM 专用目录；主任务 direct/PTY、无号池续聊与启动 onboarding 必须使用同一目录，账号池显式目录优先。启动仅原子准备本地 `.claude.json`，禁止发送模型预热请求或覆盖不合法/符号链接状态文件；未配置时保持原生目录语义。
 
 - **Codex 号池在线策略**: `pool_settings` 与账号记录一起原子保存在 `CODEX_POOL_CONFIG_PATH` 的私有 JSON 中，前端可在线修改启停、冷却、主动换号阈值、API/OAuth 路由顺序和首选账号并立即生效；部署级总开关和路径仍由环境变量控制。暂停后所有新 Codex 主任务、Monitor、Sub-Agent 与 Distill 必须 fail closed，禁止回落到 ambient `CODEX_HOME`。设置写入与登录操作共用进程内互斥锁，避免账号文件并发改写。

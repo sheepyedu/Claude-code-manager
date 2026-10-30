@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import type { Components } from 'react-markdown';
 import { api } from '../../api/client';
@@ -66,6 +67,7 @@ function groupMessages(messages: ChatMessage[]): MessageGroup[] {
 // ─── Small reusable rendering components ─────────────────────────────────────
 
 function CollapsibleContent({ content, maxLines = 5 }: { content: string; maxLines?: number }) {
+  useLanguage();
   const [expanded, setExpanded] = useState(false);
   const lines = content.split('\n');
   if (lines.length <= maxLines) {
@@ -81,7 +83,7 @@ function CollapsibleContent({ content, maxLines = 5 }: { content: string; maxLin
         className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 mt-1"
       >
         {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-        {expanded ? 'Collapse' : `Show all (${lines.length} lines)`}
+        {expanded ? translateUI("Collapse") : translateUI("Show all ({0} lines)", [lines.length])}
       </button>
     </div>
   );
@@ -121,6 +123,7 @@ function toolUseSummary(msg: ChatMessage): string {
 }
 
 function ToolItem({ message, taskId }: { message: ChatMessage; taskId: number }) {
+  useLanguage();
   const [expanded, setExpanded] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -173,7 +176,7 @@ function ToolItem({ message, taskId }: { message: ChatMessage; taskId: number })
           {summary && <span className="text-gray-600 truncate">{summary}</span>}
         </button>
         {expanded && (loading
-          ? <div className="ml-4 mt-1 mb-1 text-xs text-gray-600">Loading...</div>
+          ? <div className="ml-4 mt-1 mb-1 text-xs text-gray-600">{translateUI("Loading...")}</div>
           : detail && <div className="ml-4 mt-1 mb-1"><CollapsibleContent content={detail} /></div>
         )}
       </div>
@@ -192,7 +195,7 @@ function ToolItem({ message, taskId }: { message: ChatMessage; taskId: number })
         <span className="text-gray-600">{toolName}</span>
       </button>
       {expanded && (loading
-        ? <div className="ml-4 mt-1 mb-1 text-xs text-gray-600">Loading...</div>
+        ? <div className="ml-4 mt-1 mb-1 text-xs text-gray-600">{translateUI("Loading...")}</div>
         : detail && <div className="ml-4 mt-1 mb-1"><CollapsibleContent content={detail} /></div>
       )}
     </div>
@@ -200,6 +203,7 @@ function ToolItem({ message, taskId }: { message: ChatMessage; taskId: number })
 }
 
 function ToolGroup({ messages, taskId }: { messages: ChatMessage[]; taskId: number }) {
+  useLanguage();
   const [expanded, setExpanded] = useState(false);
   const hasError = messages.some((m) => m.is_error);
   const toolUseCount = messages.filter((m) => m.event_type === 'tool_use').length;
@@ -210,7 +214,7 @@ function ToolGroup({ messages, taskId }: { messages: ChatMessage[]; taskId: numb
         className={`flex items-center gap-1.5 text-xs py-1 hover:text-gray-400 transition-colors ${hasError ? 'text-red-400/70' : 'text-gray-600'}`}
       >
         {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-        {hasError ? '⚠' : '🔧'} {toolUseCount} tool call{toolUseCount !== 1 ? 's' : ''}
+        {hasError ? '⚠' : '🔧'} {toolUseCount} {translateUI("tool call")}{toolUseCount !== 1 ? translateUI("s") : ''}
       </button>
       {expanded && (
         <div className="ml-3 border-l border-gray-800 pl-3 space-y-1 mt-1">
@@ -222,6 +226,7 @@ function ToolGroup({ messages, taskId }: { messages: ChatMessage[]; taskId: numb
 }
 
 function CopyButton({ text }: { text: string }) {
+  useLanguage();
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -276,17 +281,18 @@ const MarkdownContent = memo(function MarkdownContent({ content, taskId }: { con
 });
 
 const MessageBubble = memo(function MessageBubble({ message, taskId }: { message: ChatMessage; taskId: number }) {
+  useLanguage();
   if (message.event_type === 'thinking') {
     return (
       <div className="mx-4 px-3 py-2 bg-gray-800/30 rounded text-xs border border-gray-700/30">
-        <div className="flex items-center gap-1.5 text-gray-500"><span>💭</span><span className="font-medium">Thinking</span></div>
+        <div className="flex items-center gap-1.5 text-gray-500"><span>💭</span><span className="font-medium">{translateUI("Thinking")}</span></div>
         {message.content && <div className="mt-1.5"><CollapsibleContent content={message.content} maxLines={3} /></div>}
       </div>
     );
   }
   if (['system_init', 'process_exit', 'system_event'].includes(message.event_type)) {
-    const label = message.event_type === 'system_init' ? '— Session started —'
-      : message.event_type === 'process_exit' ? '— Done —'
+    const label = message.event_type === 'system_init' ? translateUI('— Session started —')
+      : message.event_type === 'process_exit' ? translateUI('— Done —')
       : `— ${message.content || 'system'} —`;
     return <div className="text-center text-xs text-gray-600 py-1">{label}</div>;
   }
@@ -317,6 +323,7 @@ interface IterationPanelProps {
 }
 
 function IterationPanel({ iteration, messages, meta, isActive, defaultOpen, taskId }: IterationPanelProps & { taskId: number }) {
+  useLanguage();
   const [open, setOpen] = useState(defaultOpen || isActive);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -336,8 +343,8 @@ function IterationPanel({ iteration, messages, meta, isActive, defaultOpen, task
         className="w-full flex items-center gap-2 px-4 py-2.5 bg-gray-800/60 hover:bg-gray-800 text-left transition-colors"
       >
         {open ? <ChevronDown size={14} className="text-gray-500 shrink-0" /> : <ChevronRight size={14} className="text-gray-500 shrink-0" />}
-        <span className="text-xs font-semibold text-gray-400">Iteration {iteration + 1}</span>
-        <span className={`text-xs font-medium ${statusColor}`}>{statusIcon} {isActive ? 'running' : (meta?.action ?? '')}</span>
+        <span className="text-xs font-semibold text-gray-400">{translateUI("Iteration ")}{iteration + 1}</span>
+        <span className={`text-xs font-medium ${statusColor}`}>{statusIcon} {isActive ? translateUI("running") : (meta?.action ?? '')}</span>
         {(meta?.progress || meta?.reason) && (
           <span className="text-xs text-gray-500 truncate ml-auto">
             {meta.progress && <span className="mr-1.5">{meta.progress}</span>}
@@ -355,7 +362,7 @@ function IterationPanel({ iteration, messages, meta, isActive, defaultOpen, task
             )
           )}
           {isActive && (
-            <div className="text-xs text-gray-500 px-4 animate-pulse">Claude is working...</div>
+            <div className="text-xs text-gray-500 px-4 animate-pulse">{translateUI("Claude is working...")}</div>
           )}
           <div ref={bottomRef} />
         </div>
@@ -367,6 +374,7 @@ function IterationPanel({ iteration, messages, meta, isActive, defaultOpen, task
 // ─── Main view ────────────────────────────────────────────────────────────────
 
 export function LoopChatView({ task, onBack, inline }: LoopChatViewProps) {
+  useLanguage();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [iterMeta, setIterMeta] = useState<Map<number, IterationMeta>>(new Map());
   const [activeIteration, setActiveIteration] = useState<number | null>(null);
@@ -684,8 +692,8 @@ export function LoopChatView({ task, onBack, inline }: LoopChatViewProps) {
         </button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <p className="text-foreground font-medium text-sm">Task #{task.id}</p>
-            <span className="text-xs bg-indigo-600/20 text-indigo-400 px-1.5 rounded">Loop</span>
+            <p className="text-foreground font-medium text-sm">{translateUI("Task #")}{task.id}</p>
+            <span className="text-xs bg-indigo-600/20 text-indigo-400 px-1.5 rounded">{translateUI("Loop")}</span>
           </div>
           <p className="text-xs text-gray-500 truncate">
             {task.todo_file_path}
@@ -698,8 +706,8 @@ export function LoopChatView({ task, onBack, inline }: LoopChatViewProps) {
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3">
         {iterationGroups.length === 0 && (
           <div className="text-center text-gray-600 mt-20">
-            <p className="text-lg mb-2">Loop task</p>
-            <p className="text-sm">Iterations will appear here as Claude works through the todo list.</p>
+            <p className="text-lg mb-2">{translateUI("Loop task")}</p>
+            <p className="text-sm">{translateUI("Iterations will appear here as Claude works through the todo list.")}</p>
           </div>
         )}
         {iterationGroups.map(([iter, msgs]) => (
@@ -719,7 +727,7 @@ export function LoopChatView({ task, onBack, inline }: LoopChatViewProps) {
         <button
           onClick={() => scrollBottomRef.current?.scrollIntoView({ behavior: 'smooth' })}
           className="absolute bottom-28 right-6 z-10 p-2.5 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-foreground rounded-full shadow-lg transition-all"
-          title="Scroll to bottom"
+          title={translateUI("Scroll to bottom")}
         >
           <ArrowDown size={18} />
         </button>
@@ -736,7 +744,7 @@ export function LoopChatView({ task, onBack, inline }: LoopChatViewProps) {
             disabled={cancelling}
             className="flex items-center gap-2 px-4 py-2 rounded text-sm font-medium bg-red-600/20 text-red-400 hover:bg-red-600/30 disabled:opacity-50"
           >
-            <XCircle size={16} /> {cancelling ? 'Cancelling...' : 'Cancel Loop'}
+            <XCircle size={16} /> {cancelling ? translateUI("Cancelling...") : translateUI("Cancel Loop")}
           </button>
         </div>
       )}

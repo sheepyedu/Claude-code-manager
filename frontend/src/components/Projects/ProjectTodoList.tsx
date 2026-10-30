@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import {
@@ -46,6 +47,7 @@ function deliveryAdmissionScope(projectId: number, todoId: number): string {
 }
 
 export function ProjectTodoList({ projectId, project }: ProjectTodoListProps) {
+  useLanguage();
   const [expanded, setExpanded] = useState(false);
   const [todos, setTodos] = useState<ProjectTodo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -150,7 +152,7 @@ export function ProjectTodoList({ projectId, project }: ProjectTodoListProps) {
 
   const saveEdit = async (todoId: number) => {
     if (!editDraft.title.trim() || !editDraft.prompt.trim()) {
-      setError('Title and prompt are required.');
+      setError(translateUI("Title and prompt are required."));
       return;
     }
     startBusy(todoId);
@@ -187,7 +189,7 @@ export function ProjectTodoList({ projectId, project }: ProjectTodoListProps) {
   const toggleDone = (todo: ProjectTodo) => setStatus(todo, todo.status === 'done' ? 'open' : 'done');
 
   const archiveTodo = (todo: ProjectTodo) => {
-    if (!confirm('Archive this todo? You can restore it from "Show archived".')) return;
+    if (!confirm(translateUI("Archive this todo? You can restore it from \"Show archived\"."))) return;
     setStatus(todo, 'archived');
   };
 
@@ -199,7 +201,7 @@ export function ProjectTodoList({ projectId, project }: ProjectTodoListProps) {
   };
 
   const deleteTodo = async (todo: ProjectTodo) => {
-    if (!confirm('Permanently delete this todo? This cannot be undone.')) return;
+    if (!confirm(translateUI("Permanently delete this todo? This cannot be undone."))) return;
     startBusy(todo.id);
     setError('');
     try {
@@ -323,10 +325,10 @@ export function ProjectTodoList({ projectId, project }: ProjectTodoListProps) {
           type="button"
           onClick={() => setExpanded((value) => !value)}
           className="flex h-8 min-w-0 items-center gap-2 rounded px-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-foreground"
-          title={expanded ? 'Collapse todos' : 'Expand todos'}
+          title={expanded ? translateUI("Collapse todos") : translateUI("Expand todos")}
         >
           {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-          <span className="font-medium">To-dos</span>
+          <span className="font-medium">{translateUI("To-dos")}</span>
           {hasLoaded && (
             <span className="rounded bg-gray-700 px-1.5 py-0.5 text-xs text-gray-300">{openCount}</span>
           )}
@@ -339,19 +341,18 @@ export function ProjectTodoList({ projectId, project }: ProjectTodoListProps) {
               className={`flex h-8 items-center gap-1.5 rounded px-2.5 text-xs ${
                 showArchived ? 'bg-gray-700 text-gray-300' : 'text-gray-500 hover:bg-gray-700 hover:text-gray-300'
               }`}
-              title={showArchived ? 'Hide archived todos' : 'Show archived todos'}
+              title={showArchived ? translateUI("Hide archived todos") : translateUI("Show archived todos")}
             >
-              <Archive size={13} /> {showArchived ? 'Hide archived' : 'Show archived'}
+              <Archive size={13} /> {showArchived ? translateUI("Hide archived") : translateUI("Show archived")}
             </button>
           )}
           <button
             type="button"
             onClick={openCreateModal}
             className="flex h-8 items-center gap-1.5 rounded bg-gray-700 px-2.5 text-sm text-gray-300 hover:bg-gray-700 hover:text-foreground"
-            title="Add todo"
+            title={translateUI("Add todo")}
           >
-            <Plus size={14} /> Add
-          </button>
+            <Plus size={14} /> {translateUI("Add ")}</button>
         </div>
       </div>
 
@@ -360,9 +361,9 @@ export function ProjectTodoList({ projectId, project }: ProjectTodoListProps) {
           {error && <div className="rounded bg-red-500/15 px-3 py-2 text-xs text-red-400">{error}</div>}
 
           {loading ? (
-            <div className="px-2 py-3 text-sm text-gray-500">Loading...</div>
+            <div className="px-2 py-3 text-sm text-gray-500">{translateUI("Loading...")}</div>
           ) : todos.length === 0 ? (
-            !error && <div className="px-2 py-3 text-sm text-gray-500">No to-dos.</div>
+            !error && <div className="px-2 py-3 text-sm text-gray-500">{translateUI("No to-dos.")}</div>
           ) : (
             <div className="space-y-1.5">
               {todos.map((todo) => {
@@ -378,14 +379,13 @@ export function ProjectTodoList({ projectId, project }: ProjectTodoListProps) {
                     >
                       <span className="min-w-0 flex-1 truncate text-xs text-gray-500 line-through">{todo.title}</span>
                       <span className="shrink-0 rounded bg-gray-700 px-1.5 py-0.5 text-[10px] text-gray-500">
-                        archived
-                      </span>
+                        {translateUI("archived ")}</span>
                       {isClaimed ? (
                         <button
                           type="button"
                           onClick={() => openCreatedTask(todo)}
                           className="h-7 w-7 rounded text-gray-500 hover:bg-gray-700 hover:text-green-400"
-                          title={`Open created task #${todo.created_task_id}`}
+                          title={translateUI("Open created task #{0}", [todo.created_task_id])}
                         >
                           <Play size={14} />
                         </button>
@@ -396,7 +396,7 @@ export function ProjectTodoList({ projectId, project }: ProjectTodoListProps) {
                             onClick={() => restoreTodo(todo)}
                             disabled={isBusy}
                             className="h-7 w-7 rounded text-gray-500 hover:bg-gray-700 hover:text-blue-400 disabled:opacity-60"
-                            title="Restore todo"
+                            title={translateUI("Restore todo")}
                           >
                             <RotateCcw size={14} />
                           </button>
@@ -405,7 +405,7 @@ export function ProjectTodoList({ projectId, project }: ProjectTodoListProps) {
                             onClick={() => deleteTodo(todo)}
                             disabled={isBusy}
                             className="h-7 w-7 rounded text-gray-500 hover:bg-gray-700 hover:text-red-400 disabled:opacity-60"
-                            title="Delete permanently"
+                            title={translateUI("Delete permanently")}
                           >
                             <Trash2 size={14} />
                           </button>
@@ -423,13 +423,13 @@ export function ProjectTodoList({ projectId, project }: ProjectTodoListProps) {
                           value={editDraft.title}
                           onChange={(e) => setEditDraft((prev) => ({ ...prev, title: e.target.value }))}
                           className="w-full rounded border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-foreground outline-none focus:border-indigo-500"
-                          placeholder="Title"
+                          placeholder={translateUI("Title")}
                         />
                         <textarea
                           value={editDraft.prompt}
                           onChange={(e) => setEditDraft((prev) => ({ ...prev, prompt: e.target.value }))}
                           className="min-h-24 w-full resize-y rounded border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-foreground outline-none focus:border-indigo-500"
-                          placeholder="Prompt"
+                          placeholder={translateUI("Prompt")}
                         />
                         <div className="flex justify-end gap-2">
                           <button
@@ -437,16 +437,14 @@ export function ProjectTodoList({ projectId, project }: ProjectTodoListProps) {
                             onClick={() => setEditingId(null)}
                             className="flex h-8 items-center gap-1.5 rounded px-2.5 text-sm text-gray-300 hover:bg-gray-700"
                           >
-                            <X size={14} /> Cancel
-                          </button>
+                            <X size={14} /> {translateUI("Cancel ")}</button>
                           <button
                             type="button"
                             onClick={() => saveEdit(todo.id)}
                             disabled={isBusy}
                             className="flex h-8 items-center gap-1.5 rounded bg-indigo-600 px-2.5 text-sm text-white hover:bg-indigo-500 disabled:opacity-60"
                           >
-                            <Save size={14} /> Save
-                          </button>
+                            <Save size={14} /> {translateUI("Save ")}</button>
                         </div>
                       </div>
                     ) : (
@@ -461,7 +459,7 @@ export function ProjectTodoList({ projectId, project }: ProjectTodoListProps) {
                             onClick={() => toggleDone(todo)}
                             disabled={isBusy}
                             className="mt-0.5 h-7 w-7 shrink-0 rounded text-gray-500 hover:bg-gray-700 hover:text-green-400 disabled:opacity-60"
-                            title={todo.status === 'done' ? 'Mark open' : 'Mark done'}
+                            title={todo.status === 'done' ? translateUI("Mark open") : translateUI("Mark done")}
                           >
                           {todo.status === 'done' ? <CheckCircle2 size={17} /> : <Circle size={17} />}
                           </button>
@@ -478,7 +476,7 @@ export function ProjectTodoList({ projectId, project }: ProjectTodoListProps) {
                               type="button"
                               onClick={() => openCreatedTask(todo)}
                               className="h-8 w-8 rounded text-gray-500 hover:bg-gray-700 hover:text-green-400"
-                              title={`Open created task #${todo.created_task_id}`}
+                              title={translateUI("Open created task #{0}", [todo.created_task_id])}
                             >
                               <Play size={15} />
                             </button>
@@ -488,7 +486,7 @@ export function ProjectTodoList({ projectId, project }: ProjectTodoListProps) {
                                 type="button"
                                 onClick={() => openTaskModal(todo)}
                                 className="h-8 w-8 rounded text-gray-500 hover:bg-gray-700 hover:text-green-400"
-                                title="Create task"
+                                title={translateUI("Create task")}
                               >
                                 <Play size={15} />
                               </button>
@@ -496,7 +494,7 @@ export function ProjectTodoList({ projectId, project }: ProjectTodoListProps) {
                                 type="button"
                                 onClick={() => startEdit(todo)}
                                 className="h-8 w-8 rounded text-gray-500 hover:bg-gray-700 hover:text-blue-400"
-                                title="Edit todo"
+                                title={translateUI("Edit todo")}
                               >
                                 <Pencil size={15} />
                               </button>
@@ -505,7 +503,7 @@ export function ProjectTodoList({ projectId, project }: ProjectTodoListProps) {
                                 onClick={() => archiveTodo(todo)}
                                 disabled={isBusy}
                                 className="h-8 w-8 rounded text-gray-500 hover:bg-gray-700 hover:text-yellow-400 disabled:opacity-60"
-                                title="Archive todo"
+                                title={translateUI("Archive todo")}
                               >
                                 <Archive size={15} />
                               </button>
@@ -524,7 +522,7 @@ export function ProjectTodoList({ projectId, project }: ProjectTodoListProps) {
 
       {showCreate && (
         <TodoModal
-          title="New todo"
+          title={translateUI("New todo")}
           draft={createDraft}
           setDraft={setCreateDraft}
           submitLabel="Create todo"
@@ -537,7 +535,7 @@ export function ProjectTodoList({ projectId, project }: ProjectTodoListProps) {
 
       {taskTodo && (
         <TodoModal
-          title="Create task"
+          title={translateUI("Create task")}
           draft={taskDraft}
           setDraft={setTaskDraft}
           submitLabel="Create task"
@@ -644,6 +642,7 @@ function TodoModal({
   onSubmit: (event: FormEvent) => void;
   extraFields?: ReactNode;
 }) {
+  useLanguage();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -673,7 +672,7 @@ function TodoModal({
         </div>
         <div className="space-y-4 overflow-y-auto p-5">
           <label className="block space-y-1.5">
-            <span className="text-sm text-gray-300">Title</span>
+            <span className="text-sm text-gray-300">{translateUI("Title")}</span>
             <input
               value={draft.title}
               onChange={(e) => setDraft({ ...draft, title: e.target.value })}
@@ -683,7 +682,7 @@ function TodoModal({
             />
           </label>
           <label className="block space-y-1.5">
-            <span className="text-sm text-gray-300">Prompt</span>
+            <span className="text-sm text-gray-300">{translateUI("Prompt")}</span>
             <textarea
               value={draft.prompt}
               onChange={(e) => setDraft({ ...draft, prompt: e.target.value })}
@@ -702,14 +701,13 @@ function TodoModal({
             onClick={onClose}
             className="rounded px-3 py-2 text-sm text-gray-300 hover:bg-gray-700"
           >
-            Cancel
-          </button>
+            {translateUI("Cancel ")}</button>
           <button
             type="submit"
             disabled={saving}
             className="rounded bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-500 disabled:opacity-60"
           >
-            {saving ? 'Saving...' : submitLabel}
+            {saving ? translateUI("Saving...") : submitLabel}
           </button>
         </div>
       </form>

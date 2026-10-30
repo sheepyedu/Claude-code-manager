@@ -1,3 +1,5 @@
+import { LanguageSelect } from './LanguageSelect';
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Palette, Globe, Settings, LogOut, KeyRound, Image as ImageIcon } from '../icons';
 import { api, clearToken } from '../../api/client';
@@ -10,6 +12,7 @@ import { getTimezone, setTimezone, TIMEZONE_OPTIONS } from '../../config/timezon
 /** 顶栏齿轮下拉：时区 / 主题 / PTY / 访问置顶 / 压缩阈值 / 飞书 / 密码 / 退出。
  * 低频设置集中收纳，保持顶栏精简。 */
 export function PrefsMenu({ isAdmin }: { isAdmin: boolean }) {
+  useLanguage();
   const [theme, setTheme] = useState(getTheme());
   const [custom, setCustom] = useState(getCustomColors());
   const [bgOn, setBgOn] = useState(hasBgImage());
@@ -43,7 +46,7 @@ export function PrefsMenu({ isAdmin }: { isAdmin: boolean }) {
   const togglePtyMode = useCallback(async () => {
     if (!runtime || switching || !runtime.pty_available) return;
     if (runtime.use_pty_mode) {
-      const ok = window.confirm('关闭 PTY 模式将回退到 claude -p 一次性进程，新任务不再复用会话。确定关闭？');
+      const ok = window.confirm(translateUI("关闭 PTY 模式将回退到 claude -p 一次性进程，新任务不再复用会话。确定关闭？"));
       if (!ok) return;
     }
     setSwitching(true);
@@ -102,7 +105,7 @@ export function PrefsMenu({ isAdmin }: { isAdmin: boolean }) {
       setBgOn(true);
       applyCustom(bg, brand);
     } catch {
-      alert('图片读取失败，请换一张试试');
+      alert(translateUI("图片读取失败，请换一张试试"));
     } finally {
       setBgBusy(false);
       if (bgInputRef.current) bgInputRef.current.value = '';  // 允许重传同一文件
@@ -133,26 +136,26 @@ export function PrefsMenu({ isAdmin }: { isAdmin: boolean }) {
       <button
         onClick={() => setOpen(!open)}
         className={`p-2 rounded-lg transition-colors ${open ? 'text-foreground bg-gray-800' : 'text-gray-400 hover:text-foreground hover:bg-gray-800'}`}
-        title="偏好设置（时区 / 主题）"
+        title={translateUI("偏好设置（时区 / 主题）")}
       >
         <Settings size={18} />
       </button>
       {open && (
         <div className="absolute top-full right-0 mt-2 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl shadow-black/20 z-30 p-3 min-w-[230px] space-y-3">
+          <LanguageSelect />
           {isAdmin && runtime && (
             <div
               className="flex items-center justify-between gap-3"
               title={
                 !runtime.pty_available
-                  ? 'claude_pty 未安装，PTY 模式不可用'
+                  ? translateUI("claude_pty 未安装，PTY 模式不可用")
                   : runtime.use_pty_mode
-                    ? 'PTY 常驻会话模式：开（多轮免冷启动；切换仅影响新任务）'
-                    : 'PTY 常驻会话模式：关（使用 claude -p 一次性进程）'
+                    ? translateUI("PTY 常驻会话模式：开（多轮免冷启动；切换仅影响新任务）")
+                    : translateUI("PTY 常驻会话模式：关（使用 claude -p 一次性进程）")
               }
             >
               <span className={`text-xs flex items-center gap-1.5 ${runtime.use_pty_mode ? 'text-green-400' : 'text-gray-400'}`}>
-                PTY 模式
-              </span>
+                {translateUI("PTY 模式 ")}</span>
               <button
                 onClick={togglePtyMode}
                 disabled={!runtime.pty_available || switching}
@@ -166,46 +169,46 @@ export function PrefsMenu({ isAdmin }: { isAdmin: boolean }) {
             <div
               data-testid="codex-main-mcp-status"
               className="flex items-center justify-between gap-3"
-              title="只读运行时 capability；可用 CODEX_MAIN_MCP_ENABLED=false 紧急关闭"
+              title={translateUI("只读运行时 capability；可用 CODEX_MAIN_MCP_ENABLED=false 紧急关闭")}
             >
-              <span className="text-xs text-gray-400">Codex 主任务 MCP</span>
+              <span className="text-xs text-gray-400">{translateUI("Codex 主任务 MCP")}</span>
               <span className={`text-xs font-medium ${runtime.codex_main_mcp_enabled ? 'text-green-400' : 'text-gray-500'}`}>
-                {runtime.codex_main_mcp_enabled ? '已启用' : '已关闭'}
+                {runtime.codex_main_mcp_enabled ? translateUI("已启用") : translateUI("已关闭")}
               </span>
             </div>
           )}
           <div className="flex items-center justify-between gap-3">
-            <span className="text-xs text-gray-400 flex items-center gap-1.5"><Globe size={13} /> 时区</span>
+            <span className="text-xs text-gray-400 flex items-center gap-1.5"><Globe size={13} /> {translateUI("时区")}</span>
             <select
               value={tz}
               onChange={(e) => { setTimezone(e.target.value); setTz(e.target.value); }}
               className={selectCls}
             >
               {TIMEZONE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                <option key={opt.value} value={opt.value}>{translateUI(opt.label)}</option>
               ))}
             </select>
           </div>
           <div className="flex items-center justify-between gap-3">
-            <span className="text-xs text-gray-400 flex items-center gap-1.5"><Palette size={13} /> 主题</span>
+            <span className="text-xs text-gray-400 flex items-center gap-1.5"><Palette size={13} /> {translateUI("主题")}</span>
             <select
               value={theme}
               onChange={(e) => handleThemeChange(e.target.value as Theme)}
               className={selectCls}
             >
-              <optgroup label="现代">
+              <optgroup label={translateUI("现代")}>
                 {THEME_OPTIONS.filter((o) => o.group === 'modern').map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  <option key={opt.value} value={opt.value}>{translateUI(opt.label)}</option>
                 ))}
               </optgroup>
-              <optgroup label="Legacy">
+              <optgroup label={translateUI("Legacy")}>
                 {THEME_OPTIONS.filter((o) => o.group === 'legacy').map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  <option key={opt.value} value={opt.value}>{translateUI(opt.label)}</option>
                 ))}
               </optgroup>
-              <optgroup label="自定义">
+              <optgroup label={translateUI("自定义")}>
                 {THEME_OPTIONS.filter((o) => o.group === 'custom').map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  <option key={opt.value} value={opt.value}>{translateUI(opt.label)}</option>
                 ))}
               </optgroup>
             </select>
@@ -213,28 +216,27 @@ export function PrefsMenu({ isAdmin }: { isAdmin: boolean }) {
           {theme === 'custom' && (
             <>
               <div className="flex items-center justify-between gap-3 pl-4">
-                <span className="text-xs text-gray-500">背景 / 品牌色</span>
+                <span className="text-xs text-gray-500">{translateUI("背景 / 品牌色")}</span>
                 <div className="flex items-center gap-1.5">
                   <input
                     type="color"
                     value={custom.bg}
                     onChange={(e) => handleCustomColor('bg', e.target.value)}
                     className="h-6 w-8 rounded border border-gray-600 bg-transparent cursor-pointer"
-                    title="背景色：决定整套中性色与明暗"
+                    title={translateUI("背景色：决定整套中性色与明暗")}
                   />
                   <input
                     type="color"
                     value={custom.brand}
                     onChange={(e) => handleCustomColor('brand', e.target.value)}
                     className="h-6 w-8 rounded border border-gray-600 bg-transparent cursor-pointer"
-                    title="品牌色：决定按钮/选中态/链接色"
+                    title={translateUI("品牌色：决定按钮/选中态/链接色")}
                   />
                 </div>
               </div>
               <div className="flex items-center justify-between gap-3 pl-4">
                 <span className="text-xs text-gray-500 flex items-center gap-1.5">
-                  <ImageIcon size={12} /> 背景图
-                </span>
+                  <ImageIcon size={12} /> {translateUI("背景图 ")}</span>
                 <div className="flex items-center gap-1.5">
                   <input
                     ref={bgInputRef}
@@ -247,24 +249,23 @@ export function PrefsMenu({ isAdmin }: { isAdmin: boolean }) {
                     onClick={() => bgInputRef.current?.click()}
                     disabled={bgBusy}
                     className="text-xs px-2 py-1 rounded-md bg-gray-700 text-gray-200 border border-gray-600 hover:bg-gray-600 disabled:opacity-50 transition-colors"
-                    title="上传后自动从图中取色，界面会半透明透出背景图"
+                    title={translateUI("上传后自动从图中取色，界面会半透明透出背景图")}
                   >
-                    {bgBusy ? '处理中…' : bgOn ? '更换' : '上传'}
+                    {bgBusy ? translateUI("处理中…") : bgOn ? translateUI("更换") : translateUI("上传")}
                   </button>
                   {bgOn && (
                     <button
                       onClick={() => void handleBgClear()}
                       className="text-xs px-2 py-1 rounded-md text-gray-400 hover:text-red-400 transition-colors"
-                      title="移除背景图"
+                      title={translateUI("移除背景图")}
                     >
-                      移除
-                    </button>
+                      {translateUI("移除 ")}</button>
                   )}
                 </div>
               </div>
               {bgOn && (
                 <div className="flex items-center justify-between gap-3 pl-4">
-                  <span className="text-xs text-gray-500">背景图强度</span>
+                  <span className="text-xs text-gray-500">{translateUI("背景图强度")}</span>
                   <div className="flex items-center gap-2">
                     <input
                       type="range"
@@ -273,7 +274,7 @@ export function PrefsMenu({ isAdmin }: { isAdmin: boolean }) {
                       value={bgVisible}
                       onChange={(e) => handleBgVisible(Number(e.target.value))}
                       className="w-28 accent-indigo-500 cursor-pointer"
-                      title="向右：背景图更明显；向左：界面更实"
+                      title={translateUI("向右：背景图更明显；向左：界面更实")}
                     />
                     <span className="text-[10px] text-gray-500 tabular-nums w-8 text-right">{bgVisible}%</span>
                   </div>
@@ -283,12 +284,12 @@ export function PrefsMenu({ isAdmin }: { isAdmin: boolean }) {
           )}
           {runtime && (
             <div className="flex items-center justify-between gap-3">
-              <span className="text-xs text-gray-400">访问置顶</span>
+              <span className="text-xs text-gray-400">{translateUI("访问置顶")}</span>
               <button
                 onClick={toggleAutoSort}
                 disabled={switching}
                 className={toggleCls(runtime.auto_sort_on_access)}
-                title={runtime.auto_sort_on_access ? '开启：打开聊天自动置顶任务' : '关闭：打开聊天不改变排序'}
+                title={runtime.auto_sort_on_access ? translateUI("开启：打开聊天自动置顶任务") : translateUI("关闭：打开聊天不改变排序")}
               >
                 <span className={knobCls(runtime.auto_sort_on_access)} />
               </button>
@@ -298,10 +299,9 @@ export function PrefsMenu({ isAdmin }: { isAdmin: boolean }) {
             <div className="flex items-center justify-between gap-3">
               <span
                 className="text-xs text-gray-400"
-                title="会话上下文利用率达到该比例时自动压缩摘要并换新 session。过高会让超大 context 的请求在服务端易挂起"
+                title={translateUI("会话上下文利用率达到该比例时自动压缩摘要并换新 session。过高会让超大 context 的请求在服务端易挂起")}
               >
-                压缩阈值
-              </span>
+                {translateUI("压缩阈值 ")}</span>
               <select
                 value={Math.round(runtime.context_compact_threshold * 100)}
                 onChange={(e) => changeCompactThreshold(Number(e.target.value) / 100)}
@@ -319,21 +319,21 @@ export function PrefsMenu({ isAdmin }: { isAdmin: boolean }) {
           {/* Feishu binding */}
           <div className="border-t border-gray-700 pt-2 mt-1">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-xs text-gray-400">飞书</span>
+              <span className="text-xs text-gray-400">{translateUI("飞书")}</span>
               {feishuStatus?.bound ? (
                 <div className="flex items-center gap-1.5">
                   {feishuStatus.avatar_url && <img src={feishuStatus.avatar_url} className="w-4 h-4 rounded-full" alt="" />}
                   <span className="text-xs text-gray-300">{feishuStatus.name}</span>
                   <button
-                    onClick={async () => { if (confirm('解绑飞书？')) { await api.unbindFeishu(); setFeishuStatus({ bound: false }); } }}
+                    onClick={async () => { if (confirm(translateUI("解绑飞书？"))) { await api.unbindFeishu(); setFeishuStatus({ bound: false }); } }}
                     className="text-xs text-red-400 hover:text-red-300 ml-1"
-                  >解绑</button>
+                  >{translateUI("解绑")}</button>
                 </div>
               ) : feishuStatus !== null ? (
                 <button
                   onClick={async () => { const { url } = await api.getFeishuAuthUrl(); window.location.href = url; }}
                   className="text-xs px-2 py-0.5 rounded-md bg-blue-600/20 text-blue-300 hover:bg-blue-600/30"
-                >绑定</button>
+                >{translateUI("绑定")}</button>
               ) : null}
             </div>
           </div>
@@ -342,18 +342,17 @@ export function PrefsMenu({ isAdmin }: { isAdmin: boolean }) {
             <div className="border-t border-gray-700 pt-2 mt-1">
               <button
                 onClick={() => {
-                  const oldPwd = prompt('当前密码：');
+                  const oldPwd = prompt(translateUI("当前密码："));
                   if (!oldPwd) return;
-                  const newPwd = prompt('新密码：');
+                  const newPwd = prompt(translateUI("新密码："));
                   if (!newPwd) return;
                   api.changePassword(oldPwd, newPwd)
-                    .then(() => alert('密码修改成功'))
+                    .then(() => alert(translateUI("密码修改成功")))
                     .catch((error) => alert(error instanceof Error ? error.message : '修改失败'));
                 }}
                 className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-200 transition-colors w-full"
               >
-                <KeyRound size={12} /> 修改密码
-              </button>
+                <KeyRound size={12} /> {translateUI("修改密码 ")}</button>
             </div>
           )}
           {/* Logout */}
@@ -362,8 +361,7 @@ export function PrefsMenu({ isAdmin }: { isAdmin: boolean }) {
               onClick={() => { clearToken(); localStorage.removeItem('cc_user'); window.location.reload(); }}
               className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 transition-colors w-full"
             >
-              <LogOut size={12} /> 退出登录
-            </button>
+              <LogOut size={12} /> {translateUI("退出登录 ")}</button>
           </div>
         </div>
       )}

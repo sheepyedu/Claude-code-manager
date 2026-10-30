@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useState } from 'react';
 
 import type {
@@ -27,6 +28,7 @@ export function PlanPipelineFields({
   systemConfig,
   compact = false,
 }: PlanPipelineFieldsProps) {
+  useLanguage();
   const [roundsInput, setRoundsInput] = useState(
     String(Math.max(1, value.max_revision_cycles)),
   );
@@ -79,7 +81,7 @@ export function PlanPipelineFields({
           : 'grid-cols-1 sm:grid-cols-[8rem_1fr_7rem]'
       }`}>
         <select
-          aria-label={`${label} provider`}
+          aria-label={translateUI("{0} provider", [label])}
           className="rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs text-gray-100"
           value={route.provider}
           onChange={(event) => {
@@ -93,11 +95,11 @@ export function PlanPipelineFields({
             });
           }}
         >
-          <option value="claude">Claude</option>
-          <option value="codex">Codex</option>
+          <option value="claude">{translateUI("Claude")}</option>
+          <option value="codex">{translateUI("Codex")}</option>
         </select>
         <select
-          aria-label={`${label} model`}
+          aria-label={translateUI("{0} model", [label])}
           className="min-w-0 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs text-gray-100"
           value={route.model}
           onChange={(event) => updateRoute(stage, slot, {
@@ -110,7 +112,7 @@ export function PlanPipelineFields({
           ))}
         </select>
         <select
-          aria-label={`${label} effort`}
+          aria-label={translateUI("{0} effort", [label])}
           className="rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs text-gray-100"
           value={route.effort || ''}
           onChange={(event) => updateRoute(stage, slot, {
@@ -118,7 +120,7 @@ export function PlanPipelineFields({
             effort: event.target.value || null,
           })}
         >
-          <option value="">default</option>
+          <option value="">{translateUI("default")}</option>
           {uniqueEfforts.map((effort) => (
             <option key={effort} value={effort}>{effort}</option>
           ))}
@@ -131,15 +133,14 @@ export function PlanPipelineFields({
     <div className="space-y-3 rounded-lg border border-gray-700 bg-gray-900/50 p-3">
       <div>
         <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-indigo-300">
-          Planner
-        </div>
+          {translateUI("Planner ")}</div>
         <div className="space-y-1.5">
           <div>
-            <div className="mb-1 text-[10px] text-gray-500">Primary</div>
+            <div className="mb-1 text-[10px] text-gray-500">{translateUI("Primary")}</div>
             {routeFields('planner', 'primary')}
           </div>
           <div>
-            <div className="mb-1 text-[10px] text-gray-500">Fallback</div>
+            <div className="mb-1 text-[10px] text-gray-500">{translateUI("Fallback")}</div>
             {routeFields('planner', 'fallback')}
           </div>
         </div>
@@ -148,11 +149,10 @@ export function PlanPipelineFields({
       <div className="border-t border-gray-700 pt-3">
         <div className="mb-1.5 flex items-center justify-between">
           <div className="text-[11px] font-medium uppercase tracking-wide text-purple-300">
-            Reviewer
-          </div>
+            {translateUI("Reviewer ")}</div>
           <label className="flex items-center gap-1.5 text-[10px] text-gray-400">
             <input
-              aria-label="Enable Reviewer"
+              aria-label={translateUI("Enable Reviewer")}
               type="checkbox"
               checked={value.reviewer.enabled}
               onChange={(event) => onChange({
@@ -163,17 +163,16 @@ export function PlanPipelineFields({
                 },
               })}
             />
-            Enabled
-          </label>
+            {translateUI("Enabled ")}</label>
         </div>
         {value.reviewer.enabled && (
           <div className="space-y-1.5">
             <div>
-              <div className="mb-1 text-[10px] text-gray-500">Primary</div>
+              <div className="mb-1 text-[10px] text-gray-500">{translateUI("Primary")}</div>
               {routeFields('reviewer', 'primary')}
             </div>
             <div>
-              <div className="mb-1 text-[10px] text-gray-500">Fallback</div>
+              <div className="mb-1 text-[10px] text-gray-500">{translateUI("Fallback")}</div>
               {routeFields('reviewer', 'fallback')}
             </div>
           </div>
@@ -181,9 +180,8 @@ export function PlanPipelineFields({
       </div>
 
       <label className="flex items-center justify-between border-t border-gray-700 pt-2 text-[11px] text-gray-400">
-        Maximum rounds
-        <input
-          aria-label="Plan maximum rounds"
+        {translateUI("Maximum rounds ")}<input
+          aria-label={translateUI("Plan maximum rounds")}
           type="number"
           min={1}
           max={10}
@@ -203,9 +201,8 @@ export function PlanPipelineFields({
         />
       </label>
       <label className="flex items-center justify-between text-[11px] text-gray-400">
-        User-input pauses per Run
-        <input
-          aria-label="Plan maximum user-input pauses"
+        {translateUI("User-input pauses per Run ")}<input
+          aria-label={translateUI("Plan maximum user-input pauses")}
           type="number"
           min={0}
           max={5}

@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useState, useEffect } from 'react';
 import { api } from '../../api/client';
 import type { Instance } from '../../api/client';
@@ -17,6 +18,7 @@ const statusColors: Record<string, string> = {
 };
 
 export function InstanceGrid({ instances, onRefresh, onViewLogs }: InstanceGridProps) {
+  useLanguage();
   const [newName, setNewName] = useState('');
   const [dispatcherRunning, setDispatcherRunning] = useState<boolean | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
@@ -59,7 +61,7 @@ export function InstanceGrid({ instances, onRefresh, onViewLogs }: InstanceGridP
 
   const handleDelete = async (instance: Instance) => {
     if (instance.status === 'running' || instance.pid || instance.current_task_id) return;
-    if (!window.confirm(`Delete instance "${instance.name}"? This cannot be undone.`)) return;
+    if (!window.confirm(translateUI("Delete instance \"{0}\"? This cannot be undone.", [instance.name]))) return;
     await runAction(`delete:${instance.id}`, async () => {
       await api.deleteInstance(instance.id);
       await onRefresh();
@@ -68,17 +70,17 @@ export function InstanceGrid({ instances, onRefresh, onViewLogs }: InstanceGridP
 
   const handleStop = async (instance: Instance) => {
     if (!instance.current_task_id) {
-      setActionError('Instance has no current task owner; refresh before stopping.');
+      setActionError(translateUI("Instance has no current task owner; refresh before stopping."));
       return;
     }
     if (instance.current_task_turn_generation == null) {
-      setActionError('Instance task turn cannot be verified; refresh before stopping.');
+      setActionError(translateUI("Instance task turn cannot be verified; refresh before stopping."));
       return;
     }
     const expectedTaskId = instance.current_task_id;
     const expectedTaskTurnGeneration = instance.current_task_turn_generation;
     if (!window.confirm(
-      `Stop instance "${instance.name}"? Its current task will be interrupted and returned to the queue when safe.`,
+      translateUI("Stop instance \"{0}\"? Its current task will be interrupted and returned to the queue when safe.", [instance.name]),
     )) return;
     await runAction(`stop:${instance.id}`, async () => {
       await api.stopInstance(
@@ -95,12 +97,12 @@ export function InstanceGrid({ instances, onRefresh, onViewLogs }: InstanceGridP
   const handleCleanup = async () => {
     const deadCount = instances.filter((i) => i.status === 'error' || i.status === 'stopped').length;
     if (deadCount === 0) return;
-    if (!window.confirm(`Remove ${deadCount} error/stopped instance(s)?`)) return;
+    if (!window.confirm(translateUI("Remove {0} error/stopped instance(s)?", [deadCount]))) return;
     await runAction('cleanup', async () => {
       const result = await api.cleanupInstances();
       if (result.skipped_running.length > 0) {
         setActionError(
-          `Skipped ${result.skipped_running.length} instance(s) that still have active or orphaned process metadata.`,
+          translateUI("Skipped {0} instance(s) that still have active or orphaned process metadata.", [result.skipped_running.length]),
         );
       }
       await onRefresh();
@@ -111,7 +113,7 @@ export function InstanceGrid({ instances, onRefresh, onViewLogs }: InstanceGridP
     if (dispatcherRunning === null) return;
     if (dispatcherRunning) {
       if (!window.confirm(
-        'Pause the Dispatcher? Running tasks will continue; only new task claims will stop.',
+        translateUI("Pause the Dispatcher? Running tasks will continue; only new task claims will stop."),
       )) return;
       await runAction('dispatcher', async () => {
         await api.stopDispatcher();
@@ -139,7 +141,7 @@ export function InstanceGrid({ instances, onRefresh, onViewLogs }: InstanceGridP
       <div className="flex gap-2 flex-wrap">
         <input
           className="flex-1 min-w-[120px] bg-gray-700 text-foreground rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          placeholder="Instance name (optional)"
+          placeholder={translateUI("Instance name (optional)")}
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
         />
@@ -148,12 +150,12 @@ export function InstanceGrid({ instances, onRefresh, onViewLogs }: InstanceGridP
           disabled={pendingAction !== null}
           className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded text-sm font-medium whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Plus size={16} /> {pendingAction === 'create' ? 'Adding…' : 'Add'}
+          <Plus size={16} /> {pendingAction === 'create' ? translateUI("Adding…") : translateUI("Add")}
         </button>
         <button
           onClick={toggleDispatcher}
           disabled={dispatcherRunning === null || pendingAction !== null}
-          title={dispatcherRunning ? 'Pause new task claims; running tasks continue' : 'Allow the Dispatcher to claim queued tasks'}
+          title={dispatcherRunning ? translateUI("Pause new task claims; running tasks continue") : translateUI("Allow the Dispatcher to claim queued tasks")}
           className={`flex items-center gap-1 px-3 py-2 rounded text-sm font-medium whitespace-nowrap ${
             dispatcherRunning
               ? 'bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600/30'
@@ -162,24 +164,23 @@ export function InstanceGrid({ instances, onRefresh, onViewLogs }: InstanceGridP
         >
           {dispatcherRunning ? <ZapOff size={16} /> : <Zap size={16} />}
           {pendingAction === 'dispatcher'
-            ? 'Updating…'
+            ? translateUI("Updating…")
             : dispatcherRunning === null
-              ? 'Loading Dispatcher…'
+              ? translateUI("Loading Dispatcher…")
               : dispatcherRunning
-                ? 'Pause Dispatcher'
-                : 'Start Dispatcher'}
+                ? translateUI("Pause Dispatcher")
+                : translateUI("Start Dispatcher")}
         </button>
         <button
           onClick={handleCleanup}
           disabled={pendingAction !== null || !instances.some((i) => i.status === 'error' || i.status === 'stopped')}
           className="flex items-center gap-1 px-3 py-2 rounded text-sm font-medium whitespace-nowrap bg-red-600/20 text-red-400 hover:bg-red-600/30 disabled:opacity-30 disabled:cursor-not-allowed"
         >
-          <Eraser size={16} /> {pendingAction === 'cleanup' ? 'Cleaning…' : 'Clean Up'}
+          <Eraser size={16} /> {pendingAction === 'cleanup' ? translateUI("Cleaning…") : translateUI("Clean Up")}
         </button>
       </div>
       <p className="text-xs text-gray-500">
-        Pausing the Dispatcher stops new task claims. Tasks that are already running continue normally.
-      </p>
+        {translateUI("Pausing the Dispatcher stops new task claims. Tasks that are already running continue normally. ")}</p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {instances.map((inst) => (
@@ -193,10 +194,10 @@ export function InstanceGrid({ instances, onRefresh, onViewLogs }: InstanceGridP
             </div>
 
             <div className="text-xs text-gray-400 space-y-0.5">
-              <p>Status: <span className="text-gray-300">{inst.status}</span></p>
-              <p>Completed: <span className="text-gray-300">{inst.total_tasks_completed}</span></p>
-              {inst.current_task_id && <p>Task: <span className="text-indigo-400">#{inst.current_task_id}</span></p>}
-              {inst.pid && <p>PID: <span className="text-gray-300">{inst.pid}</span></p>}
+              <p>{translateUI("Status: ")}<span className="text-gray-300">{translateUI(inst.status)}</span></p>
+              <p>{translateUI("Completed: ")}<span className="text-gray-300">{inst.total_tasks_completed}</span></p>
+              {inst.current_task_id && <p>{translateUI("Task: ")}<span className="text-indigo-400">#{inst.current_task_id}</span></p>}
+              {inst.pid && <p>{translateUI("PID: ")}<span className="text-gray-300">{inst.pid}</span></p>}
             </div>
 
             <div className="flex gap-1 pt-1">
@@ -204,15 +205,14 @@ export function InstanceGrid({ instances, onRefresh, onViewLogs }: InstanceGridP
                 onClick={() => onViewLogs(inst.id)}
                 className="px-2 py-1 rounded text-xs font-medium bg-gray-700 text-gray-300 hover:bg-gray-600"
               >
-                Logs
-              </button>
+                {translateUI("Logs ")}</button>
               {inst.status === 'running' && (
                 <button
                   onClick={() => handleStop(inst)}
                   disabled={pendingAction !== null || !inst.current_task_id || inst.current_task_turn_generation == null}
                   className="p-1 text-gray-400 hover:text-yellow-400 disabled:opacity-40 disabled:cursor-not-allowed"
-                  title="Stop current task"
-                  aria-label={`Stop ${inst.name}`}
+                  title={translateUI("Stop current task")}
+                  aria-label={translateUI("Stop {0}", [inst.name])}
                 >
                   <Square size={14} />
                 </button>
@@ -222,9 +222,9 @@ export function InstanceGrid({ instances, onRefresh, onViewLogs }: InstanceGridP
                 disabled={pendingAction !== null || inst.status === 'running' || !!inst.pid || !!inst.current_task_id}
                 className="p-1 text-gray-400 hover:text-red-400 ml-auto disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-gray-400"
                 title={(inst.status === 'running' || inst.pid || inst.current_task_id)
-                  ? 'Resolve or stop this instance before deleting it'
-                  : 'Delete instance'}
-                aria-label={`Delete ${inst.name}`}
+                  ? translateUI("Resolve or stop this instance before deleting it")
+                  : translateUI("Delete instance")}
+                aria-label={translateUI("Delete {0}", [inst.name])}
               >
                 <Trash2 size={14} />
               </button>
@@ -234,7 +234,7 @@ export function InstanceGrid({ instances, onRefresh, onViewLogs }: InstanceGridP
       </div>
 
       {instances.length === 0 && (
-        <p className="text-gray-500 text-sm text-center py-8">No instances. Dispatcher will auto-create workers on start.</p>
+        <p className="text-gray-500 text-sm text-center py-8">{translateUI("No instances. Dispatcher will auto-create workers on start.")}</p>
       )}
     </div>
   );

@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { api } from '../../api/client';
 import type {
@@ -163,6 +164,7 @@ interface DiscussionViewProps {
 }
 
 export function DiscussionView({ discussionId, onBack, onDeleted }: DiscussionViewProps) {
+  useLanguage();
   const [discussion, setDiscussion] = useState<DiscussionDetail | null>(null);
   const [agents, setAgents] = useState<DiscussionAgentInfo[]>([]);
   const [messages, setMessages] = useState<DiscussionMessage[]>([]);
@@ -332,7 +334,7 @@ export function DiscussionView({ discussionId, onBack, onDeleted }: DiscussionVi
   };
 
   const handleDelete = async () => {
-    if (!confirm('Delete this discussion?')) return;
+    if (!confirm(translateUI("Delete this discussion?"))) return;
     try {
       await api.deleteDiscussion(discussionId);
       onDeleted?.();
@@ -402,18 +404,18 @@ export function DiscussionView({ discussionId, onBack, onDeleted }: DiscussionVi
         </button>
         <div className="flex-1 min-w-0">
           <h2 className="text-lg font-semibold text-foreground truncate">{discussion.title}</h2>
-          <p className="text-xs text-gray-400">{agents.length} agents · {messages.length} messages</p>
+          <p className="text-xs text-gray-400">{agents.length} {translateUI("agents · ")}{messages.length} {translateUI("messages")}</p>
         </div>
         <button
           onClick={handleAddAgent}
           disabled={addingAgent}
           className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-gray-400 hover:text-emerald-400 border border-gray-700 hover:border-emerald-600 rounded-lg transition-colors disabled:opacity-50"
-          title="Let Facilitator add one more agent"
+          title={translateUI("Let Facilitator add one more agent")}
         >
           {addingAgent ? <Loader2 className="animate-spin" size={14} /> : <UserPlus size={14} />}
-          <span>Add Agent</span>
+          <span>{translateUI("Add Agent")}</span>
         </button>
-        <button onClick={handleDelete} className="p-2 text-gray-500 hover:text-red-400 transition-colors" title="Delete discussion">
+        <button onClick={handleDelete} className="p-2 text-gray-500 hover:text-red-400 transition-colors" title={translateUI("Delete discussion")}>
           <Trash2 size={16} />
         </button>
       </div>
@@ -470,14 +472,12 @@ export function DiscussionView({ discussionId, onBack, onDeleted }: DiscussionVi
                   <div className="flex items-center gap-1 px-3 py-1.5 border-b border-white/5">
                     {activeTab.status === 'running' && (
                       <button onClick={() => handleStopAgent(activeTab.id)} className="flex items-center gap-1 px-2 py-1 text-xs text-gray-400 hover:text-red-400 rounded hover:bg-white/5">
-                        <StopCircle size={12} /> Stop
-                      </button>
+                        <StopCircle size={12} /> {translateUI("Stop ")}</button>
                     )}
                     {activeTab.status === 'idle' && (
                       <>
                         <button onClick={() => handleTriggerAgent(activeTab.id)} className="flex items-center gap-1 px-2 py-1 text-xs text-gray-400 hover:text-emerald-400 rounded hover:bg-white/5">
-                          <Play size={12} /> Trigger
-                        </button>
+                          <Play size={12} /> {translateUI("Trigger ")}</button>
                         {activeTab.session_id && (
                           <button
                             onClick={() => {
@@ -486,8 +486,7 @@ export function DiscussionView({ discussionId, onBack, onDeleted }: DiscussionVi
                             }}
                             className={`flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-white/5 ${replyingTo === activeTab.id ? 'text-indigo-400' : 'text-gray-400 hover:text-indigo-400'}`}
                           >
-                            <MessageCircle size={12} /> Reply
-                          </button>
+                            <MessageCircle size={12} /> {translateUI("Reply ")}</button>
                         )}
                       </>
                     )}
@@ -496,13 +495,12 @@ export function DiscussionView({ discussionId, onBack, onDeleted }: DiscussionVi
                 {activeTab.id === -1 && facilitatorStatus === 'running' && (
                   <div className="flex items-center gap-1 px-3 py-1.5 border-b border-white/5">
                     <span className="flex items-center gap-1 px-2 py-1 text-xs text-indigo-400">
-                      <Loader2 className="animate-spin" size={12} /> 正在分析...
-                    </span>
+                      <Loader2 className="animate-spin" size={12} /> {translateUI("正在分析... ")}</span>
                   </div>
                 )}
 
                 {activeEvents.length === 0 && activeTab.status !== 'running' && (
-                  <p className="text-xs text-gray-500 px-4 py-3">No output yet</p>
+                  <p className="text-xs text-gray-500 px-4 py-3">{translateUI("No output yet")}</p>
                 )}
                 <GroupedEventList events={activeEvents} />
               </div>
@@ -517,8 +515,8 @@ export function DiscussionView({ discussionId, onBack, onDeleted }: DiscussionVi
         {replyingTo && (
           <div className="flex items-center gap-2 mb-2 text-xs text-indigo-400">
             <MessageCircle size={12} />
-            <span>Replying to: {agents.find((a) => a.id === replyingTo)?.role_name}</span>
-            <button onClick={() => setReplyingTo(null)} className="text-gray-500 hover:text-foreground ml-1">Cancel</button>
+            <span>{translateUI("Replying to: ")}{agents.find((a) => a.id === replyingTo)?.role_name}</span>
+            <button onClick={() => setReplyingTo(null)} className="text-gray-500 hover:text-foreground ml-1">{translateUI("Cancel")}</button>
           </div>
         )}
         <div className="flex items-end gap-2">
@@ -533,7 +531,7 @@ export function DiscussionView({ discussionId, onBack, onDeleted }: DiscussionVi
               el.style.height = Math.min(el.scrollHeight, 192) + 'px';
             }}
             onKeyDown={handleKeyDown}
-            placeholder={replyingTo ? `Reply to ${agents.find((a) => a.id === replyingTo)?.role_name}...` : 'Send a message to the group...'}
+            placeholder={replyingTo ? translateUI("Reply to {0}...", [agents.find((a) => a.id === replyingTo)?.role_name]) : translateUI("Send a message to the group...")}
             className="flex-1 bg-gray-800 text-foreground rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none disabled:opacity-50 max-h-48 overflow-y-auto"
             style={{ minHeight: '40px' }}
             rows={1}
@@ -542,7 +540,7 @@ export function DiscussionView({ discussionId, onBack, onDeleted }: DiscussionVi
           <button
             onClick={() => handleSend()}
             disabled={!input.trim() || sending}
-            title="Send (Enter)"
+            title={translateUI("Send (Enter)")}
             className="p-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Send size={18} />
@@ -570,6 +568,7 @@ function AgentTab({
   isSelected: boolean;
   onClick: () => void;
 }) {
+  useLanguage();
   const isRunning = agent.status === 'running';
   const toolCount = useMemo(() => countToolCalls(events), [events]);
   const idleTime = useIdleTime(events, isRunning);
@@ -587,12 +586,12 @@ function AgentTab({
       <span className="font-medium">{agent.role_name}</span>
       {isRunning && <Loader2 className="animate-spin" size={10} />}
       {toolCount > 0 && (
-        <span className="flex items-center gap-0.5 text-gray-500" title={`${toolCount} tool calls`}>
+        <span className="flex items-center gap-0.5 text-gray-500" title={translateUI("{0} tool calls", [toolCount])}>
           <Wrench size={9} />{toolCount}
         </span>
       )}
       {idleTime && (
-        <span className="flex items-center gap-0.5 text-gray-600" title="Time since last output">
+        <span className="flex items-center gap-0.5 text-gray-600" title={translateUI("Time since last output")}>
           <Clock size={9} />{idleTime}
         </span>
       )}
@@ -605,6 +604,7 @@ function AgentTab({
 // ---------------------------------------------------------------------------
 
 function GroupedEventList({ events }: { events: DiscussionEventItem[] }) {
+  useLanguage();
   const grouped = useMemo(() => groupEvents(events).reverse(), [events]);
 
   if (grouped.length === 0) return null;
@@ -627,6 +627,7 @@ function GroupedEventList({ events }: { events: DiscussionEventItem[] }) {
 // ---------------------------------------------------------------------------
 
 function ActivityGroup({ events }: { events: DiscussionEventItem[] }) {
+  useLanguage();
   const [expanded, setExpanded] = useState(false);
   const hasError = events.some((e) => e.is_error);
   const toolUseCount = events.filter((e) => e.event_type === 'tool_use').length;
@@ -645,7 +646,7 @@ function ActivityGroup({ events }: { events: DiscussionEventItem[] }) {
       >
         {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         <Wrench size={11} />
-        <span>{label}</span>
+        <span>{translateUI(label)}</span>
       </button>
       {expanded && (
         <div className="ml-3 border-l border-gray-800 pl-3 space-y-0.5 mt-1">
@@ -659,12 +660,13 @@ function ActivityGroup({ events }: { events: DiscussionEventItem[] }) {
 }
 
 function ActivityItem({ event }: { event: DiscussionEventItem }) {
+  useLanguage();
   const [expanded, setExpanded] = useState(false);
 
   if (event.event_type === 'thinking') {
     return (
       <div className="text-xs text-gray-500 cursor-pointer hover:text-gray-400" onClick={() => setExpanded(!expanded)}>
-        <span className="italic">{expanded ? '▾ thinking' : '▸ thinking...'}</span>
+        <span className="italic">{expanded ? translateUI("▾ thinking") : translateUI("▸ thinking...")}</span>
         {expanded && (
           <pre className="mt-1 whitespace-pre-wrap text-gray-400 text-xs max-h-40 overflow-y-auto">{event.content}</pre>
         )}
@@ -705,7 +707,7 @@ function ActivityItem({ event }: { event: DiscussionEventItem }) {
         >
           {expanded ? <ChevronDown size={10} className="shrink-0" /> : <ChevronRight size={10} className="shrink-0" />}
           <span className={statusColor}>{statusIcon}</span>
-          <span>{event.tool_name || 'result'}</span>
+          <span>{event.tool_name || translateUI("result")}</span>
         </button>
         {expanded && detail && (
           <pre className="ml-4 mt-1 mb-1 whitespace-pre-wrap text-gray-400 text-xs max-h-40 overflow-y-auto bg-black/20 rounded p-2">
@@ -724,6 +726,7 @@ function ActivityItem({ event }: { event: DiscussionEventItem }) {
 // ---------------------------------------------------------------------------
 
 function EventItem({ event }: { event: DiscussionEventItem }) {
+  useLanguage();
   if (event.event_type === 'message' || event.event_type === 'result') {
     return (
       <div className="text-sm prose prose-sm max-w-none prose-invert overflow-x-auto break-words">

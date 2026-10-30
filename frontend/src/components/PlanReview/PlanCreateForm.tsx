@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { api, type PlanResource, type Project, type TagItem } from '../../api/client';
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export function PlanCreateForm({ onCreated, onNavigateSettings }: Props) {
+  useLanguage();
   const ccUser = JSON.parse(localStorage.getItem('cc_user') || '{}');
   const isAdmin = ccUser.role === 'admin' || ccUser.role === 'super_admin' || !ccUser.id;
   const [title, setTitle] = useState('');
@@ -140,35 +142,35 @@ export function PlanCreateForm({ onCreated, onNavigateSettings }: Props) {
   return <form ref={formRef} onSubmit={submit} className="space-y-3 rounded-xl border border-gray-700/60 bg-gray-800 p-4 shadow-sm">
     <div className="flex items-center justify-between gap-3">
       <div>
-        <h2 className="text-sm font-semibold text-gray-200">New standalone Plan</h2>
-        <p className="mt-0.5 text-xs text-gray-500">Create an independent, versioned planning work item.</p>
+        <h2 className="text-sm font-semibold text-gray-200">{translateUI("New standalone Plan")}</h2>
+        <p className="mt-0.5 text-xs text-gray-500">{translateUI("Create an independent, versioned planning work item.")}</p>
       </div>
       {isAdmin && onNavigateSettings && (
         <button
           type="button"
           onClick={onNavigateSettings}
-          aria-label="Plan settings"
-          title="Plan settings"
+          aria-label={translateUI("Plan settings")}
+          title={translateUI("Plan settings")}
           className="rounded-md border border-gray-600 p-1.5 text-gray-400 transition-colors hover:border-indigo-500/50 hover:bg-gray-700 hover:text-indigo-300"
         >
           <Settings size={14} />
         </button>
       )}
     </div>
-    {(error || dropError) && <div className="flex items-center justify-between gap-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300"><span>{error || dropError}</span><button type="button" onClick={() => { setError(''); setDropError(''); }} aria-label="Dismiss Plan form error"><X size={13} /></button></div>}
-    <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} placeholder="Plan title (optional)" className="w-full rounded-lg border border-gray-600/60 bg-gray-700 px-3 py-2 text-sm text-gray-100 outline-none focus:border-indigo-500" />
+    {(error || dropError) && <div className="flex items-center justify-between gap-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300"><span>{error || dropError}</span><button type="button" onClick={() => { setError(''); setDropError(''); }} aria-label={translateUI("Dismiss Plan form error")}><X size={13} /></button></div>}
+    <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} placeholder={translateUI("Plan title (optional)")} className="w-full rounded-lg border border-gray-600/60 bg-gray-700 px-3 py-2 text-sm text-gray-100 outline-none focus:border-indigo-500" />
     <div className="flex gap-2">
-      <textarea value={request} onChange={(event) => setRequest(event.target.value)} maxLength={200000} rows={5} required placeholder="What should this Plan investigate and decide?" className="min-w-0 flex-1 resize-y rounded-lg border border-gray-600/60 bg-gray-700 px-3 py-2 text-sm text-gray-100 outline-none focus:border-indigo-500" />
+      <textarea value={request} onChange={(event) => setRequest(event.target.value)} maxLength={200000} rows={5} required placeholder={translateUI("What should this Plan investigate and decide?")} className="min-w-0 flex-1 resize-y rounded-lg border border-gray-600/60 bg-gray-700 px-3 py-2 text-sm text-gray-100 outline-none focus:border-indigo-500" />
       <VoiceButton onTranscribed={(text) => setRequest((current) => current ? `${current} ${text}` : text)} />
     </div>
-    {uploads.uploads.length > 0 && <div className="flex flex-wrap gap-2">{uploads.uploads.map((item) => { const name = item.file?.name || item.result?.filename || 'file'; return <div key={item.id} className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900/50 px-2 py-1.5 text-xs text-gray-400">{item.preview && <img src={item.preview} alt="" className="h-8 w-8 rounded object-cover" />}<span className="max-w-48 truncate">{name}</span>{item.status === 'uploading' && <Loader2 size={12} className="animate-spin" />}{item.status === 'failed' && <AlertCircle size={12} className="text-red-400" />}<button type="button" onClick={() => uploads.removeFile(item.id)} aria-label={`Remove ${name}`}><X size={12} /></button></div>; })}</div>}
+    {uploads.uploads.length > 0 && <div className="flex flex-wrap gap-2">{uploads.uploads.map((item) => { const name = item.file?.name || item.result?.filename || 'file'; return <div key={item.id} className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900/50 px-2 py-1.5 text-xs text-gray-400">{item.preview && <img src={item.preview} alt="" className="h-8 w-8 rounded object-cover" />}<span className="max-w-48 truncate">{name}</span>{item.status === 'uploading' && <Loader2 size={12} className="animate-spin" />}{item.status === 'failed' && <AlertCircle size={12} className="text-red-400" />}<button type="button" onClick={() => uploads.removeFile(item.id)} aria-label={translateUI("Remove {0}", [name])}><X size={12} /></button></div>; })}</div>}
     <div className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_auto_auto_auto] md:items-center">
-      <ProjectSelect projects={projects.filter((project) => project.show_in_selector)} value={isNewProject ? NEW_PROJECT_VALUE : projectId || undefined} onChange={handleProjectChange} placeholder="Select project…" extraOptions={hasWorker ? [{ value: NEW_PROJECT_VALUE, label: '+ New project' }] : []} showStatus tagColorMap={tagColorMap} />
-      <label className="flex items-center gap-2 text-xs text-gray-400">Priority <select value={priority} onChange={(event) => setPriority(Number(event.target.value))} className="rounded border border-gray-600 bg-gray-700 px-2 py-1 text-gray-100">{Array.from({ length: 10 }, (_, value) => <option key={value} value={value}>{value}</option>)}</select></label>
-      <label className="flex items-center gap-2 text-xs text-gray-400">Timeout <input type="number" min="0" step="0.5" value={timeoutHours} onChange={(event) => setTimeoutHours(event.target.value)} placeholder="default" className="w-20 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-gray-100" /></label>
-      <div className="flex justify-end gap-2"><input ref={fileInputRef} type="file" multiple className="hidden" onChange={(event) => { addFiles(Array.from(event.target.files || []), setDropError); event.target.value = ''; }} /><button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg border border-gray-600 p-2 text-gray-400 hover:text-gray-200" aria-label="Attach Plan files"><Paperclip size={14} /></button><button type="submit" disabled={!canSubmit} className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-40">{busy ? 'Creating…' : 'Create Plan'}</button></div>
+      <ProjectSelect projects={projects.filter((project) => project.show_in_selector)} value={isNewProject ? NEW_PROJECT_VALUE : projectId || undefined} onChange={handleProjectChange} placeholder={translateUI("Select project…")} extraOptions={hasWorker ? [{ value: NEW_PROJECT_VALUE, label: '+ New project' }] : []} showStatus tagColorMap={tagColorMap} />
+      <label className="flex items-center gap-2 text-xs text-gray-400">{translateUI("Priority ")}<select value={priority} onChange={(event) => setPriority(Number(event.target.value))} className="rounded border border-gray-600 bg-gray-700 px-2 py-1 text-gray-100">{Array.from({ length: 10 }, (_, value) => <option key={value} value={value}>{value}</option>)}</select></label>
+      <label className="flex items-center gap-2 text-xs text-gray-400">{translateUI("Timeout ")}<input type="number" min="0" step="0.5" value={timeoutHours} onChange={(event) => setTimeoutHours(event.target.value)} placeholder={translateUI("default")} className="w-20 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-gray-100" /></label>
+      <div className="flex justify-end gap-2"><input ref={fileInputRef} type="file" multiple className="hidden" onChange={(event) => { addFiles(Array.from(event.target.files || []), setDropError); event.target.value = ''; }} /><button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg border border-gray-600 p-2 text-gray-400 hover:text-gray-200" aria-label={translateUI("Attach Plan files")}><Paperclip size={14} /></button><button type="submit" disabled={!canSubmit} className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-40">{busy ? translateUI("Creating…") : translateUI("Create Plan")}</button></div>
     </div>
-    {isNewProject && <div className="grid gap-2 sm:grid-cols-2"><input value={newProjectName} onChange={(event) => setNewProjectName(event.target.value)} required placeholder="Project name" className="rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100" /><input value={newProjectUrl} onChange={(event) => setNewProjectUrl(event.target.value)} placeholder="Git URL (optional)" className="rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100" /></div>}
-    <p className="text-[11px] text-gray-500">Planner and Reviewer routes come from global Settings and are frozen when the Plan is created. Attachments and Plan text are stored durably; use Secrets by reference rather than pasting credentials.</p>
+    {isNewProject && <div className="grid gap-2 sm:grid-cols-2"><input value={newProjectName} onChange={(event) => setNewProjectName(event.target.value)} required placeholder={translateUI("Project name")} className="rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100" /><input value={newProjectUrl} onChange={(event) => setNewProjectUrl(event.target.value)} placeholder={translateUI("Git URL (optional)")} className="rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100" /></div>}
+    <p className="text-[11px] text-gray-500">{translateUI("Planner and Reviewer routes come from global Settings and are frozen when the Plan is created. Attachments and Plan text are stored durably; use Secrets by reference rather than pasting credentials.")}</p>
   </form>;
 }

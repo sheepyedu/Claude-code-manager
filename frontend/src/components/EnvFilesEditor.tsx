@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../config/language";
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import type { Project } from '../api/client';
@@ -44,6 +45,7 @@ function FileEditor({
   filepath: string;
   onClose: () => void;
 }) {
+  useLanguage();
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -111,7 +113,7 @@ function FileEditor({
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700 flex-shrink-0">
           <div className="min-w-0">
-            <h3 className="text-foreground font-semibold">Edit env file</h3>
+            <h3 className="text-foreground font-semibold">{translateUI("Edit env file")}</h3>
             <p className="text-xs text-gray-500 font-mono truncate">{filepath}</p>
           </div>
           <div className="flex items-center gap-2 ml-3 flex-shrink-0">
@@ -121,14 +123,12 @@ function FileEditor({
                 onClick={() => { setMode('form'); setRows(parseEnvContent(content)); }}
                 className={`px-3 py-1.5 transition-colors ${mode === 'form' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}
               >
-                Form
-              </button>
+                {translateUI("Form ")}</button>
               <button
                 onClick={() => { setMode('raw'); setContent(serializeEnvContent(rows)); }}
                 className={`px-3 py-1.5 transition-colors ${mode === 'raw' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}
               >
-                Raw
-              </button>
+                {translateUI("Raw ")}</button>
             </div>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-200"><X size={18} /></button>
           </div>
@@ -138,18 +138,18 @@ function FileEditor({
         <div className="flex-1 overflow-y-auto p-5">
           {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
           {loading ? (
-            <p className="text-gray-400 text-sm">Loading...</p>
+            <p className="text-gray-400 text-sm">{translateUI("Loading...")}</p>
           ) : mode === 'raw' ? (
             <textarea
               className="w-full h-72 bg-gray-900 text-green-400 text-sm font-mono rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500 resize-y"
               value={content}
               onChange={(e) => syncRawToForm(e.target.value)}
               spellCheck={false}
-              placeholder="KEY=VALUE"
+              placeholder={translateUI("KEY=VALUE")}
             />
           ) : (
             <div className="space-y-2">
-              <p className="text-xs text-gray-500">Comments and blank lines are preserved in raw format.</p>
+              <p className="text-xs text-gray-500">{translateUI("Comments and blank lines are preserved in raw format.")}</p>
               {rows.map((row, idx) => {
                 if (row.comment) return null;
                 const isPendingDelete = pendingDeleteIdx === idx;
@@ -159,14 +159,14 @@ function FileEditor({
                       className="flex-1 bg-gray-700 text-foreground text-sm font-mono rounded px-3 py-1.5 outline-none focus:ring-1 focus:ring-indigo-500"
                       value={row.key}
                       onChange={(e) => updateRow(idx, 'key', e.target.value)}
-                      placeholder="KEY"
+                      placeholder={translateUI("KEY")}
                     />
                     <span className="text-gray-500">=</span>
                     <input
                       className="flex-[2] bg-gray-700 text-foreground text-sm font-mono rounded px-3 py-1.5 outline-none focus:ring-1 focus:ring-indigo-500"
                       value={row.value}
                       onChange={(e) => updateRow(idx, 'value', e.target.value)}
-                      placeholder="value"
+                      placeholder={translateUI("value")}
                     />
                     <button
                       onClick={() => deleteRow(idx)}
@@ -176,7 +176,7 @@ function FileEditor({
                           ? 'bg-red-600 text-white hover:bg-red-500'
                           : 'text-gray-500 hover:text-red-400 hover:bg-gray-700'
                       }`}
-                      title={isPendingDelete ? 'Click again to confirm delete' : 'Delete row'}
+                      title={isPendingDelete ? translateUI("Click again to confirm delete") : translateUI("Delete row")}
                     >
                       {isPendingDelete ? <Check size={14} /> : <Trash2 size={14} />}
                     </button>
@@ -187,21 +187,20 @@ function FileEditor({
                 onClick={addRow}
                 className="flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 mt-1"
               >
-                <Plus size={13} /> Add key
-              </button>
+                <Plus size={13} /> {translateUI("Add key ")}</button>
             </div>
           )}
         </div>
 
         {/* Footer */}
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-700 flex-shrink-0">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-300 hover:text-foreground">Cancel</button>
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-300 hover:text-foreground">{translateUI("Cancel")}</button>
           <button
             onClick={handleSave}
             disabled={saving || loading}
             className="px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-500 disabled:opacity-50"
           >
-            {saving ? 'Saving...' : 'Save'}
+            {saving ? translateUI("Saving...") : translateUI("Save")}
           </button>
         </div>
       </div>
@@ -212,6 +211,7 @@ function FileEditor({
 // ── Main EnvFilesEditor ───────────────────────────────────────────────────────
 
 export function EnvFilesEditor({ project, onProjectUpdated }: { project: Project; onProjectUpdated: (p: Project) => void }) {
+  useLanguage();
   const [fileStatuses, setFileStatuses] = useState<{ path: string; exists: boolean }[]>([]);
   const [newPath, setNewPath] = useState('');
   const [editingFile, setEditingFile] = useState<string | null>(null);
@@ -305,13 +305,13 @@ export function EnvFilesEditor({ project, onProjectUpdated }: { project: Project
               <div key={path} className="flex items-center gap-2 bg-gray-700/50 rounded px-3 py-2">
                 <span
                   className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${exists ? 'bg-green-500' : 'bg-yellow-500'}`}
-                  title={exists ? 'File exists' : 'File not yet created'}
+                  title={exists ? translateUI("File exists") : translateUI("File not yet created")}
                 />
                 <span className="flex-1 text-sm font-mono text-gray-300 truncate" title={path}>{path}</span>
                 <button
                   onClick={() => setEditingFile(path)}
                   className="p-1.5 text-gray-400 hover:text-indigo-400 hover:bg-gray-600 rounded transition-colors flex-shrink-0"
-                  title="Edit file"
+                  title={translateUI("Edit file")}
                 >
                   <Edit2 size={13} />
                 </button>
@@ -323,16 +323,16 @@ export function EnvFilesEditor({ project, onProjectUpdated }: { project: Project
                       ? 'bg-red-600 text-white hover:bg-red-500 px-2'
                       : 'text-gray-400 hover:text-red-400 hover:bg-gray-600'
                   }`}
-                  title={isPendingRemove ? 'Click again to confirm removal' : 'Remove from list (file stays on disk)'}
+                  title={isPendingRemove ? translateUI("Click again to confirm removal") : translateUI("Remove from list (file stays on disk)")}
                 >
-                  {isPendingRemove ? 'Confirm' : <Trash2 size={13} />}
+                  {isPendingRemove ? translateUI("Confirm") : <Trash2 size={13} />}
                 </button>
               </div>
             );
           })}
         </div>
       ) : (
-        <p className="text-xs text-gray-500">No env files configured.</p>
+        <p className="text-xs text-gray-500">{translateUI("No env files configured.")}</p>
       )}
 
       {/* Add path input */}
@@ -342,22 +342,21 @@ export function EnvFilesEditor({ project, onProjectUpdated }: { project: Project
           value={newPath}
           onChange={(e) => setNewPath(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPath(); } }}
-          placeholder=".env or config/.env.local"
+          placeholder={translateUI(".env or config/.env.local")}
         />
         <button
           onClick={addPath}
           disabled={!newPath.trim()}
           className="flex items-center gap-1 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-500 disabled:opacity-50 flex-shrink-0"
         >
-          <Plus size={13} /> Add
-        </button>
+          <Plus size={13} /> {translateUI("Add ")}</button>
         <button
           onClick={handleScan}
           disabled={scanning || !project.local_path}
           className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-300 border border-gray-600 rounded hover:bg-gray-700 disabled:opacity-50 flex-shrink-0"
-          title="Scan repo for .env files"
+          title={translateUI("Scan repo for .env files")}
         >
-          <Search size={13} /> {scanning ? 'Scanning...' : 'Scan repo'}
+          <Search size={13} /> {scanning ? translateUI("Scanning...") : translateUI("Scan repo")}
         </button>
       </div>
 
@@ -365,8 +364,7 @@ export function EnvFilesEditor({ project, onProjectUpdated }: { project: Project
       {discovered.length > 0 && (
         <div className="border border-gray-600 rounded-lg p-3 space-y-2">
           <p className="text-xs text-gray-400 flex items-center gap-1">
-            <Search size={12} /> Found {discovered.length} new file{discovered.length > 1 ? 's' : ''} — select to add:
-          </p>
+            <Search size={12} /> {translateUI("Found ")}{discovered.length} {translateUI("new file")}{discovered.length > 1 ? translateUI("s") : ''} {translateUI("— select to add: ")}</p>
           <div className="space-y-1">
             {discovered.map((path) => (
               <label key={path} className="flex items-center gap-2 cursor-pointer">
@@ -386,22 +384,20 @@ export function EnvFilesEditor({ project, onProjectUpdated }: { project: Project
               disabled={selectedDiscovered.size === 0}
               className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-500 disabled:opacity-50"
             >
-              Add selected ({selectedDiscovered.size})
+              {translateUI("Add selected (")}{selectedDiscovered.size})
             </button>
             <button
               onClick={() => { setDiscovered([]); setSelectedDiscovered(new Set()); }}
               className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200"
             >
-              Dismiss
-            </button>
+              {translateUI("Dismiss ")}</button>
           </div>
         </div>
       )}
 
       {discovered.length === 0 && !scanning && project.local_path && fileStatuses.length > 0 && (
         <p className="text-xs text-gray-600">
-          Green dot = file exists on disk · Yellow dot = file not yet created (will be created on first save)
-        </p>
+          {translateUI("Green dot = file exists on disk · Yellow dot = file not yet created (will be created on first save) ")}</p>
       )}
 
       {/* File editor modal */}

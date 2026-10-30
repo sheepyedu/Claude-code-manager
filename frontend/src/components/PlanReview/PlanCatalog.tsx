@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import type { PlanResource, Project } from '../../api/client';
 import { useState } from 'react';
 import { Archive, ArchiveRestore, ChevronRight, ListTodo } from '../icons';
@@ -13,9 +14,10 @@ interface Props {
 }
 
 export function PlanCatalog({ plans, projects, selectedPlanId, onSelectPlan, onNavigateTask, onSetArchived }: Props) {
+  useLanguage();
   const [updatingPlanId, setUpdatingPlanId] = useState<number | null>(null);
   if (plans.length === 0) {
-    return <div className="rounded-xl border border-gray-800 bg-gray-900/50 px-4 py-10 text-center text-sm text-gray-500">No Plans match this filter.</div>;
+    return <div className="rounded-xl border border-gray-800 bg-gray-900/50 px-4 py-10 text-center text-sm text-gray-500">{translateUI("No Plans match this filter.")}</div>;
   }
 
   return <div className="space-y-2">
@@ -45,18 +47,18 @@ export function PlanCatalog({ plans, projects, selectedPlanId, onSelectPlan, onN
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-gray-500">#{plan.id}</span>
-              {plan.current_version && <span className="rounded-full bg-indigo-500/15 px-2 py-0.5 text-[10px] text-indigo-300">v{plan.current_version.version_number}</span>}
+              {plan.current_version && <span className="rounded-full bg-indigo-500/15 px-2 py-0.5 text-[10px] text-indigo-300">{translateUI("v")}{plan.current_version.version_number}</span>}
               <span className={`rounded-full border px-2 py-0.5 text-[10px] ${planDisplayStateClassName(plan.display_state)}`}>{planDisplayStateLabel(plan.display_state)}</span>
-              {plan.read_only && <span className="rounded-full border border-indigo-500/40 bg-indigo-500/10 px-2 py-0.5 text-[10px] text-indigo-300">Capability · read-only</span>}
-              {appliedOlder && <span className="rounded-full bg-teal-500/15 px-2 py-0.5 text-[10px] text-teal-300">earlier Version applied</span>}
+              {plan.read_only && <span className="rounded-full border border-indigo-500/40 bg-indigo-500/10 px-2 py-0.5 text-[10px] text-indigo-300">{translateUI("Capability · read-only")}</span>}
+              {appliedOlder && <span className="rounded-full bg-teal-500/15 px-2 py-0.5 text-[10px] text-teal-300">{translateUI("earlier Version applied")}</span>}
             </div>
             <div className="mt-1 truncate text-sm font-semibold text-gray-100">{plan.title}</div>
-            <div className="mt-1 truncate text-xs text-gray-500">{plan.target_task_id != null ? `Related to Task #${plan.target_task_id}` : 'Standalone Plan'}{project ? ` · ${project.name}` : ''}</div>
+            <div className="mt-1 truncate text-xs text-gray-500">{plan.target_task_id != null ? translateUI("Related to Task #{0}", [plan.target_task_id]) : translateUI("Standalone Plan")}{project ? ` · ${project.name}` : ''}</div>
           </div>
           </button>
           <div className="flex shrink-0 items-center gap-1 pr-3">
-            {plan.target_task_id != null && <button type="button" onClick={() => onNavigateTask(plan.target_task_id!)} aria-label={`Open related Task #${plan.target_task_id}`} title={`Open related Task #${plan.target_task_id}`} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs text-gray-500 transition-colors hover:bg-indigo-500/15 hover:text-indigo-300"><ListTodo size={15} /><span className="hidden lg:inline">Task #{plan.target_task_id}</span></button>}
-            {!plan.read_only && plan.active_run_id == null && <button type="button" onClick={() => void setArchived()} disabled={updating} aria-label={archiveLabel} title={archived ? 'Restore' : 'Archive'} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs text-gray-500 transition-colors hover:bg-gray-700/70 hover:text-gray-200 disabled:pointer-events-none disabled:opacity-40">{archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}<span className="hidden lg:inline">{archived ? 'Restore' : 'Archive'}</span></button>}
+            {plan.target_task_id != null && <button type="button" onClick={() => onNavigateTask(plan.target_task_id!)} aria-label={translateUI("Open related Task #{0}", [plan.target_task_id])} title={translateUI("Open related Task #{0}", [plan.target_task_id])} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs text-gray-500 transition-colors hover:bg-indigo-500/15 hover:text-indigo-300"><ListTodo size={15} /><span className="hidden lg:inline">{translateUI("Task #")}{plan.target_task_id}</span></button>}
+            {!plan.read_only && plan.active_run_id == null && <button type="button" onClick={() => void setArchived()} disabled={updating} aria-label={archiveLabel} title={archived ? translateUI("Restore") : translateUI("Archive")} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs text-gray-500 transition-colors hover:bg-gray-700/70 hover:text-gray-200 disabled:pointer-events-none disabled:opacity-40">{archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}<span className="hidden lg:inline">{archived ? translateUI("Restore") : translateUI("Archive")}</span></button>}
             <ChevronRight size={15} aria-hidden="true" className={`shrink-0 ${selected ? 'text-indigo-300' : 'text-gray-600'}`} />
           </div>
         </div>;

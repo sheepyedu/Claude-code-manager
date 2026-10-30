@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { api, isApiRequestError, type PlanInputRequest, type PlanRun } from '../../api/client';
@@ -14,6 +15,7 @@ interface PlanInputFormProps {
 type AnswerValue = string | string[];
 
 export function PlanInputForm({ run, request, compact = false, onAnswered }: PlanInputFormProps) {
+  useLanguage();
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
   const [additional, setAdditional] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -90,10 +92,9 @@ export function PlanInputForm({ run, request, compact = false, onAnswered }: Pla
       <div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-full bg-amber-500/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-300">
-            {request.requested_by} needs input
-          </span>
+            {request.requested_by} {translateUI("needs input ")}</span>
           <span className="text-xs text-gray-500">
-            {request.questions.length} {request.questions.length === 1 ? 'question' : 'questions'}
+            {request.questions.length} {request.questions.length === 1 ? translateUI("question") : translateUI("questions")}
           </span>
         </div>
         {request.reason && <p className="mt-2 text-sm leading-6 text-gray-300">{request.reason}</p>}
@@ -154,7 +155,7 @@ export function PlanInputForm({ run, request, compact = false, onAnswered }: Pla
       <textarea
         value={additional}
         onChange={(event) => setAdditional(event.target.value)}
-        placeholder="Additional context (optional)"
+        placeholder={translateUI("Additional context (optional)")}
         rows={2}
         maxLength={50000}
         className="w-full resize-y rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-indigo-500"
@@ -165,12 +166,12 @@ export function PlanInputForm({ run, request, compact = false, onAnswered }: Pla
           {uploads.uploads.map((upload) => (
             <span key={upload.id} className="flex max-w-full items-center gap-1 rounded-lg border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-gray-300">
               {upload.preview && <img src={upload.preview} alt="" className="h-8 w-8 rounded object-cover" />}
-              <span className="max-w-40 truncate">{upload.file?.name || upload.result?.filename || 'file'}</span>
+              <span className="max-w-40 truncate">{upload.file?.name || upload.result?.filename || translateUI("file")}</span>
               {upload.status === 'uploading' && <Loader2 size={11} className="animate-spin" />}
               {upload.status === 'failed' && (
-                <button type="button" className="rounded px-1 py-0.5 text-red-300 transition-colors hover:bg-red-500/10 hover:text-red-200" onClick={() => uploads.retryFile(upload.id)}>Retry</button>
+                <button type="button" className="rounded px-1 py-0.5 text-red-300 transition-colors hover:bg-red-500/10 hover:text-red-200" onClick={() => uploads.retryFile(upload.id)}>{translateUI("Retry")}</button>
               )}
-              <button type="button" aria-label={`Remove ${upload.file?.name || upload.result?.filename || 'file'}`} onClick={() => uploads.removeFile(upload.id)} className="rounded p-0.5 text-gray-500 transition-colors hover:bg-gray-700 hover:text-gray-200"><X size={11} /></button>
+              <button type="button" aria-label={translateUI("Remove {0}", [upload.file?.name || upload.result?.filename || 'file'])} onClick={() => uploads.removeFile(upload.id)} className="rounded p-0.5 text-gray-500 transition-colors hover:bg-gray-700 hover:text-gray-200"><X size={11} /></button>
             </span>
           ))}
         </div>
@@ -189,8 +190,7 @@ export function PlanInputForm({ run, request, compact = false, onAnswered }: Pla
             }}
           />
           <button type="button" onClick={() => inputRef.current?.click()} className="flex items-center gap-1.5 rounded-lg border border-gray-700 px-3 py-2 text-xs text-gray-300 transition-colors hover:border-gray-600 hover:bg-gray-800 hover:text-gray-200">
-            <Paperclip size={13} /> Attach files
-          </button>
+            <Paperclip size={13} /> {translateUI("Attach files ")}</button>
         </div>
         <button
           type="submit"
@@ -198,8 +198,7 @@ export function PlanInputForm({ run, request, compact = false, onAnswered }: Pla
           className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {submitting && <Loader2 size={12} className="animate-spin" />}
-          Submit answers
-        </button>
+          {translateUI("Submit answers ")}</button>
       </div>
       </fieldset>
     </form>

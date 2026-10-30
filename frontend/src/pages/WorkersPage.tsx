@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../config/language";
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api/client';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -166,6 +167,7 @@ function AddWorkerModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  useLanguage();
   const [name, setName] = useState('');
   const [accounts, setAccounts] = useState<WorkerAccountDraft[]>([emptyWorkerAccount()]);
   const [error, setError] = useState<string | null>(null);
@@ -177,21 +179,21 @@ function AddWorkerModal({
     const activeAccounts = accounts.filter(accountHasInput);
     const invalidIndex = activeAccounts.findIndex((account) => !account.email.trim());
     if (invalidIndex !== -1) {
-      setError(`账号 ${invalidIndex + 1} 的 Email 必填`);
+      setError(translateUI("账号 {0} 的 Email 必填", [invalidIndex + 1]));
       return;
     }
     const invalidCodexIndex = activeAccounts.findIndex(
       (account) => account.provider === 'codex' && !account.token.trim(),
     );
     if (invalidCodexIndex !== -1) {
-      setError(`Codex 账号 ${invalidCodexIndex + 1} 的 Worker 自动登录需要邮箱 Token`);
+      setError(translateUI("Codex 账号 {0} 的 Worker 自动登录需要邮箱 Token", [invalidCodexIndex + 1]));
       return;
     }
     const invalidClaudeIndex = activeAccounts.findIndex(
       (account) => account.provider === 'claude' && !account.token.trim(),
     );
     if (invalidClaudeIndex !== -1) {
-      setError(`Claude 账号 ${invalidClaudeIndex + 1} 的接码 Token 必填`);
+      setError(translateUI("Claude 账号 {0} 的接码 Token 必填", [invalidClaudeIndex + 1]));
       return;
     }
 
@@ -214,7 +216,7 @@ function AddWorkerModal({
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700">
-          <h3 className="text-foreground font-semibold">Add Worker</h3>
+          <h3 className="text-foreground font-semibold">{translateUI("Add Worker")}</h3>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-200">
             <X size={18} />
           </button>
@@ -222,17 +224,15 @@ function AddWorkerModal({
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {error && <p className="text-red-400 text-sm">{error}</p>}
           <p className="text-xs text-gray-400">
-            机型、镜像和子网可继承本机；SSH 公钥与专属安全组会自动配置。账号在 Worker 上独立登录，登录信息仅用于 bootstrap 与失败重试。
-          </p>
+            {translateUI("机型、镜像和子网可继承本机；SSH 公钥与专属安全组会自动配置。账号在 Worker 上独立登录，登录信息仅用于 bootstrap 与失败重试。 ")}</p>
           <div>
             <label className="block text-xs text-gray-400 mb-1">
-              Worker 名称 *（也作为 AWS 实例名）
-            </label>
+              {translateUI("Worker 名称 *（也作为 AWS 实例名） ")}</label>
             <input
               className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="如 worker-prod-1"
+              placeholder={translateUI("如 worker-prod-1")}
               required
             />
           </div>
@@ -240,7 +240,7 @@ function AddWorkerModal({
             <div key={index} className="flex gap-2 items-start">
               <div className="flex-1 space-y-2">
                 <select
-                  aria-label={`账号 ${index + 1} Provider`}
+                  aria-label={translateUI("账号 {0} Provider", [index + 1])}
                   className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                   value={account.provider}
                   onChange={(event) => {
@@ -258,13 +258,13 @@ function AddWorkerModal({
                     )));
                   }}
                 >
-                  <option value="codex">Codex（默认）</option>
-                  <option value="claude">Claude</option>
+                  <option value="codex">{translateUI("Codex（默认）")}</option>
+                  <option value="claude">{translateUI("Claude")}</option>
                 </select>
                 <input
                   className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                   value={account.email}
-                  placeholder={`账号 ${index + 1} Email`}
+                  placeholder={translateUI("账号 {0} Email", [index + 1])}
                   onChange={(event) => setAccounts(accounts.map((item, itemIndex) => (
                     itemIndex === index ? { ...item, email: event.target.value } : item
                   )))}
@@ -274,7 +274,7 @@ function AddWorkerModal({
                     className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                     type="password"
                     value={account.password}
-                    placeholder="OpenAI 密码（可选）"
+                    placeholder={translateUI("OpenAI 密码（可选）")}
                     onChange={(event) => setAccounts(accounts.map((item, itemIndex) => (
                       itemIndex === index ? { ...item, password: event.target.value } : item
                     )))}
@@ -284,15 +284,14 @@ function AddWorkerModal({
                   className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
                   type="password"
                   value={account.token}
-                  placeholder={account.provider === 'codex' ? '邮箱接码 Token *' : '接码 Token *'}
+                  placeholder={account.provider === 'codex' ? translateUI("邮箱接码 Token *") : translateUI("接码 Token *")}
                   onChange={(event) => setAccounts(accounts.map((item, itemIndex) => (
                     itemIndex === index ? { ...item, token: event.target.value } : item
                   )))}
                 />
                 {account.provider === 'codex' && (
                   <p className="text-[11px] text-gray-500">
-                    邮箱 Token 用于无人值守获取验证码；OpenAI 密码可选。
-                  </p>
+                    {translateUI("邮箱 Token 用于无人值守获取验证码；OpenAI 密码可选。 ")}</p>
                 )}
                 <select
                   className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
@@ -301,14 +300,14 @@ function AddWorkerModal({
                     itemIndex === index ? { ...item, login_method: event.target.value } : item
                   )))}
                 >
-                  <option value="">自动识别（按邮箱后缀）</option>
-                  <option value="171mail">171mail（API 接码）</option>
+                  <option value="">{translateUI("自动识别（按邮箱后缀）")}</option>
+                  <option value="171mail">{translateUI("171mail（API 接码）")}</option>
                   {account.provider === 'codex' && (
-                    <option value="mailcatcher">MailCatcher（Token 接码）</option>
+                    <option value="mailcatcher">{translateUI("MailCatcher（Token 接码）")}</option>
                   )}
-                  <option value="mailcom">mail.com（Chrome 接码）</option>
-                  <option value="onet">Onet（Token 接码）</option>
-                  <option value="gazeta">Gazeta（Token 接码）</option>
+                  <option value="mailcom">{translateUI("mail.com（Chrome 接码）")}</option>
+                  <option value="onet">{translateUI("Onet（Token 接码）")}</option>
+                  <option value="gazeta">{translateUI("Gazeta（Token 接码）")}</option>
                 </select>
               </div>
               {accounts.length > 1 && (
@@ -327,18 +326,16 @@ function AddWorkerModal({
             onClick={() => setAccounts([...accounts, emptyWorkerAccount()])}
             className="text-xs text-indigo-400 hover:text-indigo-300"
           >
-            + 再加一个账号
-          </button>
+            {translateUI("+ 再加一个账号 ")}</button>
           <div className="flex justify-end gap-2 pt-1">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-300 hover:text-foreground">
-              Cancel
-            </button>
+              {translateUI("Cancel ")}</button>
             <button
               type="submit"
               disabled={submitting || !name.trim()}
               className="px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-500 disabled:opacity-50"
             >
-              {submitting ? 'Creating...' : 'Create'}
+              {submitting ? translateUI("Creating...") : translateUI("Create")}
             </button>
           </div>
         </form>
@@ -348,6 +345,7 @@ function AddWorkerModal({
 }
 
 function LogsModal({ worker, onClose }: { worker: Worker; onClose: () => void }) {
+  useLanguage();
   const [log, setLog] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -376,7 +374,7 @@ function LogsModal({ worker, onClose }: { worker: Worker; onClose: () => void })
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700">
-          <h3 className="text-foreground font-semibold">{worker.name} — Bootstrap Log</h3>
+          <h3 className="text-foreground font-semibold">{worker.name} {translateUI("— Bootstrap Log")}</h3>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-200">
             <X size={18} />
           </button>
@@ -405,6 +403,7 @@ function WorkerCard({
   users: TeamUser[];
   isAdmin: boolean;
 }) {
+  useLanguage();
   const inferredPoolProvider = preferredWorkerProvider(worker);
   const [logsOpen, setLogsOpen] = useState(false);
   const [poolOpen, setPoolOpen] = useState(false);
@@ -667,7 +666,7 @@ function WorkerCard({
           ) : (
             <span
               className={`text-foreground font-medium truncate ${canRename ? 'cursor-pointer hover:text-indigo-300 group' : ''}`}
-              title={canRename ? 'Click to rename' : worker.name}
+              title={canRename ? translateUI("Click to rename") : worker.name}
               onClick={() => {
                 if (canRename) {
                   setEditName(worker.name);
@@ -680,7 +679,7 @@ function WorkerCard({
             </span>
           )}
           <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${STATUS_COLORS[worker.status] || 'bg-gray-500/20 text-gray-400'}`}>
-            {worker.status}{busy && worker.bootstrap_step ? `: ${worker.bootstrap_step}` : ''}
+            {translateUI(worker.status)}{busy && worker.bootstrap_step ? `: ${worker.bootstrap_step}` : ''}
           </span>
           {isAdmin && (
             <select
@@ -695,9 +694,9 @@ function WorkerCard({
                 }
               }}
               className="text-xs bg-gray-700 text-gray-300 rounded px-1.5 py-0.5 border border-gray-600 shrink-0"
-              title="Assign to user"
+              title={translateUI("Assign to user")}
             >
-              <option value="">Public Pool</option>
+              <option value="">{translateUI("Public Pool")}</option>
               {users.filter((user) => user.role === 'member').map((user) => (
                 <option key={user.id} value={user.id}>{user.name}</option>
               ))}
@@ -713,10 +712,10 @@ function WorkerCard({
           {worker.status === 'ready' && ptyEnabled !== null && canControl && (
             <button
               type="button"
-              title={ptyEnabled ? 'PTY 模式：开（点击关闭）' : 'PTY 模式：关（点击开启）'}
+              title={ptyEnabled ? translateUI("PTY 模式：开（点击关闭）") : translateUI("PTY 模式：关（点击开启）")}
               disabled={ptySwitching}
               onClick={async () => {
-                if (ptyEnabled && !window.confirm('关闭 PTY 模式将回退到 claude -p 一次性进程。确定？')) return;
+                if (ptyEnabled && !window.confirm(translateUI("关闭 PTY 模式将回退到 claude -p 一次性进程。确定？"))) return;
                 setPtySwitching(true);
                 try {
                   const settings = await api.updateWorkerRuntimeSettings(worker.id, {
@@ -731,23 +730,21 @@ function WorkerCard({
               }}
               className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold ${ptyEnabled ? 'bg-green-600/30 text-green-400' : 'bg-gray-700 text-gray-400'}`}
             >
-              PTY
-            </button>
+              {translateUI("PTY ")}</button>
           )}
           {worker.status === 'ready' && canControl && (
             <button
               type="button"
-              title="Worker 号池额度"
+              title={translateUI("Worker 号池额度")}
               onClick={() => void togglePool()}
               className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded ${poolOpen ? 'bg-indigo-600/30 text-indigo-300' : 'bg-gray-700 text-gray-400'} hover:text-indigo-300 text-[10px] font-semibold`}
             >
-              Pro
-            </button>
+              {translateUI("Pro ")}</button>
           )}
           {canControl && (
             <button
               type="button"
-              title="日志"
+              title={translateUI("日志")}
               onClick={() => setLogsOpen(true)}
               className="p-1.5 text-gray-400 hover:text-gray-200"
             >
@@ -757,7 +754,7 @@ function WorkerCard({
           {canControl && worker.status === 'error' && !hasPendingDestroy && (
             <button
               type="button"
-              title="重试 bootstrap"
+              title={translateUI("重试 bootstrap")}
               onClick={() => void act(api.retryWorker)}
               className="p-1.5 text-gray-400 hover:text-blue-400"
             >
@@ -767,7 +764,7 @@ function WorkerCard({
           {canControl && worker.status === 'ready' && (
             <button
               type="button"
-              title="关机（EC2 stop，数据保留）"
+              title={translateUI("关机（EC2 stop，数据保留）")}
               onClick={() => void act(
                 api.stopWorker,
                 `关机 ${shortName(worker)}？数据保留，停机期间不可派发任务。`,
@@ -780,7 +777,7 @@ function WorkerCard({
           {canControl && worker.status === 'stopped' && (
             <button
               type="button"
-              title="开机"
+              title={translateUI("开机")}
               onClick={() => void act(api.startWorker)}
               className="p-1.5 text-gray-400 hover:text-green-400"
             >
@@ -790,7 +787,7 @@ function WorkerCard({
           {canDestroy && (
             <button
               type="button"
-              title="销毁（terminate EC2）"
+              title={translateUI("销毁（terminate EC2）")}
               onClick={() => void act(
                 api.destroyWorker,
                 `销毁 ${shortName(worker)}？EC2 实例将被 terminate，不可恢复！`,
@@ -805,18 +802,18 @@ function WorkerCard({
 
       {isAdmin && (
         <div className="text-xs text-gray-400 flex flex-wrap gap-x-4 gap-y-1">
-          {worker.private_ip && <span>内网 {worker.private_ip}</span>}
+          {worker.private_ip && <span>{translateUI("内网 ")}{worker.private_ip}</span>}
           {worker.cloud_instance_id && <span>{worker.cloud_instance_id}</span>}
           {worker.ccm_commit && <span title={worker.ccm_commit}>@{worker.ccm_commit.slice(0, 8)}</span>}
           {worker.last_heartbeat && (
-            <span>心跳 {new Date(`${worker.last_heartbeat}Z`).toLocaleTimeString()}</span>
+            <span>{translateUI("心跳 ")}{new Date(`${worker.last_heartbeat}Z`).toLocaleTimeString()}</span>
           )}
         </div>
       )}
 
       {poolOpen && (
         <div className="bg-gray-900/60 rounded p-3 space-y-2">
-          <div role="tablist" aria-label="Worker 号池 Provider" className="flex gap-1">
+          <div role="tablist" aria-label={translateUI("Worker 号池 Provider")} className="flex gap-1">
             {(['codex', 'claude'] as WorkerProvider[]).map((provider) => (
               <button
                 key={provider}
@@ -827,7 +824,7 @@ function WorkerCard({
                 onClick={() => selectPoolProvider(provider)}
                 className={`rounded px-2 py-1 text-xs ${poolProvider === provider ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400'}`}
               >
-                {provider === 'codex' ? 'Codex' : 'Claude'}
+                {provider === 'codex' ? translateUI("Codex") : translateUI("Claude")}
               </button>
             ))}
           </div>
@@ -835,12 +832,12 @@ function WorkerCard({
           {poolErr ? (
             <span className="text-xs text-red-400 break-all">{poolErr}</span>
           ) : pool === null ? (
-            <span className="text-xs text-gray-500">加载额度…</span>
+            <span className="text-xs text-gray-500">{translateUI("加载额度…")}</span>
           ) : (
             <>
               <div className="flex items-center gap-2 text-xs text-gray-500">
-                <span>{pool.accounts?.length || 0} 个账号</span>
-                {pool.available != null && <span>· {pool.available}/{pool.total} 可用</span>}
+                <span>{pool.accounts?.length || 0} {translateUI("个账号")}</span>
+                {pool.available != null && <span>· {pool.available}/{pool.total} {translateUI("可用")}</span>}
               </div>
               {pool.accounts?.length ? pool.accounts.map((account) => {
                 const dot = !account.enabled
@@ -867,7 +864,7 @@ function WorkerCard({
                         <button
                           type="button"
                           onClick={async () => {
-                            if (!window.confirm(`从 ${poolProvider === 'codex' ? 'Codex' : 'Claude'} 号池删除 ${account.id}（${account.email || ''}）？`)) return;
+                            if (!window.confirm(translateUI("从 {0} 号池删除 {1}（{2}）？", [poolProvider === 'codex' ? 'Codex' : 'Claude', account.id, account.email || '']))) return;
                             try {
                               await api.deleteWorkerAccount(worker.id, account.id, poolProvider);
                               await loadPool(poolProvider);
@@ -877,8 +874,7 @@ function WorkerCard({
                           }}
                           className="text-[10px] px-1.5 py-0.5 rounded border border-gray-600 text-gray-400 hover:text-red-400 hover:border-red-500"
                         >
-                          删除
-                        </button>
+                          {translateUI("删除 ")}</button>
                       </div>
                     </div>
                     {account.email && <div className="text-xs text-gray-500 truncate">{account.email}</div>}
@@ -898,7 +894,7 @@ function WorkerCard({
                               : 'text-green-400';
                           return (
                             <div key={`${bar.label}-${index}`} className="flex items-center gap-2 text-xs">
-                              <span className="w-7 shrink-0 text-gray-500">{bar.label}</span>
+                              <span className="w-7 shrink-0 text-gray-500">{translateUI(bar.label)}</span>
                               <div className="flex-1 h-2 rounded-full bg-gray-700 overflow-hidden">
                                 <div
                                   className={`h-full rounded-full ${barColor}`}
@@ -920,7 +916,7 @@ function WorkerCard({
                     ) : null}
                   </div>
                 );
-              }) : <div className="text-xs text-gray-500">暂无账号</div>}
+              }) : <div className="text-xs text-gray-500">{translateUI("暂无账号")}</div>}
 
               <div className="pt-1 border-t border-gray-700">
                 <button
@@ -934,30 +930,29 @@ function WorkerCard({
                   }}
                   className="text-xs text-indigo-400 hover:text-indigo-300"
                 >
-                  + 添加 {poolProvider === 'codex' ? 'Codex' : 'Claude'} 账号
-                </button>
+                  {translateUI("+ 添加 ")}{poolProvider === 'codex' ? translateUI("Codex") : translateUI("Claude")} {translateUI("账号 ")}</button>
                 {addingPoolAccount && (
                   <form onSubmit={addPoolAccount} className="mt-2 space-y-2 rounded border border-gray-700 p-2">
                     {poolAccountError && <p className="text-xs text-red-400">{poolAccountError}</p>}
                     {poolLoginActive && poolLoginState && (
                       <p className="text-xs text-blue-400">
                         {poolLoginState.status === 'awaiting_otp'
-                          ? 'OpenAI 正在等待邮箱验证码'
+                          ? translateUI("OpenAI 正在等待邮箱验证码")
                           : poolLoginState.status === 'verifying_otp'
-                            ? '正在验证邮箱验证码…'
+                            ? translateUI("正在验证邮箱验证码…")
                             : poolLoginState.status === 'finalizing'
-                              ? '登录成功，正在保存账号…'
+                              ? translateUI("登录成功，正在保存账号…")
                               : poolLoginState.status === 'cancelling'
-                                ? '正在取消登录…'
-                                : `正在自动登录 ${poolProvider === 'codex' ? 'Codex' : 'Claude'}…`}
+                                ? translateUI("正在取消登录…")
+                                : translateUI("正在自动登录 {0}…", [poolProvider === 'codex' ? 'Codex' : 'Claude'])}
                       </p>
                     )}
                     <input
-                      aria-label="Worker 号池账号 Email"
+                      aria-label={translateUI("Worker 号池账号 Email")}
                       className="w-full rounded bg-gray-700 px-2 py-1.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-indigo-500"
                       value={poolAccountDraft.email}
                       disabled={poolLoginActive}
-                      placeholder="账号 Email"
+                      placeholder={translateUI("账号 Email")}
                       onChange={(event) => setPoolAccountDraft({
                         ...poolAccountDraft,
                         email: event.target.value,
@@ -965,12 +960,12 @@ function WorkerCard({
                     />
                     {poolProvider === 'codex' && (
                       <input
-                        aria-label="Worker 号池 OpenAI 密码"
+                        aria-label={translateUI("Worker 号池 OpenAI 密码")}
                         className="w-full rounded bg-gray-700 px-2 py-1.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-indigo-500"
                         type="password"
                         disabled={poolLoginActive}
                         value={poolAccountDraft.password}
-                        placeholder="OpenAI 密码（可选）"
+                        placeholder={translateUI("OpenAI 密码（可选）")}
                         onChange={(event) => setPoolAccountDraft({
                           ...poolAccountDraft,
                           password: event.target.value,
@@ -978,19 +973,19 @@ function WorkerCard({
                       />
                     )}
                     <input
-                      aria-label="Worker 号池接码 Token"
+                      aria-label={translateUI("Worker 号池接码 Token")}
                       className="w-full rounded bg-gray-700 px-2 py-1.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-indigo-500"
                       type="password"
                       disabled={poolLoginActive}
                       value={poolAccountDraft.token}
-                      placeholder={poolProvider === 'codex' ? '邮箱接码 Token *' : '接码 Token *'}
+                      placeholder={poolProvider === 'codex' ? translateUI("邮箱接码 Token *") : translateUI("接码 Token *")}
                       onChange={(event) => setPoolAccountDraft({
                         ...poolAccountDraft,
                         token: event.target.value,
                       })}
                     />
                     <select
-                      aria-label="Worker 号池登录方式"
+                      aria-label={translateUI("Worker 号池登录方式")}
                       className="w-full rounded bg-gray-700 px-2 py-1.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-indigo-500"
                       value={poolAccountDraft.login_method}
                       disabled={poolLoginActive}
@@ -999,23 +994,23 @@ function WorkerCard({
                         login_method: event.target.value,
                       })}
                     >
-                      <option value="">自动识别</option>
-                      <option value="171mail">171mail</option>
-                      {poolProvider === 'codex' && <option value="mailcatcher">MailCatcher</option>}
-                      <option value="mailcom">mail.com</option>
-                      <option value="onet">Onet</option>
-                      <option value="gazeta">Gazeta</option>
+                      <option value="">{translateUI("自动识别")}</option>
+                      <option value="171mail">{translateUI("171mail")}</option>
+                      {poolProvider === 'codex' && <option value="mailcatcher">{translateUI("MailCatcher")}</option>}
+                      <option value="mailcom">{translateUI("mail.com")}</option>
+                      <option value="onet">{translateUI("Onet")}</option>
+                      <option value="gazeta">{translateUI("Gazeta")}</option>
                     </select>
                     {poolLoginState?.status === 'awaiting_otp' && (
                       <div className="flex gap-2">
                         <input
-                          aria-label="Worker OpenAI 邮箱验证码"
+                          aria-label={translateUI("Worker OpenAI 邮箱验证码")}
                           className="min-w-0 flex-1 rounded bg-gray-700 px-2 py-1.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-indigo-500"
                           inputMode="numeric"
                           autoComplete="one-time-code"
                           maxLength={6}
                           value={poolOtp}
-                          placeholder="6 位验证码"
+                          placeholder={translateUI("6 位验证码")}
                           onChange={(event) => setPoolOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
                         />
                         <button
@@ -1024,8 +1019,7 @@ function WorkerCard({
                           disabled={poolOtp.length !== 6}
                           className="rounded bg-indigo-600 px-2 py-1 text-xs text-white disabled:opacity-50"
                         >
-                          提交验证码
-                        </button>
+                          {translateUI("提交验证码 ")}</button>
                       </div>
                     )}
                     <div className="flex justify-end gap-2">
@@ -1042,17 +1036,17 @@ function WorkerCard({
                         className="px-2 py-1 text-xs text-gray-400 hover:text-gray-200 disabled:opacity-50"
                       >
                         {poolCancelSubmitting
-                          ? '取消中…'
+                          ? translateUI("取消中…")
                           : poolLoginActive
-                            ? '取消登录'
-                            : '取消'}
+                            ? translateUI("取消登录")
+                            : translateUI("取消")}
                       </button>
                       <button
                         type="submit"
                         disabled={poolAccountSubmitting || poolLoginActive}
                         className="rounded bg-indigo-600 px-2 py-1 text-xs text-white disabled:opacity-50"
                       >
-                        {poolAccountSubmitting ? '登录中…' : '开始登录'}
+                        {poolAccountSubmitting ? translateUI("登录中…") : translateUI("开始登录")}
                       </button>
                     </div>
                   </form>
@@ -1074,6 +1068,7 @@ function WorkerCard({
 }
 
 export default function WorkersPage() {
+  useLanguage();
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [users, setUsers] = useState<TeamUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1109,7 +1104,7 @@ export default function WorkersPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-foreground">
-          {isAdmin ? 'Workers' : 'My Workers'}
+          {isAdmin ? translateUI("Workers") : translateUI("My Workers")}
         </h2>
         {isAdmin && (
           <button
@@ -1117,17 +1112,16 @@ export default function WorkersPage() {
             onClick={() => setAdding(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-500"
           >
-            <Plus size={15} /> Add Worker
-          </button>
+            <Plus size={15} /> {translateUI("Add Worker ")}</button>
         )}
       </div>
       {error && <p className="text-red-400 text-sm">{error}</p>}
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <p className="text-gray-400 text-sm">{translateUI("Loading...")}</p>
       ) : workers.length === 0 ? (
         <div className="text-center py-16 text-gray-500">
           <Server size={32} className="mx-auto mb-3 opacity-50" />
-          <p className="text-sm">还没有 Worker。点击 Add Worker 开一台和本机同配置的 EC2。</p>
+          <p className="text-sm">{translateUI("还没有 Worker。点击 Add Worker 开一台和本机同配置的 EC2。")}</p>
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">

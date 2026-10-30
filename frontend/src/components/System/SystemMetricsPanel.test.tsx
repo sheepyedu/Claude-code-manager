@@ -1,11 +1,15 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SystemMetricsPanel } from './SystemMetricsPanel';
 import { api } from '../../api/client';
 
 vi.mock('../../api/client', () => ({
   api: { systemMetrics: vi.fn() },
 }));
+
+import { setLanguage } from '../../config/language';
+
+afterEach(() => { cleanup(); setLanguage('en'); vi.clearAllMocks(); });
 
 const snapshot = {
   collected_at: '2026-09-01T12:00:00+00:00',
@@ -32,4 +36,15 @@ describe('SystemMetricsPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /refresh/i }));
     await waitFor(() => expect(api.systemMetrics).toHaveBeenLastCalledWith(true));
   });
+});
+
+ it('translates live and shows cache age in minutes without fetching again', async () => {
+  vi.mocked(api.systemMetrics).mockResolvedValue(snapshot);
+  render(<SystemMetricsPanel />);
+  await screen.findByText('12.5%');
+  act(() => setLanguage('zh-CN'));
+  expect(screen.getByRole('heading', { name: '系统健康' })).toBeInTheDocument();
+  expect(screen.getByText('内存')).toBeInTheDocument();
+  expect(screen.getByText(/2 分钟前/)).toBeInTheDocument();
+  expect(api.systemMetrics).toHaveBeenCalledOnce();
 });

@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../config/language";
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { HelpCircle, X } from './icons';
 import { api } from '../api/client';
@@ -22,6 +23,7 @@ interface PendingAsk {
  * 回填，点击通知跳转到对应 task 聊天页。
  */
 export function AskUserNotifications() {
+  useLanguage();
   const [pending, setPending] = useState<PendingAsk[]>([]);
   const stateVersionRef = useRef(0);
   const refreshGenerationRef = useRef(0);
@@ -101,15 +103,14 @@ export function AskUserNotifications() {
           <HelpCircle size={18} className="text-indigo-400 shrink-0 mt-0.5" />
           <div className="min-w-0 flex-1">
             <div className="text-xs font-medium text-indigo-300">
-              Task #{p.task_id} needs your input
-            </div>
+              {translateUI("Task #")}{p.task_id} {translateUI("needs your input ")}</div>
             <div className="text-xs text-gray-400 truncate mt-0.5">{p.summary}</div>
-            <div className="text-[10px] text-gray-500 mt-1">Click to answer</div>
+            <div className="text-[10px] text-gray-500 mt-1">{translateUI("Click to answer")}</div>
           </div>
           <button
             onClick={(e) => { e.stopPropagation(); dismiss(p.request_id); }}
             className="text-gray-600 hover:text-gray-300 shrink-0"
-            title="Dismiss"
+            title={translateUI("Dismiss")}
           >
             <X size={14} />
           </button>

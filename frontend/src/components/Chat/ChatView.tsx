@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import type { Components } from 'react-markdown';
 import { api, isApiRequestError } from '../../api/client';
@@ -375,6 +376,7 @@ function formatTokenCount(n: number): string {
 }
 
 function ContextUsageIndicator({ usage }: { usage: ContextUsage }) {
+  useLanguage();
   const contextWindow = usage.context_window;
   const totalUsed = usage.total_input_tokens + usage.output_tokens;
   const percentage = contextWindow ? Math.min((totalUsed / contextWindow) * 100, 100) : null;
@@ -391,11 +393,11 @@ function ContextUsageIndicator({ usage }: { usage: ContextUsage }) {
   }
 
   return (
-    <div className="flex items-center gap-2 text-xs shrink-0" title={`Input: ${formatTokenCount(usage.input_tokens)} | Cache read: ${formatTokenCount(usage.cache_read_input_tokens)} | Cache create: ${formatTokenCount(usage.cache_creation_input_tokens)} | Output: ${formatTokenCount(usage.output_tokens)}${contextWindow ? ` | Context window: ${formatTokenCount(contextWindow)}` : ' | Context window: unknown'}`}>
+    <div className="flex items-center gap-2 text-xs shrink-0" title={translateUI("Input: {0} | Cache read: {1} | Cache create: {2} | Output: {3}{4}", [formatTokenCount(usage.input_tokens), formatTokenCount(usage.cache_read_input_tokens), formatTokenCount(usage.cache_creation_input_tokens), formatTokenCount(usage.output_tokens), contextWindow ? ` | Context window: ${formatTokenCount(contextWindow)}` : ' | Context window: unknown'])}>
       <div className="flex items-center gap-1.5">
         <span className={`${textColor} font-medium`}>{formatTokenCount(totalUsed)}</span>
         <span className="text-gray-600">/</span>
-        <span className="text-gray-500">{contextWindow ? formatTokenCount(contextWindow) : 'unknown'}</span>
+        <span className="text-gray-500">{contextWindow ? formatTokenCount(contextWindow) : translateUI("unknown")}</span>
       </div>
       {percentage !== null && (
         <>
@@ -424,6 +426,7 @@ function injectAttachments(uploadResults: UploadResult[]): InjectTaskAttachments
 }
 
 export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, inline }: ChatViewProps) {
+  useLanguage();
   const projectName = useMemo(() => {
     if (!task.project_id) return null;
     const p = projects.find((p) => p.id === task.project_id);
@@ -736,9 +739,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
       consumeForkSeedUploads();
     } catch (e) {
       setError(
-        `未收到注入成功确认，消息和附件已保留；请先查看聊天记录或运行日志，再决定是否重试：${
-          e instanceof Error ? e.message : String(e)
-        }`,
+        translateUI("未收到注入成功确认，消息和附件已保留；请先查看聊天记录或运行日志，再决定是否重试：{0}", [e instanceof Error ? e.message : String(e)]),
       );
       onTaskUpdated?.();
       refreshHistoryRef.current();
@@ -1236,7 +1237,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
     }
     if (!fileUpload.addUploadedResults(additions)) {
       setError(
-        `合并后附件超过 ${MAX_FILES} 个，队列已保持原样；请先删除部分附件。`,
+        translateUI("合并后附件超过 {0} 个，队列已保持原样；请先删除部分附件。", [MAX_FILES]),
       );
       return false;
     }
@@ -2455,7 +2456,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
       ...suggestion.processes.map((item) => `${item.cwd}: ${item.command.join(' ')}`),
     ].join('\n');
     const approved = window.confirm(
-      `首次运行需要保存并信任 Project Preview 配置。\n\n${suggestion.name}\n${commands}\n\n这些命令会以 CCM 当前系统用户执行该工作区代码；服务仅监听本机回环地址，模型/云凭证环境变量会被清除。只应确认你信任的本地分支。是否继续？`,
+      translateUI("首次运行需要保存并信任 Project Preview 配置。\n\n{0}\n{1}\n\n这些命令会以 CCM 当前系统用户执行该工作区代码；服务仅监听本机回环地址，模型/云凭证环境变量会被清除。只应确认你信任的本地分支。是否继续？", [suggestion.name, commands]),
     );
     if (!approved) return false;
     try {
@@ -2495,17 +2496,17 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
     if (!text && sendableAttachmentCount === 0) return;
 
     if (!fromQueue && fileUpload.isUploading) {
-      setError('附件仍在上传，请等待上传完成后再发送。');
+      setError(translateUI("附件仍在上传，请等待上传完成后再发送。"));
       return;
     }
     if (!fromQueue && fileUpload.hasFailed) {
-      setError('Retry or remove failed attachments before sending.');
+      setError(translateUI("Retry or remove failed attachments before sending."));
       return;
     }
     // 注入模式：文本和已上传附件直达当前 turn，不新开 turn、不排队。
     if (injectMode && canInjectNow && !fromQueue) {
       if (!isProcessing) {
-        setError('注入仅在 turn 正在运行时可用；空闲时请关闭注入模式发送普通消息。');
+        setError(translateUI("注入仅在 turn 正在运行时可用；空闲时请关闭注入模式发送普通消息。"));
         return;
       }
       await handleInject(
@@ -2525,7 +2526,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
     }
     if (workspaceReviewComposerMode && !fromQueue) {
       if (sendableAttachmentCount > 0) {
-        setError('单次黑盒审查暂不接收附件；请在目标分支中保存改动后再启动。');
+        setError(translateUI("单次黑盒审查暂不接收附件；请在目标分支中保存改动后再启动。"));
         return;
       }
       setSending(true);
@@ -2866,7 +2867,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
               data-testid="chat-task-badges"
               className="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-hidden"
             >
-              <p className="text-foreground font-medium text-sm whitespace-nowrap">Task #{task.id}</p>
+              <p className="text-foreground font-medium text-sm whitespace-nowrap">{translateUI("Task #")}{task.id}</p>
               {task.mode === 'plan' ? (
                 <PlanPipelineBadge task={task} />
               ) : (
@@ -2879,16 +2880,14 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
               )}
               {backgroundActive && (
                 <span className="text-xs bg-teal-600/25 text-teal-300 px-1.5 rounded font-medium whitespace-nowrap">
-                  后台运行中
-                </span>
+                  {translateUI("后台运行中 ")}</span>
               )}
               {showFrontendReviewGoal && (
                 <span
                   className="whitespace-nowrap rounded bg-indigo-500/20 px-1.5 text-xs font-medium text-indigo-300"
-                  title={frontendReviewGoalProgress.lastReason || '模型将自动判断是否继续下一轮'}
+                  title={frontendReviewGoalProgress.lastReason || translateUI("模型将自动判断是否继续下一轮")}
                 >
-                  Goal 审查 · 第 {Math.max(1, frontendReviewGoalProgress.turn + (frontendReviewGoalProgress.active ? 1 : 0))} 轮 · 自动
-                </span>
+                  {translateUI("Goal 审查 · 第 ")}{Math.max(1, frontendReviewGoalProgress.turn + (frontendReviewGoalProgress.active ? 1 : 0))} {translateUI("轮 · 自动 ")}</span>
               )}
               {!deliveryReadOnly && task.mode !== 'plan' && task.provider === 'codex' && codexMainMcpEnabled !== null && (
                 <span
@@ -2900,11 +2899,11 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                   }`}
                   title={
                     codexMainMcpEnabled
-                      ? 'Codex 主任务 MCP 已启用'
-                      : 'Codex 主任务 MCP 已关闭'
+                      ? translateUI("Codex 主任务 MCP 已启用")
+                      : translateUI("Codex 主任务 MCP 已关闭")
                   }
                 >
-                  MCP <span className="hidden sm:inline">{codexMainMcpEnabled ? '已启用' : '已关闭'}</span>
+                  {translateUI("MCP ")}<span className="hidden sm:inline">{codexMainMcpEnabled ? translateUI("已启用") : translateUI("已关闭")}</span>
                 </span>
               )}
               {projectName && (
@@ -2934,8 +2933,8 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                     ? 'bg-indigo-500/15 text-indigo-300'
                     : 'text-gray-600 hover:text-indigo-400'
                 }`}
-                title="Search chat history"
-                aria-label="Search chat history"
+                title={translateUI("Search chat history")}
+                aria-label={translateUI("Search chat history")}
               >
                 <Search size={18} />
               </button>
@@ -2949,8 +2948,8 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                     ? 'bg-indigo-500/15 text-indigo-300'
                     : 'text-gray-600 hover:text-indigo-400'
                 }`}
-                title={browserReviewDisplayMode === 'floating' ? '打开前端测试浮窗' : '打开前端测试栏'}
-                aria-label="Toggle Frontend Review panel"
+                title={browserReviewDisplayMode === 'floating' ? translateUI("打开前端测试浮窗") : translateUI("打开前端测试栏")}
+                aria-label={translateUI("Toggle Frontend Review panel")}
               >
                 <Eye size={18} />
                 <span
@@ -2967,11 +2966,11 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                     ? 'bg-indigo-500/15 text-indigo-300'
                     : 'text-gray-500 hover:bg-gray-800 hover:text-indigo-300'
                 }`}
-                title="Independent Plans"
-                aria-label="Plans"
+                title={translateUI("Independent Plans")}
+                aria-label={translateUI("Plans")}
               >
                 <ListTodo size={16} />
-                <span className="hidden sm:inline">Plans</span>
+                <span className="hidden sm:inline">{translateUI("Plans")}</span>
                 {planAttentionCount > 0 && (
                   <span className="min-w-4 rounded-full bg-indigo-500 px-1 text-center text-[9px] font-bold leading-4 text-white">
                     {planAttentionCount}
@@ -2992,7 +2991,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                 }}
                 disabled={messages.length === 0}
                 className="p-1.5 transition-colors text-gray-600 hover:text-purple-400 disabled:opacity-30 disabled:cursor-not-allowed"
-                title="Distill skill from conversation"
+                title={translateUI("Distill skill from conversation")}
               >
                 <Sparkles size={18} />
               </button>
@@ -3000,7 +2999,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
             <button
               onClick={handleStar}
               className={`p-1.5 transition-colors ${starred ? 'text-yellow-400 hover:text-yellow-300' : 'text-gray-600 hover:text-yellow-400'}`}
-              title={starred ? "Unstar" : "Star"}
+              title={starred ? translateUI("Unstar") : translateUI("Star")}
             >
               <Star size={18} fill={starred ? 'currentColor' : 'none'} />
             </button>
@@ -3060,10 +3059,10 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                 }}
                 disabled={interrupting}
                 className="flex items-center gap-1 px-1.5 py-1.5 text-xs text-red-400 hover:text-red-300 border border-red-500/30 rounded hover:bg-red-500/10 disabled:opacity-50 sm:px-2.5"
-                title="Interrupt session"
+                title={translateUI("Interrupt session")}
               >
                 <StopCircle size={14} />
-                <span className="hidden sm:inline">{interrupting ? 'Interrupting...' : 'Interrupt'}</span>
+                <span className="hidden sm:inline">{interrupting ? translateUI("Interrupting...") : translateUI("Interrupt")}</span>
               </button>
             )}
           </div>
@@ -3080,20 +3079,20 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                 onBlur={handleTitleSave}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleTitleSave(); if (e.key === 'Escape') { setTitleDraft(task.title || ''); setEditingTitle(false); } }}
                 className="w-full bg-gray-800 text-foreground text-xs rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                placeholder="Enter title..."
+                placeholder={translateUI("Enter title...")}
               />
             ) : (
               <div className="flex items-center gap-1 min-w-0 group/title">
-                <span className={`text-xs text-gray-500 ${titleExpanded ? 'whitespace-normal break-all' : 'truncate'}`}>{task.title || task.description || 'Untitled'}</span>
+                <span className={`text-xs text-gray-500 ${titleExpanded ? 'whitespace-normal break-all' : 'truncate'}`}>{task.title || task.description || translateUI("Untitled")}</span>
                 <button
                   onClick={() => setTitleExpanded(!titleExpanded)}
                   className="text-[10px] text-gray-600 hover:text-gray-300 shrink-0 whitespace-nowrap"
-                >{titleExpanded ? 'less' : 'more'}</button>
+                >{titleExpanded ? translateUI("less") : translateUI("more")}</button>
                 {!deliveryReadOnly && (
                   <button
                     onClick={() => { setTitleDraft(task.title || ''); setEditingTitle(true); }}
                     className="text-gray-600 hover:text-gray-400 opacity-0 group-hover/title:opacity-100 transition-opacity shrink-0"
-                    title="Edit title"
+                    title={translateUI("Edit title")}
                   >
                     <Pencil size={10} />
                   </button>
@@ -3105,7 +3104,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
             task.attention_tag ? (
               <span
                 className="inline-flex min-w-0 max-w-[45vw] items-center gap-1 rounded-md border border-amber-400/25 bg-amber-500/15 px-1.5 py-0.5 text-xs font-medium text-amber-300 sm:max-w-xs"
-                title="Delivery-owned Task attention tag"
+                title={translateUI("Delivery-owned Task attention tag")}
               >
                 <Pin size={11} className="shrink-0" />
                 <span className="truncate">{task.attention_tag}</span>
@@ -3149,8 +3148,8 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                     setHistorySearchQuery('');
                   }
                 }}
-                placeholder="Search this chat history..."
-                aria-label="Search this chat history"
+                placeholder={translateUI("Search this chat history...")}
+                aria-label={translateUI("Search this chat history")}
                 className="w-full rounded border border-gray-700 bg-gray-900 py-1.5 pl-8 pr-8 text-sm text-gray-200 placeholder-gray-600 focus:border-indigo-500 focus:outline-none"
               />
               {historySearchQuery && (
@@ -3158,7 +3157,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                   type="button"
                   onClick={() => setHistorySearchQuery('')}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
-                  aria-label="Clear chat history search"
+                  aria-label={translateUI("Clear chat history search")}
                 >
                   <X size={14} />
                 </button>
@@ -3167,9 +3166,9 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
             {historySearchQuery.trim() && (
               <div className="max-h-52 overflow-y-auto rounded border border-gray-800 bg-gray-900/80">
                 {historySearchLoading ? (
-                  <div className="px-3 py-2 text-xs text-gray-500">Searching...</div>
+                  <div className="px-3 py-2 text-xs text-gray-500">{translateUI("Searching...")}</div>
                 ) : historySearchResults.length === 0 ? (
-                  <div className="px-3 py-2 text-xs text-gray-500">No matching messages</div>
+                  <div className="px-3 py-2 text-xs text-gray-500">{translateUI("No matching messages")}</div>
                 ) : (
                   historySearchResults.map((result) => (
                     <button
@@ -3202,7 +3201,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
       {task.metadata_?.forked_from_task_id && (
         <div className="px-4 py-1.5 border-b border-indigo-500/20 bg-indigo-500/5 text-xs text-indigo-300 flex items-center gap-1.5">
           <GitBranch size={12} />
-          <span>Forked from Task #{task.metadata_.forked_from_task_id}</span>
+          <span>{translateUI("Forked from Task #")}{task.metadata_.forked_from_task_id}</span>
         </div>
       )}
 
@@ -3212,8 +3211,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
             <div className="flex items-center justify-between border-b border-gray-700 px-4 py-3">
               <div className="flex items-center gap-2 text-sm font-medium text-gray-100">
                 <GitBranch size={16} className="text-indigo-400" />
-                复制或分叉 Codex Task
-              </div>
+                {translateUI("复制或分叉 Codex Task ")}</div>
               <button
                 onClick={() => !forking && setForkOpen(false)}
                 className="text-gray-500 hover:text-gray-300 disabled:opacity-40"
@@ -3224,22 +3222,18 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
             </div>
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
               <p className="text-sm text-gray-300">
-                “完整复制”会保留最后一个已完成 turn 的全部上下文；选择用户消息则从该消息之前分叉，并把消息预填到输入框中。
-              </p>
+                {translateUI("“完整复制”会保留最后一个已完成 turn 的全部上下文；选择用户消息则从该消息之前分叉，并把消息预填到输入框中。 ")}</p>
               <p className="text-xs text-amber-400/90">
-                注入消息属于运行中 turn，无法作为精确边界，因此不会出现在列表中。两个 Task 仍使用同一工作目录。
-              </p>
+                {translateUI("注入消息属于运行中 turn，无法作为精确边界，因此不会出现在列表中。两个 Task 仍使用同一工作目录。 ")}</p>
               <div className="space-y-1.5">
                 {forkAnchorsLoading && (
                   <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500">
                     <Loader2 size={15} className="animate-spin" />
-                    加载用户消息…
-                  </div>
+                    {translateUI("加载用户消息… ")}</div>
                 )}
                 {!forkAnchorsLoading && forkAnchors.length === 0 && !forkError && (
                   <div className="rounded border border-gray-700 bg-gray-900/40 px-3 py-6 text-center text-sm text-gray-500">
-                    当前会话没有可精确分叉的后续用户消息
-                  </div>
+                    {translateUI("当前会话没有可精确分叉的后续用户消息 ")}</div>
                 )}
                 {forkAnchors.map((anchor) => (
                   <button
@@ -3258,8 +3252,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                     </div>
                     {anchor.type === 'latest' && (
                       <div className="mt-1 text-[11px] text-indigo-300">
-                        包含全部用户消息和回答，新 Task 输入框为空
-                      </div>
+                        {translateUI("包含全部用户消息和回答，新 Task 输入框为空 ")}</div>
                     )}
                     <div className="mt-1.5 flex items-center gap-2 text-[11px] text-gray-500">
                       {anchor.timestamp && <span>{formatMessageTime(anchor.timestamp)}</span>}
@@ -3274,11 +3267,11 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                 ))}
               </div>
               <div>
-                <label className="mb-1 block text-xs text-gray-400">New Task title (optional)</label>
+                <label className="mb-1 block text-xs text-gray-400">{translateUI("New Task title (optional)")}</label>
                 <input
                   value={forkTitle}
                   onChange={(e) => setForkTitle(e.target.value)}
-                  placeholder={`Fork of #${task.id}`}
+                  placeholder={translateUI("Fork of #{0}", [task.id])}
                   maxLength={200}
                   className="w-full rounded border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 outline-none focus:border-indigo-500"
                 />
@@ -3295,15 +3288,14 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                 disabled={forking}
                 className="rounded px-3 py-1.5 text-xs text-gray-400 hover:bg-gray-700 hover:text-gray-200 disabled:opacity-40"
               >
-                Cancel
-              </button>
+                {translateUI("Cancel ")}</button>
               <button
                 onClick={confirmFork}
                 disabled={forking || !selectedForkAnchor}
                 className="flex items-center gap-1.5 rounded bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-500 disabled:opacity-50"
               >
                 {forking ? <Loader2 size={13} className="animate-spin" /> : <GitBranch size={13} />}
-                {forking ? 'Forking…' : 'Create fork'}
+                {forking ? translateUI("Forking…") : translateUI("Create fork")}
               </button>
             </div>
           </div>
@@ -3342,7 +3334,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
               <div className="flex items-center gap-2">
                 <Sparkles size={16} className="text-purple-400" />
-                <span className="text-sm font-medium text-foreground">Distill Skill</span>
+                <span className="text-sm font-medium text-foreground">{translateUI("Distill Skill")}</span>
               </div>
               <button onClick={() => { setDistillOpen(false); setDistillResult(null); setDistillError(null); }} className="text-gray-500 hover:text-gray-300">
                 <X size={16} />
@@ -3353,20 +3345,18 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
             {!distilling && !distillResult && !distillError && (
               <div className="p-6 space-y-4">
                 <p className="text-sm text-gray-300">
-                  从当前 Task 的对话记录中提取可复用的经验，生成一份结构化的 Skill 卡片。
-                </p>
+                  {translateUI("从当前 Task 的对话记录中提取可复用的经验，生成一份结构化的 Skill 卡片。 ")}</p>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">补充说明（可选）</label>
+                  <label className="text-xs text-gray-400 mb-1 block">{translateUI("补充说明（可选）")}</label>
                   <textarea
                     value={distillInstruction}
                     onChange={(e) => setDistillInstruction(e.target.value)}
-                    placeholder="例如：只提取上传功能相关的经验 / 重点关注 bug 排查过程..."
+                    placeholder={translateUI("例如：只提取上传功能相关的经验 / 重点关注 bug 排查过程...")}
                     className="w-full h-20 bg-gray-700 text-foreground text-sm rounded px-3 py-2 border border-gray-600 focus:outline-none focus:border-purple-500 resize-y"
                   />
                 </div>
                 <p className="text-xs text-gray-500">
-                  将使用当前 Task 的 {providerLabel} 分析对话历史，提取关键步骤、踩坑点和验证方法。可多次蒸馏，每次指定不同侧重点。
-                </p>
+                  {translateUI("将使用当前 Task 的 ")}{providerLabel} {translateUI("分析对话历史，提取关键步骤、踩坑点和验证方法。可多次蒸馏，每次指定不同侧重点。 ")}</p>
                 <div className="flex justify-end">
                   <button
                     onClick={async () => {
@@ -3395,8 +3385,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                     className="flex items-center gap-2 px-4 py-2 text-sm text-white bg-purple-600 rounded-lg hover:bg-purple-700"
                   >
                     <Sparkles size={14} />
-                    Start Distill
-                  </button>
+                    {translateUI("Start Distill ")}</button>
                 </div>
               </div>
             )}
@@ -3405,8 +3394,8 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
             {distilling && (
               <div className="p-8 flex flex-col items-center gap-3">
                 <Loader2 size={32} className="animate-spin text-purple-400" />
-                <p className="text-sm text-gray-400">Distilling skill from conversation...</p>
-                <p className="text-xs text-gray-600">This may take 30-60 seconds</p>
+                <p className="text-sm text-gray-400">{translateUI("Distilling skill from conversation...")}</p>
+                <p className="text-xs text-gray-600">{translateUI("This may take 30-60 seconds")}</p>
               </div>
             )}
 
@@ -3421,8 +3410,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                     onClick={() => setDistillError(null)}
                     className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200 bg-gray-700 rounded hover:bg-gray-600"
                   >
-                    Retry
-                  </button>
+                    {translateUI("Retry ")}</button>
                 </div>
               </div>
             )}
@@ -3432,16 +3420,16 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
               <>
                 <div className="flex-1 overflow-auto p-4 space-y-3">
                   <div>
-                    <label className="text-xs text-gray-400 mb-1 block">Skill Name</label>
+                    <label className="text-xs text-gray-400 mb-1 block">{translateUI("Skill Name")}</label>
                     <input
                       value={distillName}
                       onChange={(e) => setDistillName(e.target.value)}
                       className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-1.5 border border-gray-600 focus:outline-none focus:border-purple-500"
-                      placeholder="Enter skill name..."
+                      placeholder={translateUI("Enter skill name...")}
                     />
                   </div>
                   <div className="flex-1">
-                    <label className="text-xs text-gray-400 mb-1 block">Content (editable)</label>
+                    <label className="text-xs text-gray-400 mb-1 block">{translateUI("Content (editable)")}</label>
                     <textarea
                       value={distillContent}
                       onChange={(e) => setDistillContent(e.target.value)}
@@ -3454,8 +3442,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                     onClick={() => { setDistillOpen(false); setDistillResult(null); setDistillError(null); }}
                     className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200 bg-gray-700 rounded hover:bg-gray-600"
                   >
-                    Cancel
-                  </button>
+                    {translateUI("Cancel ")}</button>
                   <button
                     onClick={async () => {
                       if (!distillName.trim()) { setDistillError('Name is required'); return; }
@@ -3475,8 +3462,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-white bg-purple-600 rounded hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {distillSaving ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                    Save as Skill
-                  </button>
+                    {translateUI("Save as Skill ")}</button>
                 </div>
               </>
             )}
@@ -3488,8 +3474,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
       {interrupting && (
         <div className="flex items-center gap-2 px-4 py-2 bg-yellow-500/10 border-b border-yellow-500/30 text-yellow-400 text-xs">
           <Loader2 size={14} className="animate-spin" />
-          Interrupting {providerLabel}... waiting for graceful shutdown
-        </div>
+          {translateUI("Interrupting ")}{providerLabel}{translateUI("... waiting for graceful shutdown ")}</div>
       )}
 
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
@@ -3503,7 +3488,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
             className="text-xs text-gray-400 hover:text-gray-200 px-3 py-1 rounded-full bg-gray-800 hover:bg-gray-700 transition-colors disabled:opacity-50 flex items-center gap-1.5"
           >
             {loadingMore ? <Loader2 size={12} className="animate-spin" /> : <ChevronUp size={12} />}
-            {loadingMore ? 'Loading...' : 'Load older messages'}
+            {loadingMore ? translateUI("Loading...") : translateUI("Load older messages")}
           </button>
         </div>
       )}
@@ -3513,23 +3498,23 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
         {messages.length === 0 && historyLoading && (
           <div className="flex items-center justify-center gap-2 text-gray-500 mt-20">
             <Loader2 size={16} className="animate-spin" />
-            <span className="text-sm">Loading chat history...</span>
+            <span className="text-sm">{translateUI("Loading chat history...")}</span>
           </div>
         )}
         {messages.length === 0 && !historyLoading && (
           <div className="text-center text-gray-600 mt-20">
-            <p className="text-lg mb-2">Chat with this task</p>
+            <p className="text-lg mb-2">{translateUI("Chat with this task")}</p>
             <p className="text-sm">
               {task.session_id
-                ? 'Send a follow-up message to continue the conversation'
-                : 'This task has no session yet. Run it first via Ralph Loop or manually.'}
+                ? translateUI("Send a follow-up message to continue the conversation")
+                : translateUI("This task has no session yet. Run it first via Ralph Loop or manually.")}
             </p>
           </div>
         )}
         {/* Initial prompt bubble */}
         {task.description && (
           <div data-user-msg>
-            <div className="text-center text-xs text-gray-600 py-1 mb-1">— Initial Prompt —</div>
+            <div className="text-center text-xs text-gray-600 py-1 mb-1">{translateUI("— Initial Prompt —")}</div>
             <div className="flex justify-end">
               <div className="max-w-[85%] group">
                 <div className="rounded-2xl px-4 py-2.5 text-sm bg-indigo-600 text-white rounded-br-md shadow-md shadow-indigo-600/10">
@@ -3585,7 +3570,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
             return (
               <div className="mx-3 flex items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
                 <Check size={14} />
-                <span>后台任务已完成，正在收尾…</span>
+                <span>{translateUI("后台任务已完成，正在收尾…")}</span>
               </div>
             );
           }
@@ -3612,10 +3597,10 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                 {possiblyStalled
                   ? <AlertCircle size={14} />
                   : <Loader2 size={14} className="animate-spin" />}
-                <span>{possiblyStalled ? '后台任务可能停滞' : '主回复已完成，后台仍在运行'}</span>
+                <span>{possiblyStalled ? translateUI("后台任务可能停滞") : translateUI("主回复已完成，后台仍在运行")}</span>
               </div>
               <div className="mt-1 text-xs opacity-75">
-                正在等待{reason} · 最近活动 {formatBackgroundSilence(silenceMs)}
+                {translateUI("正在等待")}{reason} {translateUI("· 最近活动 ")}{formatBackgroundSilence(silenceMs)}
               </div>
             </div>
           );
@@ -3625,17 +3610,16 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
             <Loader2 size={14} className="animate-spin" />
             {showFrontendReviewGoal ? (
               <div>
-                <div>Goal Agent 第 {Math.max(1, frontendReviewGoalProgress.turn + 1)} 轮正在执行…</div>
+                <div>{translateUI("Goal Agent 第 ")}{Math.max(1, frontendReviewGoalProgress.turn + 1)} {translateUI("轮正在执行…")}</div>
                 <div className="mt-0.5 text-[11px] text-gray-500">
-                  审查报告不会结束本轮；Agent 会继续处理必要修改、构建测试和修改后复查。
-                </div>
+                  {translateUI("审查报告不会结束本轮；Agent 会继续处理必要修改、构建测试和修改后复查。 ")}</div>
               </div>
             ) : isWaitingCapability ? (
-              <span>Waiting for requested capability...</span>
+              <span>{translateUI("Waiting for requested capability...")}</span>
             ) : terminalReconciliationPending ? (
-              <span>正在确认任务状态...</span>
+              <span>{translateUI("正在确认任务状态...")}</span>
             ) : (
-              <span>{providerLabel} is thinking...</span>
+              <span>{providerLabel} {translateUI("is thinking...")}</span>
             )}
           </div>
         )}
@@ -3661,23 +3645,21 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-xs text-amber-400 font-medium flex items-center gap-1.5">
                 <ListPlus size={12} />
-                Queued messages ({messageQueue.length})
+                {translateUI("Queued messages (")}{messageQueue.length})
               </span>
               <div className="flex items-center gap-2">
                 <button
                   onClick={mergeQueueToInput}
                   className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-amber-300 transition-colors"
-                  title="Merge queued messages into input"
+                  title={translateUI("Merge queued messages into input")}
                 >
                   <Copy size={11} />
-                  Merge
-                </button>
+                  {translateUI("Merge ")}</button>
                 <button
                   onClick={clearMessageQueue}
                   className="text-xs text-gray-500 hover:text-red-400 transition-colors"
                 >
-                  Clear all
-                </button>
+                  {translateUI("Clear all ")}</button>
               </div>
             </div>
             <div className="space-y-1 max-h-32 overflow-y-auto">
@@ -3688,7 +3670,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                     {item.planTaskIds && item.planTaskIds.length > 0 && (
                       <span
                         className="inline-flex shrink-0 items-center gap-0.5 text-indigo-300"
-                        title={`Plans: ${item.planTaskIds.map((id) => `#${id}`).join(', ')}`}
+                        title={translateUI("Plans: {0}", [item.planTaskIds.map((id) => `#${id}`).join(', ')])}
                       >
                         <ListTodo size={10} />
                         <span className="text-[10px]">{item.planTaskIds.length}</span>
@@ -3706,7 +3688,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                     <button
                       onClick={() => editQueueItem(idx)}
                       className="p-0.5 text-gray-500 hover:text-amber-300"
-                      title="Edit in input"
+                      title={translateUI("Edit in input")}
                     >
                       <Pencil size={12} />
                     </button>
@@ -3714,7 +3696,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                       onClick={() => moveQueueItem(idx, 'up')}
                       disabled={idx === 0}
                       className="p-0.5 text-gray-500 hover:text-gray-300 disabled:opacity-30"
-                      title="Move up"
+                      title={translateUI("Move up")}
                     >
                       <ChevronDown size={12} className="rotate-180" />
                     </button>
@@ -3722,14 +3704,14 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                       onClick={() => moveQueueItem(idx, 'down')}
                       disabled={idx === messageQueue.length - 1}
                       className="p-0.5 text-gray-500 hover:text-gray-300 disabled:opacity-30"
-                      title="Move down"
+                      title={translateUI("Move down")}
                     >
                       <ChevronDown size={12} />
                     </button>
                     <button
                       onClick={() => removeFromQueue(idx)}
                       className="p-0.5 text-gray-500 hover:text-red-400"
-                      title="Remove"
+                      title={translateUI("Remove")}
                     >
                       <Trash2 size={12} />
                     </button>
@@ -3747,26 +3729,24 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
           className="border-t border-indigo-500/20 bg-indigo-500/5 px-4 py-3 text-center text-xs text-indigo-200"
           data-testid="delivery-read-only"
         >
-          Delivery Run #{task.delivery_run_id ?? '?'} owns this Developer Task. Its conversation is read-only; workflow controls and PR status are shown above.
-        </div>
+          {translateUI("Delivery Run #")}{task.delivery_run_id ?? '?'} {translateUI("owns this Developer Task. Its conversation is read-only; workflow controls and PR status are shown above. ")}</div>
       ) : (
       <div className="border-t border-gray-800 bg-gray-900 p-3">
         <div className="flex flex-col gap-2 max-w-3xl mx-auto">
           {selectedPlanVersionIds.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-indigo-300">
-                <ListTodo size={11} /> Next message
-              </span>
+                <ListTodo size={11} /> {translateUI("Next message ")}</span>
               {selectedPlanVersionIds.map((versionId) => {
                 const plan = versionedPlans.find((item) => item.current_version?.id === versionId);
                 return (
-                  <span key={versionId} className="inline-flex max-w-[240px] items-center gap-1 rounded-full border border-indigo-500/40 bg-indigo-500/10 px-2 py-1 text-[11px] text-indigo-200" title={plan?.title || `Plan Version #${versionId}`}>
-                    <span className="truncate">Plan #{plan?.id || '?'} · v{plan?.current_version?.version_number || '?' }{plan?.title ? ` · ${plan.title}` : ''}</span>
-                    <button type="button" onClick={() => togglePlanVersionAttachment(versionId)} className="shrink-0 text-indigo-300 hover:text-white" aria-label={`Detach Plan Version #${versionId}`}><X size={10} /></button>
+                  <span key={versionId} className="inline-flex max-w-[240px] items-center gap-1 rounded-full border border-indigo-500/40 bg-indigo-500/10 px-2 py-1 text-[11px] text-indigo-200" title={plan?.title || translateUI("Plan Version #{0}", [versionId])}>
+                    <span className="truncate">{translateUI("Plan #")}{plan?.id || '?'} {translateUI("· v")}{plan?.current_version?.version_number || '?' }{plan?.title ? ` · ${plan.title}` : ''}</span>
+                    <button type="button" onClick={() => togglePlanVersionAttachment(versionId)} className="shrink-0 text-indigo-300 hover:text-white" aria-label={translateUI("Detach Plan Version #{0}", [versionId])}><X size={10} /></button>
                   </span>
                 );
               })}
-              <span className="text-[10px] text-gray-500">applied only when this message is sent</span>
+              <span className="text-[10px] text-gray-500">{translateUI("applied only when this message is sent")}</span>
             </div>
           )}
           {/* File preview strip */}
@@ -3786,7 +3766,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                   )}
                   <button
                     type="button"
-                    aria-label={`Remove ${upload.filename || 'fork attachment'}`}
+                    aria-label={translateUI("Remove {0}", [upload.filename || 'fork attachment'])}
                     onClick={() => setForkSeedUploads((prev) => prev.filter((item) => item.id !== upload.id))}
                     disabled={injecting}
                     className="absolute top-0 right-0 bg-gray-900/80 rounded-bl p-0.5 text-gray-300 hover:text-foreground"
@@ -3830,14 +3810,14 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                       onClick={() => {
                         if (!injecting) fileUpload.retryFile(upload.id);
                       }}
-                      title={injecting ? 'Injection in progress' : 'Click to retry'}
+                      title={injecting ? translateUI("Injection in progress") : translateUI("Click to retry")}
                     >
                       <AlertCircle size={16} className="text-red-400" />
                     </div>
                   )}
                   <button
                     type="button"
-                    aria-label={`Remove ${filename}`}
+                    aria-label={translateUI("Remove {0}", [filename])}
                     onClick={() => fileUpload.removeFile(upload.id)}
                     disabled={injecting}
                     className="absolute top-0 right-0 bg-gray-900/80 rounded-bl p-0.5 text-gray-300 hover:text-foreground"
@@ -3869,7 +3849,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                 || fileUpload.uploads.length + forkSeedUploads.length >= MAX_FILES
               }
               className="p-2 text-gray-500 hover:text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
-              title="Attach files"
+              title={translateUI("Attach files")}
             >
               <Paperclip size={18} />
             </button>
@@ -3885,7 +3865,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                   setModelOverride(null);
                 }}
                 disabled={injecting || !canStartWorkspaceReview}
-                aria-label="单次审查当前分支"
+                aria-label={translateUI("单次审查当前分支")}
                 aria-pressed={workspaceReviewComposerMode}
                 className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-40 ${
                   workspaceReviewComposerMode
@@ -3894,8 +3874,8 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                 }`}
                 title={canStartWorkspaceReview
                   ? workspaceReviewComposerMode
-                    ? '单次审查已选择：启动隔离 Preview，并由独立浏览器 Agent 黑盒测试'
-                    : '单次审查当前开发分支（不修改代码）'
+                    ? translateUI("单次审查已选择：启动隔离 Preview，并由独立浏览器 Agent 黑盒测试")
+                    : translateUI("单次审查当前开发分支（不修改代码）")
                   : workspaceReviewUnavailableReason}
               >
                 <Eye size={16} />
@@ -3911,7 +3891,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                   setModelOverride(null);
                 }}
                 disabled={injecting || !canStartFrontendReviewGoal}
-                aria-label="循环审查"
+                aria-label={translateUI("循环审查")}
                 aria-pressed={frontendReviewComposerMode}
                 className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-not-allowed disabled:opacity-40 ${
                   frontendReviewComposerMode
@@ -3920,8 +3900,8 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                 }`}
                 title={canStartFrontendReviewGoal
                   ? frontendReviewComposerMode
-                    ? '循环审查已选择：发送后在当前 Task/session 中自动审查、修改并复查'
-                    : '启动循环审查（当前 Task/session，最多 5 轮）'
+                    ? translateUI("循环审查已选择：发送后在当前 Task/session 中自动审查、修改并复查")
+                    : translateUI("启动循环审查（当前 Task/session，最多 5 轮）")
                   : frontendReviewGoalUnavailableReason}
               >
                 <RefreshCw size={16} />
@@ -3936,18 +3916,18 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                 className={`p-2 rounded-lg transition-colors disabled:opacity-40 ${
                   modelOverride ? 'text-indigo-300 bg-indigo-600/20' : 'text-gray-500 hover:text-gray-300'
                 }`}
-                title={modelOverride ? `下一条消息用 ${modelOverride}（点击更换）` : '临时切换模型（仅下一条消息）'}
+                title={modelOverride ? translateUI("下一条消息用 {0}（点击更换）", [modelOverride]) : translateUI("临时切换模型（仅下一条消息）")}
               >
                 <ListFilter size={18} />
               </button>
               {showModelMenu && (
                 <div className="absolute bottom-full mb-1 left-0 bg-gray-800 border border-gray-600 rounded shadow-lg z-30 min-w-[200px] py-1 max-h-60 overflow-y-auto">
-                  <div className="px-3 py-1 text-[10px] text-gray-500 uppercase tracking-wider">下一条消息使用</div>
+                  <div className="px-3 py-1 text-[10px] text-gray-500 uppercase tracking-wider">{translateUI("下一条消息使用")}</div>
                   <button
                     onClick={() => { setModelOverride(null); setShowModelMenu(false); }}
                     className={`w-full px-3 py-1.5 text-xs text-left hover:bg-gray-700 ${!modelOverride ? 'text-indigo-300 bg-indigo-600/20' : 'text-gray-300'}`}
                   >
-                    默认（{task.model || 'default'}）
+                    {translateUI("默认（")}{task.model || translateUI("default")}）
                   </button>
                   {modelOptions.map((m) => {
                     // Known fixed windows come from the backend capability table.
@@ -3964,13 +3944,13 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                       onClick={() => { setModelOverride(m === task.model ? null : m); setShowModelMenu(false); }}
                       className={`w-full px-3 py-1.5 text-xs text-left hover:bg-gray-700 flex items-center justify-between gap-2 disabled:cursor-not-allowed disabled:text-gray-600 disabled:hover:bg-transparent ${modelOverride === m ? 'text-indigo-300 bg-indigo-600/20' : over ? 'text-amber-400/80' : 'text-gray-300'}`}
                       title={fastUnsupported
-                        ? `${m} 不支持 Fast；先在 Task Config 中切换为 Standard`
+                        ? translateUI("{0} 不支持 Fast；先在 Task Config 中切换为 Standard", [m])
                         : over
-                          ? `当前上下文（${Math.round(contextUsage!.total_input_tokens/1000)}K tokens）可能超出该模型 ${win/1000}K 窗口，会报 Prompt is too long`
+                          ? translateUI("当前上下文（{0}K tokens）可能超出该模型 {1}K 窗口，会报 Prompt is too long", [Math.round(contextUsage!.total_input_tokens/1000), win/1000])
                           : undefined}
                     >
                       <span>{m}</span>
-                      {fastUnsupported ? <span className="shrink-0">需 Standard</span> : over && <span className="shrink-0">⚠</span>}
+                      {fastUnsupported ? <span className="shrink-0">{translateUI("需 Standard")}</span> : over && <span className="shrink-0">⚠</span>}
                     </button>
                   );})}
                 </div>
@@ -3986,8 +3966,8 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
                   injectMode ? 'text-teal-300 bg-teal-600/20' : 'text-gray-500 hover:text-teal-300'
                 }`}
                 title={injectMode
-                  ? `注入模式已开启：消息将通过 ${injectTransport} 插入运行中的 turn（点击关闭）`
-                  : `开启注入模式：通过 ${injectTransport} 插入运行中的 turn（不开新 turn）`}
+                  ? translateUI("注入模式已开启：消息将通过 {0} 插入运行中的 turn（点击关闭）", [injectTransport])
+                  : translateUI("开启注入模式：通过 {0} 插入运行中的 turn（不开新 turn）", [injectTransport])}
               >
                 <Syringe size={18} />
               </button>
@@ -4000,21 +3980,21 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
               <button
                 onClick={() => navigateUserMessage('up')}
                 className="p-1.5 text-gray-500 hover:text-gray-300 rounded transition-colors"
-                title="Previous user message"
+                title={translateUI("Previous user message")}
               >
                 <ChevronUp size={16} />
               </button>
               <button
                 onClick={() => navigateUserMessage('down')}
                 className="p-1.5 text-gray-500 hover:text-gray-300 rounded transition-colors"
-                title="Next user message"
+                title={translateUI("Next user message")}
               >
                 <ChevronDown size={16} />
               </button>
               <button
                 onClick={() => { const c = messagesContainerRef.current; if (c) c.scrollTo({ top: c.scrollHeight, behavior: 'smooth' }); }}
                 className="p-1.5 text-gray-500 hover:text-gray-300 rounded transition-colors"
-                title="Scroll to bottom"
+                title={translateUI("Scroll to bottom")}
               >
                 <ArrowDown size={16} />
               </button>
@@ -4023,19 +4003,18 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
           {/* Row 2: full-width input */}
           {injectMode && canInjectNow && (
             <div className="text-[10px] leading-relaxed text-teal-300/80">
-              文本、图片和文件会注入当前 turn；只有服务器明确确认成功后才会清空输入和附件。
-            </div>
+              {translateUI("文本、图片和文件会注入当前 turn；只有服务器明确确认成功后才会清空输入和附件。 ")}</div>
           )}
           {frontendReviewComposerMode && (
             <div className="flex min-w-0 items-center gap-1.5 text-[10px] leading-relaxed text-indigo-400">
               <RefreshCw size={11} className="shrink-0" />
-              <span className="truncate">当前 Task/session：浏览器审查 → 必要修改 → 测试 → 重新审查（最多 5 轮）</span>
+              <span className="truncate">{translateUI("当前 Task/session：浏览器审查 → 必要修改 → 测试 → 重新审查（最多 5 轮）")}</span>
             </div>
           )}
           {workspaceReviewComposerMode && (
             <div className="flex min-w-0 items-center gap-1.5 text-[10px] leading-relaxed text-cyan-300">
               <Eye size={11} className="shrink-0" />
-              <span className="truncate">单次黑盒审查当前分支：隔离 Preview → 浏览器验证 → 截图与报告（不修改代码）</span>
+              <span className="truncate">{translateUI("单次黑盒审查当前分支：隔离 Preview → 浏览器验证 → 截图与报告（不修改代码）")}</span>
             </div>
           )}
           <div className="flex gap-2 items-end">
@@ -4046,16 +4025,16 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
               onKeyDown={handleKeyDown}
               placeholder={
                 !task.session_id && !task.shared_from_id
-                  ? 'Run the task first to start a session...'
+                  ? translateUI("Run the task first to start a session...")
                   : injectMode && canInjectNow
-                    ? '注入模式：消息将直接注入运行中的 turn...'
+                    ? translateUI("注入模式：消息将直接注入运行中的 turn...")
                     : frontendReviewComposerMode
-                      ? '描述这次要循环审查的页面、URL、流程或前端改动...'
+                      ? translateUI("描述这次要循环审查的页面、URL、流程或前端改动...")
                     : workspaceReviewComposerMode
-                      ? '描述要验证的功能、页面和关键流程；无需提供 URL...'
+                      ? translateUI("描述要验证的功能、页面和关键流程；无需提供 URL...")
                     : isProcessing
-                      ? 'Type next message to queue...'
-                      : 'Type a follow-up message...'
+                      ? translateUI("Type next message to queue...")
+                      : translateUI("Type a follow-up message...")
               }
               disabled={injecting || (!task.session_id && !task.shared_from_id)}
               rows={1}
@@ -4066,12 +4045,12 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
               onClick={() => handleSend()}
               disabled={(!input.trim() && fileUpload.uploadedResults.length === 0 && forkSeedUploads.length === 0) || ((frontendReviewComposerMode || workspaceReviewComposerMode) && !input.trim()) || (!task.session_id && !task.shared_from_id) || (frontendReviewComposerMode && !canStartFrontendReviewGoal) || (workspaceReviewComposerMode && !canStartWorkspaceReview) || (injectMode && canInjectNow && !isProcessing) || injecting || fileUpload.isUploading || fileUpload.hasFailed}
               title={fileUpload.hasFailed
-                ? 'Retry or remove failed attachments before sending'
+                ? translateUI("Retry or remove failed attachments before sending")
                 : injectMode && canInjectNow
                 ? (isProcessing ? '注入到运行中的 turn (Ctrl+Enter)' : '注入模式：仅在 turn 运行中可用，空闲时请关闭注入模式')
-                : frontendReviewComposerMode ? '启动循环审查 (Ctrl+Enter)'
-                : workspaceReviewComposerMode ? '启动单次审查 (Ctrl+Enter)'
-                : isProcessing ? 'Add to queue (Ctrl+Enter)' : 'Send (Ctrl+Enter)'}
+                : frontendReviewComposerMode ? translateUI("启动循环审查 (Ctrl+Enter)")
+                : workspaceReviewComposerMode ? translateUI("启动单次审查 (Ctrl+Enter)")
+                : isProcessing ? translateUI("Add to queue (Ctrl+Enter)") : translateUI("Send (Ctrl+Enter)")}
               className={`p-2.5 text-white rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-md ${
                 injectMode && canInjectNow ? 'bg-teal-600 hover:bg-teal-700 shadow-teal-600/20'
                 : frontendReviewComposerMode ? 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/25'
@@ -4115,6 +4094,7 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
 }
 
 function CollapsibleContent({ content, maxLines = 5 }: { content: string; maxLines?: number }) {
+  useLanguage();
   const [expanded, setExpanded] = useState(false);
   const lines = content.split('\n');
   const shouldCollapse = lines.length > maxLines;
@@ -4135,7 +4115,7 @@ function CollapsibleContent({ content, maxLines = 5 }: { content: string; maxLin
         className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 mt-1"
       >
         {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-        {expanded ? 'Collapse' : `Show all (${lines.length} lines)`}
+        {expanded ? translateUI("Collapse") : translateUI("Show all ({0} lines)", [lines.length])}
       </button>
     </div>
   );
@@ -4190,6 +4170,7 @@ function ToolGroup({
   messages: ChatMessage[];
   taskId: number;
 }) {
+  useLanguage();
   const [expanded, setExpanded] = useState(false);
   const hasError = messages.some((m) => m.is_error);
   const toolUseCount = messages.filter((m) => m.event_type === 'tool_use').length;
@@ -4203,7 +4184,7 @@ function ToolGroup({
         >
           {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
           <span>
-            {hasError ? '⚠' : '🔧'} {toolUseCount} tool call{toolUseCount !== 1 ? 's' : ''}
+            {hasError ? '⚠' : '🔧'} {toolUseCount} {translateUI("tool call")}{toolUseCount !== 1 ? translateUI("s") : ''}
           </span>
         </button>
       </div>
@@ -4219,6 +4200,7 @@ function ToolGroup({
 }
 
 function ToolItem({ message, taskId }: { message: ChatMessage; taskId: number }) {
+  useLanguage();
   const [expanded, setExpanded] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -4279,7 +4261,7 @@ function ToolItem({ message, taskId }: { message: ChatMessage; taskId: number })
           {summary && <span className="text-gray-600 truncate">{summary}</span>}
         </button>
         {expanded && (loading
-          ? <div className="ml-4 mt-1 mb-1 text-xs text-gray-600">Loading...</div>
+          ? <div className="ml-4 mt-1 mb-1 text-xs text-gray-600">{translateUI("Loading...")}</div>
           : detail && <div className="ml-4 mt-1 mb-1"><CollapsibleContent content={detail} /></div>
         )}
       </div>
@@ -4300,7 +4282,7 @@ function ToolItem({ message, taskId }: { message: ChatMessage; taskId: number })
         <span className="text-gray-600">{toolName}</span>
       </button>
       {expanded && (loading
-        ? <div className="ml-4 mt-1 mb-1 text-xs text-gray-600">Loading...</div>
+        ? <div className="ml-4 mt-1 mb-1 text-xs text-gray-600">{translateUI("Loading...")}</div>
         : detail && <div className="ml-4 mt-1 mb-1"><CollapsibleContent content={detail} /></div>
       )}
     </div>
@@ -4308,6 +4290,7 @@ function ToolItem({ message, taskId }: { message: ChatMessage; taskId: number })
 }
 
 function MessageCopyButton({ text }: { text: string }) {
+  useLanguage();
   const [copied, setCopied] = useState(false);
   const handleCopy = () => {
     copyToClipboard(text).then(() => {
@@ -4319,7 +4302,7 @@ function MessageCopyButton({ text }: { text: string }) {
     <button
       onClick={handleCopy}
       className="copy-btn opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto p-1 rounded hover:bg-gray-700/60 text-gray-600 hover:text-gray-400 transition-opacity"
-      title="Copy message"
+      title={translateUI("Copy message")}
     >
       {copied ? <Check size={14} /> : <Copy size={14} />}
     </button>
@@ -4327,6 +4310,7 @@ function MessageCopyButton({ text }: { text: string }) {
 }
 
 function CopyButton({ text }: { text: string }) {
+  useLanguage();
   const [copied, setCopied] = useState(false);
   const handleCopy = () => {
     copyToClipboard(text).then(() => {
@@ -4338,7 +4322,7 @@ function CopyButton({ text }: { text: string }) {
     <button
       onClick={handleCopy}
       className="copy-btn pointer-events-none absolute right-2 top-2 rounded bg-gray-700/80 p-1 text-gray-400 opacity-0 transition-opacity hover:bg-gray-600 hover:text-gray-200 group-hover:pointer-events-auto group-hover:opacity-100"
-      title="Copy"
+      title={translateUI("Copy")}
     >
       {copied ? <Check size={12} /> : <Copy size={12} />}
     </button>
@@ -4346,14 +4330,15 @@ function CopyButton({ text }: { text: string }) {
 }
 
 function ForkButton({ onClick, disabled = false }: { onClick: () => void; disabled?: boolean }) {
+  useLanguage();
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
       className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-indigo-500/10 hover:text-indigo-400 focus-visible:text-indigo-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-not-allowed disabled:opacity-40"
-      title={disabled ? '当前 Codex turn 结束后才能分叉' : '从一条用户消息之前的上下文创建 Fork'}
-      aria-label="Fork Codex session"
+      title={disabled ? translateUI("当前 Codex turn 结束后才能分叉") : translateUI("从一条用户消息之前的上下文创建 Fork")}
+      aria-label={translateUI("Fork Codex session")}
     >
       <GitBranch size={16} />
     </button>
@@ -4428,6 +4413,7 @@ const MarkdownContent = memo(function MarkdownContent({
   );
 });
 function MessageTimestamp({ timestamp, className }: { timestamp: string | null; className?: string }) {
+  useLanguage();
   if (!timestamp) return null;
   return (
     <span className={`text-[10px] text-gray-600 select-none ${className || ''}`}>
@@ -4437,6 +4423,7 @@ function MessageTimestamp({ timestamp, className }: { timestamp: string | null; 
 }
 
 function AppliedPlansInMessage({ plans }: { plans: AppliedPlanSnapshot[] }) {
+  useLanguage();
   return (
     <div className="applied-plan-message mt-2 space-y-1.5 border-t border-white/25 pt-2">
       {plans.map((plan) => (
@@ -4445,7 +4432,7 @@ function AppliedPlansInMessage({ plans }: { plans: AppliedPlanSnapshot[] }) {
           className="rounded-lg border border-white/25 bg-black/15 px-2.5 py-1.5"
         >
           <summary className="cursor-pointer select-none text-xs font-medium text-white marker:text-white/70">
-            Applied Plan #{plan.id}: {plan.title}
+            {translateUI("Applied Plan #")}{plan.id}: {plan.title}
           </summary>
           <div className="applied-plan-content mt-2 max-h-80 overflow-y-auto rounded-md bg-transparent p-2.5">
             <MarkdownContent
@@ -4460,6 +4447,7 @@ function AppliedPlansInMessage({ plans }: { plans: AppliedPlanSnapshot[] }) {
 }
 
 function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  useLanguage();
   return (
     <div className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center" onClick={onClose}>
       <button onClick={onClose} className="absolute top-4 right-4 text-white/70 hover:text-white text-3xl font-light">&times;</button>
@@ -4469,6 +4457,7 @@ function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
 }
 
 function MessageImages({ urls }: { urls: string[] }) {
+  useLanguage();
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   return (
     <>
@@ -4495,6 +4484,7 @@ function MessageImages({ urls }: { urls: string[] }) {
  * CC 侧最多等 120s，超时默认拒绝；过期点击会得到 410 并标记过期。
  * 历史消息没有 request_id（只入库描述），渲染为只读。 */
 function PermissionCard({ message, taskId }: { message: ChatMessage; taskId?: number }) {
+  useLanguage();
   const [submitting, setSubmitting] = useState(false);
   const [localStatus, setLocalStatus] = useState<string | null>(null);
   const status = localStatus || message.permission_status || (message.request_id ? 'pending' : 'expired');
@@ -4524,7 +4514,7 @@ function PermissionCard({ message, taskId }: { message: ChatMessage; taskId?: nu
       <div className="px-3 py-2.5 bg-amber-500/10 border border-amber-500/40 rounded-lg text-sm">
         <div className="flex items-center gap-2 text-amber-300 font-medium">
           <span>🔐</span>
-          <span>权限请求{message.tool_name ? `：${message.tool_name}` : ''}</span>
+          <span>{translateUI("权限请求")}{message.tool_name ? `：${message.tool_name}` : ''}</span>
           {message.timestamp && (
             <MessageTimestamp timestamp={message.timestamp} className="ml-auto" />
           )}
@@ -4543,20 +4533,18 @@ function PermissionCard({ message, taskId }: { message: ChatMessage; taskId?: nu
                 disabled={submitting}
                 className="px-3 py-1 text-xs rounded bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50"
               >
-                允许
-              </button>
+                {translateUI("允许 ")}</button>
               <button
                 onClick={() => decide('deny')}
                 disabled={submitting}
                 className="px-3 py-1 text-xs rounded bg-red-600/80 hover:bg-red-500 text-white disabled:opacity-50"
               >
-                拒绝
-              </button>
-              <span className="text-xs text-gray-500">120s 内有效，超时默认拒绝</span>
+                {translateUI("拒绝 ")}</button>
+              <span className="text-xs text-gray-500">{translateUI("120s 内有效，超时默认拒绝")}</span>
             </>
           ) : (
             <span className={`text-xs ${statusBadge[status]?.cls || 'text-gray-500'}`}>
-              {statusBadge[status]?.text || status}
+              {statusBadge[status]?.text || translateUI(status)}
             </span>
           )}
         </div>
@@ -4574,6 +4562,7 @@ function AskUserCard({
   taskId?: number;
   onResolved?: (requestId: string, status: 'answered' | 'expired') => void;
 }) {
+  useLanguage();
   const questions = message.ask_questions || [];
   const [submitting, setSubmitting] = useState(false);
   const [localStatus, setLocalStatus] = useState<string | null>(null);
@@ -4630,7 +4619,7 @@ function AskUserCard({
       <div className="px-3 py-2.5 bg-sky-500/10 border border-sky-500/40 rounded-lg text-sm">
         <div className="flex items-center gap-2 text-sky-300 font-medium">
           <span>💬</span>
-          <span>需要你的选择</span>
+          <span>{translateUI("需要你的选择")}</span>
           {message.timestamp && (
             <MessageTimestamp timestamp={message.timestamp} className="ml-auto" />
           )}
@@ -4666,7 +4655,7 @@ function AskUserCard({
                   type="text"
                   value={custom[qi] || ''}
                   onChange={(e) => setCustom((p) => ({ ...p, [qi]: e.target.value }))}
-                  placeholder="或自定义回答…"
+                  placeholder={translateUI("或自定义回答…")}
                   className="mt-1 w-full px-2 py-1 text-xs bg-gray-900/60 border border-gray-700 rounded text-gray-200 placeholder-gray-600 focus:border-sky-600 outline-none"
                 />
               )}
@@ -4681,13 +4670,12 @@ function AskUserCard({
                 disabled={submitting}
                 className="px-3 py-1 text-xs rounded bg-sky-600 hover:bg-sky-500 text-white disabled:opacity-50"
               >
-                提交
-              </button>
-              <span className="text-xs text-gray-500">提交后回答会喂回给模型继续</span>
+                {translateUI("提交 ")}</button>
+              <span className="text-xs text-gray-500">{translateUI("提交后回答会喂回给模型继续")}</span>
             </>
           ) : (
             <span className={`text-xs ${statusBadge[status]?.cls || 'text-gray-500'}`}>
-              {statusBadge[status]?.text || status}
+              {statusBadge[status]?.text || translateUI(status)}
             </span>
           )}
         </div>
@@ -4705,6 +4693,7 @@ const MessageBubble = memo(function MessageBubble({
   taskId: number;
   onAskUserResolved?: (requestId: string, status: 'answered' | 'expired') => void;
 }) {
+  useLanguage();
   const isUser = message.role === 'user';
 
   if (message.event_type === 'background_lifecycle') return null;
@@ -4730,7 +4719,7 @@ const MessageBubble = memo(function MessageBubble({
       <div className="group mx-4 px-3 py-2 bg-gray-800/30 rounded text-xs border border-gray-700/30">
         <div className="flex items-center gap-1.5 text-gray-500">
           <span>💭</span>
-          <span className="font-medium">Thinking</span>
+          <span className="font-medium">{translateUI("Thinking")}</span>
           {message.timestamp && (
             <MessageTimestamp timestamp={message.timestamp} className="ml-auto" />
           )}
@@ -4742,7 +4731,7 @@ const MessageBubble = memo(function MessageBubble({
             <span className="text-gray-600 italic">
               {isEncrypted
                 ? text
-                : '[no thinking text in stream — model may have returned encrypted thinking]'}
+                : translateUI("[no thinking text in stream — model may have returned encrypted thinking]")}
             </span>
           )}
         </div>
@@ -4788,9 +4777,9 @@ const MessageBubble = memo(function MessageBubble({
       );
     }
     const label = message.event_type === 'system_init'
-      ? '— Session started —'
+      ? translateUI('— Session started —')
       : message.event_type === 'process_exit'
-        ? '— Done —'
+        ? translateUI('— Done —')
         : `— ${content} —`;
     return (
       <div className="text-center text-xs text-gray-600 py-1">
@@ -4830,17 +4819,17 @@ const MessageBubble = memo(function MessageBubble({
       <div className="max-w-[85%] group">
         {isMonitor && !isUser && (
           <div className="flex items-center gap-1 mb-0.5 pl-1">
-            <span className="text-xs bg-teal-600/30 text-teal-300 px-1.5 py-0.5 rounded">Monitor</span>
+            <span className="text-xs bg-teal-600/30 text-teal-300 px-1.5 py-0.5 rounded">{translateUI("Monitor")}</span>
           </div>
         )}
         {isSubAgent && !isUser && (
           <div className="flex items-center gap-1 mb-0.5 pl-1">
-            <span className="text-xs bg-amber-600/30 text-amber-300 px-1.5 py-0.5 rounded">Sub-Agent</span>
+            <span className="text-xs bg-amber-600/30 text-amber-300 px-1.5 py-0.5 rounded">{translateUI("Sub-Agent")}</span>
           </div>
         )}
         {isInjected && (
           <div className="flex items-center gap-1 mb-0.5 pr-1 justify-end">
-            <span className="text-xs bg-teal-600/30 text-teal-300 px-1.5 py-0.5 rounded" title="注入到运行中的 turn">💉 注入</span>
+            <span className="text-xs bg-teal-600/30 text-teal-300 px-1.5 py-0.5 rounded" title={translateUI("注入到运行中的 turn")}>{translateUI("💉 注入")}</span>
           </div>
         )}
         <div

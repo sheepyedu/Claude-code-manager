@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../../api/client';
 import type { SharedTaskReceived } from '../../api/client';
@@ -92,6 +93,7 @@ export function mergeSharedHistory(
 }
 
 export function SharedChatView({ shared, onBack }: SharedChatViewProps) {
+  useLanguage();
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -326,12 +328,12 @@ export function SharedChatView({ shared, onBack }: SharedChatViewProps) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h2 className="text-foreground font-medium truncate">
-              {shared.task_title || `Task #${shared.remote_task_id}`}
+              {shared.task_title || translateUI("Task #{0}", [shared.remote_task_id])}
             </h2>
-            <span className={`text-xs ${statusColor}`}>{status}</span>
+            <span className={`text-xs ${statusColor}`}>{translateUI(status)}</span>
           </div>
           <p className="text-xs text-gray-500 truncate">
-            Shared by {shared.owner_name || 'Unknown'}
+            {translateUI("Shared by ")}{shared.owner_name || translateUI("Unknown")}
             {shared.project_name && ` · ${shared.project_name}`}
           </p>
         </div>
@@ -352,7 +354,7 @@ export function SharedChatView({ shared, onBack }: SharedChatViewProps) {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
         {loading && messages.length === 0 && (
-          <p className="text-gray-500 text-sm text-center py-8">Loading history...</p>
+          <p className="text-gray-500 text-sm text-center py-8">{translateUI("Loading history...")}</p>
         )}
         {messages.map((msg) => (
           <MessageRow key={msg.id} msg={msg} />
@@ -360,7 +362,7 @@ export function SharedChatView({ shared, onBack }: SharedChatViewProps) {
         {sending && (
           <div className="flex gap-2 items-center text-gray-500 text-sm px-3">
             <Loader2 size={14} className="animate-spin" />
-            <span>Claude is thinking...</span>
+            <span>{translateUI("Claude is thinking...")}</span>
           </div>
         )}
         <div ref={bottomRef} />
@@ -373,7 +375,7 @@ export function SharedChatView({ shared, onBack }: SharedChatViewProps) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-            placeholder="Send a message..."
+            placeholder={translateUI("Send a message...")}
             className="flex-1 bg-gray-700 text-foreground rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
             disabled={sending}
           />
@@ -391,6 +393,7 @@ export function SharedChatView({ shared, onBack }: SharedChatViewProps) {
 }
 
 function MessageRow({ msg }: { msg: ChatMsg }) {
+  useLanguage();
   if (msg.event_type === 'user_message') {
     return (
       <div className="flex justify-end">
@@ -404,7 +407,7 @@ function MessageRow({ msg }: { msg: ChatMsg }) {
   if (msg.event_type === 'tool_use' || msg.event_type === 'tool_result') {
     return (
       <div className="text-xs text-gray-500 px-2 py-1 bg-gray-800/50 rounded font-mono">
-        {msg.event_type === 'tool_use' ? `🔧 ${msg.tool_name || 'tool'}` : '📋 result'}
+        {msg.event_type === 'tool_use' ? `🔧 ${msg.tool_name || 'tool'}` : translateUI("📋 result")}
         {msg.tool_output && <span className="ml-2 text-gray-600">{msg.tool_output.slice(0, 100)}</span>}
       </div>
     );

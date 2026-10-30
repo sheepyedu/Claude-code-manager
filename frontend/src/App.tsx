@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "./config/language";
 import { useState, useEffect, Component } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
 import { AppShell } from './components/Layout/AppShell';
@@ -31,14 +32,13 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: string |
     if (this.state.error) {
       return (
         <div style={{ padding: 40, color: '#f87171', background: '#1a1a2e', minHeight: '100vh' }}>
-          <h1 style={{ fontSize: 24, marginBottom: 16 }}>Something went wrong</h1>
+          <h1 style={{ fontSize: 24, marginBottom: 16 }}>{translateUI("Something went wrong")}</h1>
           <pre style={{ whiteSpace: 'pre-wrap' }}>{this.state.error}</pre>
           <button
             onClick={() => { this.setState({ error: null }); window.location.reload(); }}
             style={{ marginTop: 16, padding: '8px 16px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
           >
-            Reload
-          </button>
+            {translateUI("Reload ")}</button>
         </div>
       );
     }
@@ -75,6 +75,7 @@ function updateHash(page: string, chatTaskId: number | null, planId: number | nu
 }
 
 function App() {
+  useLanguage();
   const initial = parseHash();
   const [page, setPage] = useState(initial.page);
   const [chatTaskId, setChatTaskId] = useState<number | null>(initial.chatTaskId);
@@ -175,7 +176,7 @@ function App() {
     return (
       <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center gap-3">
         <div className="h-8 w-8 rounded-full border-2 border-gray-700 border-t-indigo-500 animate-spin" />
-        <p className="text-gray-500 text-sm">Connecting...</p>
+        <p className="text-gray-500 text-sm">{translateUI("Connecting...")}</p>
       </div>
     );
   }

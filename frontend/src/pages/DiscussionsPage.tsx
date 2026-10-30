@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../config/language";
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../api/client';
 import type { DiscussionListItem, Project } from '../api/client';
@@ -5,6 +6,7 @@ import { DiscussionView } from '../components/Discussion/DiscussionView';
 import { Plus, MessageSquare, Trash2 } from '../components/icons';
 
 export function DiscussionsPage() {
+  useLanguage();
   const [discussions, setDiscussions] = useState<DiscussionListItem[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
@@ -56,7 +58,7 @@ export function DiscussionsPage() {
 
   const handleDelete = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm('Delete this discussion?')) return;
+    if (!confirm(translateUI("Delete this discussion?"))) return;
     try {
       await api.deleteDiscussion(id);
       setDiscussions((prev) => prev.filter((d) => d.id !== id));
@@ -82,14 +84,13 @@ export function DiscussionsPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-foreground">Discussions</h2>
+        <h2 className="text-xl font-bold text-foreground">{translateUI("Discussions")}</h2>
         <button
           onClick={() => setShowForm(!showForm)}
           className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-500 transition-colors"
         >
           <Plus size={16} />
-          New Discussion
-        </button>
+          {translateUI("New Discussion ")}</button>
       </div>
 
       {showForm && (
@@ -98,7 +99,7 @@ export function DiscussionsPage() {
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Discussion topic, e.g. SaaS 架构设计方案讨论"
+            placeholder={translateUI("Discussion topic, e.g. SaaS 架构设计方案讨论")}
             className="w-full bg-gray-900 text-foreground rounded px-3 py-2 text-sm border border-gray-700 focus:border-indigo-500 focus:outline-none"
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
             autoFocus
@@ -111,7 +112,7 @@ export function DiscussionsPage() {
               }
               className="bg-gray-900 text-foreground text-sm rounded px-3 py-2 border border-gray-700"
             >
-              <option value="">No project</option>
+              <option value="">{translateUI("No project")}</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -119,7 +120,7 @@ export function DiscussionsPage() {
               ))}
             </select>
             <div className="flex items-center gap-1.5">
-              <label className="text-xs text-gray-400">Facilitator:</label>
+              <label className="text-xs text-gray-400">{translateUI("Facilitator:")}</label>
               <select
                 value={facilitatorModel}
                 onChange={(e) => setFacilitatorModel(e.target.value)}
@@ -131,7 +132,7 @@ export function DiscussionsPage() {
               </select>
             </div>
             <div className="flex items-center gap-1.5">
-              <label className="text-xs text-gray-400">Agents:</label>
+              <label className="text-xs text-gray-400">{translateUI("Agents:")}</label>
               <select
                 value={agentModel}
                 onChange={(e) => setAgentModel(e.target.value)}
@@ -143,7 +144,7 @@ export function DiscussionsPage() {
               </select>
             </div>
             <div className="flex items-center gap-1.5">
-              <label className="text-xs text-gray-400">Max agents:</label>
+              <label className="text-xs text-gray-400">{translateUI("Max agents:")}</label>
               <select
                 value={maxAgents}
                 onChange={(e) => setMaxAgents(Number(e.target.value))}
@@ -159,14 +160,13 @@ export function DiscussionsPage() {
               disabled={!title.trim() || creating}
               className="px-4 py-2 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-500 disabled:opacity-50 transition-colors"
             >
-              {creating ? 'Creating...' : 'Create'}
+              {creating ? translateUI("Creating...") : translateUI("Create")}
             </button>
             <button
               onClick={() => setShowForm(false)}
               className="px-4 py-2 text-gray-400 text-sm hover:text-foreground transition-colors"
             >
-              Cancel
-            </button>
+              {translateUI("Cancel ")}</button>
           </div>
         </div>
       )}
@@ -174,10 +174,9 @@ export function DiscussionsPage() {
       {discussions.length === 0 && !showForm ? (
         <div className="text-center py-16 text-gray-500">
           <MessageSquare size={48} className="mx-auto mb-4 opacity-50" />
-          <p className="text-lg">No discussions yet</p>
+          <p className="text-lg">{translateUI("No discussions yet")}</p>
           <p className="text-sm mt-1">
-            Create a discussion to brainstorm with multiple AI perspectives
-          </p>
+            {translateUI("Create a discussion to brainstorm with multiple AI perspectives ")}</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -193,7 +192,7 @@ export function DiscussionsPage() {
                   {d.title}
                 </h3>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  {d.agent_count} agents · {d.message_count} messages · {new Date(d.created_at).toLocaleDateString()}
+                  {d.agent_count} {translateUI("agents · ")}{d.message_count} {translateUI("messages · ")}{new Date(d.created_at).toLocaleDateString()}
                 </p>
               </div>
               <button

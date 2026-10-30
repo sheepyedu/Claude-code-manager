@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import type { Task } from '../../api/client';
 import { Check, Loader2, X } from '../icons';
 
@@ -80,6 +81,7 @@ function buildSteps(task: Task): PlanStep[] {
 }
 
 function StepIcon({ state }: { state: StepState }) {
+  useLanguage();
   if (state === 'done') return <Check size={11} />;
   if (state === 'failed') return <X size={11} />;
   if (state === 'active') return <Loader2 size={10} className="animate-spin" />;
@@ -87,9 +89,10 @@ function StepIcon({ state }: { state: StepState }) {
 }
 
 export function PlanProgress({ task, compact = false }: { task: Task; compact?: boolean }) {
+  useLanguage();
   const steps = buildSteps(task);
   return (
-    <div className="flex min-w-0 items-center overflow-x-auto py-1" aria-label="Plan progress">
+    <div className="flex min-w-0 items-center overflow-x-auto py-1" aria-label={translateUI("Plan progress")}>
       {steps.map((step, index) => (
         <div key={`${step.label}-${index}`} className="flex shrink-0 items-center">
           {index > 0 && <span className={`${compact ? 'w-3' : 'w-5 sm:w-8'} mx-1 h-px bg-gray-700`} />}
@@ -103,7 +106,7 @@ export function PlanProgress({ task, compact = false }: { task: Task; compact?: 
                     ? 'font-medium text-red-300'
                     : 'text-gray-600'
             }`}
-            title={step.title || step.label}
+            title={step.title || translateUI(step.label)}
           >
             <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
               step.state === 'done'
@@ -116,7 +119,7 @@ export function PlanProgress({ task, compact = false }: { task: Task; compact?: 
             }`}>
               <StepIcon state={step.state} />
             </span>
-            <span>{step.label}</span>
+            <span>{translateUI(step.label)}</span>
           </span>
         </div>
       ))}

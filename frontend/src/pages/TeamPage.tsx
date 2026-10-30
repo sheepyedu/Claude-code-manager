@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../config/language";
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../api/client';
 import type { TeamUser, Worker } from '../api/client';
@@ -20,6 +21,7 @@ function GroupModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  useLanguage();
   const [name, setName] = useState(group?.name || '');
   const [description, setDescription] = useState(group?.description || '');
   const [saving, setSaving] = useState(false);
@@ -43,28 +45,28 @@ function GroupModal({
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700">
-          <h3 className="text-foreground font-semibold">{group ? 'Edit Group' : 'New Group'}</h3>
+          <h3 className="text-foreground font-semibold">{group ? translateUI("Edit Group") : translateUI("New Group")}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-200"><X size={18} /></button>
         </div>
         <div className="p-5 space-y-3">
           <input
             className="w-full bg-gray-700 text-foreground rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            placeholder="Group name"
+            placeholder={translateUI("Group name")}
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoFocus
           />
           <input
             className="w-full bg-gray-700 text-foreground rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            placeholder="Description (optional)"
+            placeholder={translateUI("Description (optional)")}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
           <div className="flex justify-end gap-2 pt-1">
-            <button onClick={onClose} className="px-4 py-2 text-sm text-gray-300 hover:text-foreground">Cancel</button>
+            <button onClick={onClose} className="px-4 py-2 text-sm text-gray-300 hover:text-foreground">{translateUI("Cancel")}</button>
             <button onClick={handleSave} disabled={saving || !name.trim()}
               className="px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-500 disabled:opacity-50">
-              {saving ? 'Saving...' : 'Save'}
+              {saving ? translateUI("Saving...") : translateUI("Save")}
             </button>
           </div>
         </div>
@@ -87,6 +89,7 @@ function AddMemberModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  useLanguage();
   const available = allUsers.filter(u => !existingUserIds.has(u.id));
   const [adding, setAdding] = useState<number | null>(null);
 
@@ -103,12 +106,12 @@ function AddMemberModal({
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700">
-          <h3 className="text-foreground font-semibold">Add Member</h3>
+          <h3 className="text-foreground font-semibold">{translateUI("Add Member")}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-200"><X size={18} /></button>
         </div>
         <div className="p-4 space-y-1 max-h-[50vh] overflow-y-auto">
           {available.length === 0 ? (
-            <p className="text-gray-500 text-sm">All users are already in this group.</p>
+            <p className="text-gray-500 text-sm">{translateUI("All users are already in this group.")}</p>
           ) : (
             available.map(u => (
               <div key={u.id} className="flex items-center justify-between p-2 rounded bg-gray-700/50 hover:bg-gray-700">
@@ -127,7 +130,7 @@ function AddMemberModal({
                 </div>
                 <button onClick={() => handleAdd(u.id)} disabled={adding === u.id}
                   className="text-xs px-2 py-1 bg-indigo-600/20 text-indigo-300 rounded hover:bg-indigo-600/30 disabled:opacity-50">
-                  {adding === u.id ? 'Adding...' : 'Add'}
+                  {adding === u.id ? translateUI("Adding...") : translateUI("Add")}
                 </button>
               </div>
             ))
@@ -140,6 +143,7 @@ function AddMemberModal({
 
 /* ── Team Page ────────────────────────────────────────────────── */
 export default function TeamPage() {
+  useLanguage();
   const ccUser = JSON.parse(localStorage.getItem('cc_user') || '{}');
   const isAdmin = ccUser.role === 'admin' || ccUser.role === 'super_admin' || !ccUser.id;
   const isSuperAdmin = ccUser.role === 'super_admin' || !ccUser.id;
@@ -169,7 +173,7 @@ export default function TeamPage() {
   const selectedGroup = groups.find(g => g.id === selectedGroupId) ?? null;
 
   const handleDeleteGroup = async (id: number) => {
-    if (!confirm('Delete this group?')) return;
+    if (!confirm(translateUI("Delete this group?"))) return;
     try {
       await api.deleteTeamGroup(id);
       if (selectedGroupId === id) setSelectedGroupId(null);
@@ -188,7 +192,7 @@ export default function TeamPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <p className="text-gray-400">Loading...</p>
+        <p className="text-gray-400">{translateUI("Loading...")}</p>
       </div>
     );
   }
@@ -199,8 +203,7 @@ export default function TeamPage() {
       {isAdmin && teamUsers.length > 0 && (
         <div>
           <h2 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-3">
-            <User size={20} /> Users
-          </h2>
+            <User size={20} /> {translateUI("Users ")}</h2>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {teamUsers.map(u => (
               <div key={u.id} className="bg-gray-800 rounded-lg p-3 flex items-center justify-between gap-2">
@@ -223,13 +226,13 @@ export default function TeamPage() {
                     u.role === 'admin' ? 'bg-indigo-600/20 text-indigo-400' :
                     'bg-gray-600/20 text-gray-400'
                   }`}>
-                    {u.role === 'super_admin' ? 'Super Admin' : u.role === 'admin' ? 'Admin' : 'Member'}
+                    {u.role === 'super_admin' ? translateUI("Super Admin") : u.role === 'admin' ? translateUI("Admin") : translateUI("Member")}
                   </span>
                   {(() => {
                     const count = workers.filter(w => w.owner_user_id === u.id).length;
                     return count > 0 ? (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-600/20 text-green-400">
-                        {count} Worker{count > 1 ? 's' : ''}
+                        {count} {translateUI("Worker")}{count > 1 ? translateUI("s") : ''}
                       </span>
                     ) : null;
                   })()}
@@ -238,14 +241,14 @@ export default function TeamPage() {
                       onClick={async () => {
                         const newRole = u.role === 'admin' ? 'member' : 'admin';
                         const label = newRole === 'admin' ? '管理员' : '普通用户';
-                        if (!confirm(`将 ${u.name} 设为${label}？`)) return;
+                        if (!confirm(translateUI("将 {0} 设为{1}？", [u.name, label]))) return;
                         try {
                           await api.updateTeamUserRole(u.id, newRole);
                           fetchAll();
                         } catch {}
                       }}
                       className="p-1 text-gray-500 hover:text-indigo-400"
-                      title={u.role === 'admin' ? '降级为普通用户' : '提升为管理员'}
+                      title={u.role === 'admin' ? translateUI("降级为普通用户") : translateUI("提升为管理员")}
                     >
                       {u.role === 'admin' ? <Shield size={14} /> : <ShieldCheck size={14} />}
                     </button>
@@ -261,22 +264,20 @@ export default function TeamPage() {
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-            <Users size={20} /> Groups
-          </h2>
+            <Users size={20} /> {translateUI("Groups ")}</h2>
           {isAdmin && (
             <button
               onClick={() => { setEditingGroup(null); setShowGroupModal(true); }}
               className="flex items-center gap-1 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-500"
             >
-              <Plus size={14} /> New Group
-            </button>
+              <Plus size={14} /> {translateUI("New Group ")}</button>
           )}
         </div>
 
         {groups.length === 0 ? (
           <div className="text-center py-8 bg-gray-800 rounded-lg text-gray-500">
             <Users size={32} className="mx-auto mb-2 opacity-40" />
-            <p className="text-sm">No groups yet.{isAdmin ? ' Click "New Group" to create one.' : ''}</p>
+            <p className="text-sm">{translateUI("No groups yet.")}{isAdmin ? translateUI(" Click \"New Group\" to create one.") : ''}</p>
           </div>
         ) : (
           <div className="grid md:grid-cols-3 gap-4">
@@ -310,7 +311,7 @@ export default function TeamPage() {
                     )}
                   </div>
                   {group.description && <div className="text-xs text-gray-400 mt-0.5">{group.description}</div>}
-                  <div className="text-xs text-gray-500 mt-1">{group.members?.length || 0} members</div>
+                  <div className="text-xs text-gray-500 mt-1">{group.members?.length || 0} {translateUI("members")}</div>
                 </div>
               ))}
             </div>
@@ -331,12 +332,11 @@ export default function TeamPage() {
                         onClick={() => setShowAddMember(true)}
                         className="flex items-center gap-1 px-3 py-1.5 text-sm bg-indigo-600/20 text-indigo-300 rounded hover:bg-indigo-600/30"
                       >
-                        <UserPlus size={14} /> Add Member
-                      </button>
+                        <UserPlus size={14} /> {translateUI("Add Member ")}</button>
                     )}
                   </div>
                   {(!selectedGroup.members || selectedGroup.members.length === 0) ? (
-                    <p className="text-gray-500 text-sm">No members in this group yet.</p>
+                    <p className="text-gray-500 text-sm">{translateUI("No members in this group yet.")}</p>
                   ) : (
                     <div className="space-y-1">
                       {selectedGroup.members.map(m => (
@@ -369,8 +369,7 @@ export default function TeamPage() {
                 </>
               ) : (
                 <div className="flex items-center justify-center h-full text-gray-500 text-sm">
-                  Select a group to view its members
-                </div>
+                  {translateUI("Select a group to view its members ")}</div>
               )}
             </div>
           </div>

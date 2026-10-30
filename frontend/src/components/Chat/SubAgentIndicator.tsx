@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useState, useEffect, useRef } from 'react';
 import { Users } from '../icons';
 import { api } from '../../api/client';
@@ -13,6 +14,7 @@ interface SubAgentIndicatorProps {
 /** ChatView 头部的子 agent 小人：常驻显示；点开按类型汇总
  *（和任务卡上的 SubAgentsBadge 一致），没有子 agent 显示 "No sub-agents"。 */
 export function SubAgentIndicator({ taskId, count, active, onNavigate }: SubAgentIndicatorProps) {
+  useLanguage();
   const [expanded, setExpanded] = useState(false);
   const [summary, setSummary] = useState<SubAgentSummary | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -54,12 +56,11 @@ export function SubAgentIndicator({ taskId, count, active, onNavigate }: SubAgen
               >
                 <span>{type.charAt(0).toUpperCase() + type.slice(1)}</span>
                 <span className={counts.running > 0 ? 'text-emerald-400 font-medium' : 'text-gray-500'}>
-                  {counts.running} running
-                </span>
+                  {counts.running} {translateUI("running ")}</span>
               </button>
             ))
           ) : (
-            <div className="px-3 py-1.5 text-xs text-gray-500">No sub-agents</div>
+            <div className="px-3 py-1.5 text-xs text-gray-500">{translateUI("No sub-agents")}</div>
           )}
         </div>
       )}

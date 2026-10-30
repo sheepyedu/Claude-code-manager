@@ -8,8 +8,9 @@ import os
 import shutil
 import time
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
+
+import psutil
 
 
 CACHE_TTL_SECONDS = 60 * 60
@@ -18,64 +19,33 @@ _cache_at = 0.0
 _cache_lock = asyncio.Lock()
 
 
-def _read_cpu_times() -> tuple[int, int]:
-    """Return total and idle jiffies for the aggregate CPU line."""
-
-    line = Path("/proc/stat").read_text(encoding="ascii").splitlines()[0]
-    fields = line.split()
-    if not fields or fields[0] != "cpu":
-        raise RuntimeError("aggregate CPU statistics are unavailable")
-    values = [int(value) for value in fields[1:]]
-    total = sum(values)
-    idle = (values[3] if len(values) > 3 else 0) + (
-        values[4] if len(values) > 4 else 0
-    )
-    return total, idle
-
-
 async def _cpu_metrics() -> dict[str, Any]:
-    before_total, before_idle = _read_cpu_times()
-    # A short delta gives utilization rather than a load-based estimate while
-    # keeping the endpoint non-blocking for the rest of the application.
-    await asyncio.sleep(0.1)
-    after_total, after_idle = _read_cpu_times()
-    total_delta = max(after_total - before_total, 1)
-    idle_delta = max(after_idle - before_idle, 0)
-    utilization = max(0.0, min(100.0, (1 - idle_delta / total_delta) * 100))
+    # psutil uses native counters on macOS/Linux. The blocking sampling interval
+    # belongs in a worker thread so a dashboard refresh cannot stall ASGI.
+    utilization = await asyncio.to_thread(psutil.cpu_percent, interval=0.1)
     load_1m = os.getloadavg()[0] if hasattr(os, "getloadavg") else 0.0
     return {
-        "utilization_percent": round(utilization, 1),
+        "utilization_percent": round(max(0.0, min(100.0, utilization)), 1),
         "load_1m": round(load_1m, 2),
         "cores": os.cpu_count() or 1,
     }
 
 
 def _memory_metrics() -> dict[str, Any]:
-    values: dict[str, int] = {}
-    for line in Path("/proc/meminfo").read_text(encoding="ascii").splitlines():
-        key, _, raw = line.partition(":")
-        if not _:
-            continue
-        parts = raw.strip().split()
-        if parts:
-            # /proc/meminfo reports byte-sized values as kB.
-            values[key] = int(parts[0]) * 1024
-
-    total = values.get("MemTotal", 0)
-    available = values.get("MemAvailable", values.get("MemFree", 0))
+    memory = psutil.virtual_memory()
+    swap = psutil.swap_memory()
+    total = memory.total
+    available = memory.available
     used = max(total - available, 0)
-    swap_total = values.get("SwapTotal", 0)
-    swap_free = values.get("SwapFree", 0)
-    swap_used = max(swap_total - swap_free, 0)
     return {
         "total_bytes": total,
         "used_bytes": used,
         "available_bytes": available,
         "used_percent": round((used / total * 100) if total else 0.0, 1),
-        "swap_total_bytes": swap_total,
-        "swap_used_bytes": swap_used,
+        "swap_total_bytes": swap.total,
+        "swap_used_bytes": swap.used,
         "swap_used_percent": round(
-            (swap_used / swap_total * 100) if swap_total else 0.0, 1
+            (swap.used / swap.total * 100) if swap.total else 0.0, 1
         ),
     }
 

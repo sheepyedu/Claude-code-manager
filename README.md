@@ -6,6 +6,14 @@ Web 端调度和管理多个 Claude Code 实例并行工作。灵感来自胡渊
 
 > **⚠️ 重要安全提示：** 本项目会以 `--dangerously-skip-permissions` 模式运行 Claude Code，这意味着 Claude Code 将拥有**不受限制的文件读写、命令执行和网络访问权限**，并且会自动执行 `git push` 等操作。**强烈建议在一台单独的、没有重要文件的电脑或虚拟机上部署**，避免对你的个人数据或工作环境造成意外影响。
 
+## 本分支与本地使用
+
+本仓库是 [sheepyedu/Claude-code-manager](https://github.com/sheepyedu/Claude-code-manager) 维护分支，保留 [jiaruixuan/CC-Manager](https://github.com/jiaruixuan/CC-Manager) 的历史与原有功能。
+
+- **macOS 资源监控**：CPU、内存和交换空间使用 psutil 原生接口，无需管理员权限；保留 Linux 支持、每小时缓存和“刷新”按钮。升级后运行 `uv sync --locked`，构建前端并重启服务。
+- **界面语言**：右上角齿轮或 Settings 页面选择 **Language → 简体中文**，立即切换导航、仪表盘、任务、项目、文件、账号池等主要界面的文案。选择保存在当前浏览器，刷新后保留；用户内容、模型回复、文件内容和 API 参数保持原值。英文选项沿用上游已有的中英文文案。
+- 本地 `.env`、数据库、账号登录文件、SSH 私钥均不属于仓库配置；部署时沿用各自的本机配置。
+
 ## 功能
 
 ### 核心调度

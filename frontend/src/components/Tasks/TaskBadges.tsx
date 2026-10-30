@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useState, useEffect, useCallback } from 'react';
 import { Wrench, Users, Settings } from '../icons';
 import { api } from '../../api/client';
@@ -16,6 +17,7 @@ function routeDescription(
 /** Read-only Plan routing badge. A running Plan shows the concrete current
  * route (including fallback); an idle Plan shows its frozen pipeline. */
 export function PlanPipelineBadge({ task }: { task: Task }) {
+  useLanguage();
   if (task.mode !== 'plan') return null;
 
   const config = task.plan_pipeline_config;
@@ -43,10 +45,10 @@ export function PlanPipelineBadge({ task }: { task: Task }) {
               ? 'bg-green-600/25 text-green-300'
               : 'bg-blue-600/25 text-blue-300'
         }`}
-        title={`${stage}, round ${round}: ${provider} / ${model}${effort ? ` / ${effort}` : ''}${fallback ? ' (fallback)' : ''}`}
+        title={translateUI("{0}, round {1}: {2} / {3}{4}{5}", [stage, round, provider, model, effort ? ` / ${effort}` : '', fallback ? ' (fallback)' : ''])}
       >
         <span className="truncate">{stage} · {model}</span>
-        {fallback && <span className="shrink-0 text-[10px] uppercase">fallback</span>}
+        {fallback && <span className="shrink-0 text-[10px] uppercase">{translateUI("fallback")}</span>}
       </span>
     );
   }
@@ -56,9 +58,9 @@ export function PlanPipelineBadge({ task }: { task: Task }) {
       <span
         data-testid="plan-pipeline-badge"
         className="max-w-[240px] truncate rounded bg-purple-600/20 px-1.5 text-xs font-medium text-purple-300"
-        title={`Planner: ${task.provider} / ${task.model || 'default'}`}
+        title={translateUI("Planner: {0} / {1}", [task.provider, task.model || 'default'])}
       >
-        Planner · {task.model || 'default'}
+        {translateUI("Planner · ")}{task.model || translateUI("default")}
       </span>
     );
   }
@@ -91,6 +93,7 @@ export function PlanPipelineBadge({ task }: { task: Task }) {
 
 /** Immutable Plan revision lineage. Middle versions can show both links. */
 export function PlanRevisionBadge({ task }: { task: Task }) {
+  useLanguage();
   if (task.mode !== 'plan') return null;
   const predecessorId = task.supersedes_plan_task_id;
   const successorId = task.metadata_?.plan_superseded_by_task_id;
@@ -101,17 +104,17 @@ export function PlanRevisionBadge({ task }: { task: Task }) {
       {predecessorId && (
         <span
           className="rounded bg-indigo-600/15 px-1.5 text-[10px] font-medium text-indigo-300"
-          title={`This Plan is a revision of Plan #${predecessorId}`}
+          title={translateUI("This Plan is a revision of Plan #{0}", [predecessorId])}
         >
-          Revision of #{predecessorId}
+          {translateUI("Revision of #")}{predecessorId}
         </span>
       )}
       {successorId && (
         <span
           className="rounded bg-gray-700 px-1.5 text-[10px] font-medium text-gray-400"
-          title={`A newer revision is available as Plan #${successorId}`}
+          title={translateUI("A newer revision is available as Plan #{0}", [successorId])}
         >
-          Superseded by #{successorId}
+          {translateUI("Superseded by #")}{successorId}
         </span>
       )}
     </>
@@ -159,6 +162,7 @@ async function loadCodexTaskSkillsCapability(): Promise<CodexTaskSkillsCapabilit
 /** Wrench badge with a dropdown to toggle per-task tools (shared by the
  * task list and the split-mode sidebar). */
 export function PluginsBadge({ task, onRefresh }: { task: Task; onRefresh: () => void }) {
+  useLanguage();
   const [open, setOpen] = useState(false);
   const [tools, setTools] = useState<{ key: string; label: string }[]>([]);
   const remoteTaskScope = task.worker_id != null
@@ -210,7 +214,7 @@ export function PluginsBadge({ task, onRefresh }: { task: Task; onRefresh: () =>
       <button
         onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
         className="text-xs bg-amber-600/30 text-amber-300 px-1.5 rounded cursor-pointer hover:bg-amber-600/40 flex items-center gap-0.5"
-        title="Plugins"
+        title={translateUI("Plugins")}
       >
         <Wrench size={12} />
         {task.enabled_skills ? Object.entries(task.enabled_skills).filter(([k, v]) => v && tools.some(t => t.key === k)).length : 0}
@@ -243,7 +247,7 @@ export function PluginsBadge({ task, onRefresh }: { task: Task; onRefresh: () =>
                 }`}>
                   {enabled && '✓'}
                 </span>
-                <span className={enabled ? 'text-gray-200' : 'text-gray-400'}>{tool.label}</span>
+                <span className={enabled ? 'text-gray-200' : 'text-gray-400'}>{translateUI(tool.label)}</span>
               </button>
             );
           })}
@@ -256,6 +260,7 @@ export function PluginsBadge({ task, onRefresh }: { task: Task; onRefresh: () =>
 /** Sub-agents badge with a summary dropdown (shared by the task list and
  * the split-mode sidebar). */
 export function SubAgentsBadge({ task }: { task: Task }) {
+  useLanguage();
   const [open, setOpen] = useState(false);
   const [summary, setSummary] = useState<SubAgentSummary | null>(null);
 
@@ -289,7 +294,7 @@ export function SubAgentsBadge({ task }: { task: Task }) {
       <button
         onClick={toggle}
         className={`text-xs bg-teal-600/30 text-teal-300 px-1.5 rounded cursor-pointer hover:bg-teal-600/40 flex items-center gap-0.5${task.active_sub_agents > 0 ? ' animate-pulse' : ''}`}
-        title="Sub-agents"
+        title={translateUI("Sub-agents")}
       >
         <Users size={12} />
         {task.active_sub_agents}
@@ -300,11 +305,11 @@ export function SubAgentsBadge({ task }: { task: Task }) {
             Object.entries(summary.by_type).map(([type, counts]) => (
               <div key={type} className="px-3 py-1 text-xs text-gray-300 flex items-center justify-between gap-3">
                 <span>{type.charAt(0).toUpperCase() + type.slice(1)}</span>
-                <span className={counts.running > 0 ? 'text-green-400' : 'text-gray-500'}>{counts.running} running</span>
+                <span className={counts.running > 0 ? 'text-green-400' : 'text-gray-500'}>{counts.running} {translateUI("running")}</span>
               </div>
             ))
           ) : (
-            <div className="px-3 py-1 text-xs text-gray-500">No sub-agents</div>
+            <div className="px-3 py-1 text-xs text-gray-500">{translateUI("No sub-agents")}</div>
           )}
         </div>
       )}
@@ -340,20 +345,21 @@ const fetchModelOptions = fetchConfigOptions;
 /** Visible Fast request marker. The backend refuses to start a turn unless
  * priority was confirmed, so it cannot silently execute this task as Standard. */
 export function FastModeBadge({ task }: { task: Task }) {
+  useLanguage();
   if (task.provider !== 'codex' || task.codex_service_tier !== 'priority') return null;
   return (
     <span
       data-testid="codex-fast-badge"
       className="text-xs bg-amber-500/20 text-amber-300 px-1.5 rounded font-medium whitespace-nowrap"
-      title="Codex Fast（priority service tier）"
+      title={translateUI("Codex Fast（priority service tier）")}
     >
-      Fast
-    </span>
+      {translateUI("Fast ")}</span>
   );
 }
 
 /** Clickable model badge: dropdown to switch the task's model (persisted). */
 export function ModelBadge({ task, onRefresh, compact }: { task: Task; onRefresh: () => void; compact?: boolean }) {
+  useLanguage();
   const [open, setOpen] = useState(false);
   const [config, setConfig] = useState<ConfigOptions | null>(null);
 
@@ -367,7 +373,7 @@ export function ModelBadge({ task, onRefresh, compact }: { task: Task; onRefresh
     return () => document.removeEventListener('mousedown', handle);
   }, [open, task.provider]);
 
-  const label = task.model || 'default';
+  const label = task.model || translateUI('default');
   const options = config ? (task.provider === 'codex' ? config.codex : config.claude) : [];
 
   return (
@@ -375,14 +381,14 @@ export function ModelBadge({ task, onRefresh, compact }: { task: Task; onRefresh
       <button
         onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
         className={`text-xs bg-gray-700 text-gray-300 px-1.5 rounded cursor-pointer hover:bg-gray-600 hover:text-gray-100 ${compact ? 'max-w-[120px] truncate' : ''}`}
-        title="切换模型（持久化到该任务）"
+        title={translateUI("切换模型（持久化到该任务）")}
       >
         {label}
       </button>
       {open && (
         <div className="absolute top-full mt-1 left-0 bg-gray-800 border border-gray-600 rounded shadow-lg z-20 min-w-[180px] py-1 max-h-60 overflow-y-auto">
           {options.length === 0 && (
-            <div className="px-3 py-1.5 text-xs text-gray-500">Loading…</div>
+            <div className="px-3 py-1.5 text-xs text-gray-500">{translateUI("Loading…")}</div>
           )}
           {options.map((m) => (
             <button
@@ -446,6 +452,7 @@ const THINKING_OPTIONS: { value: string; label: string }[] = [
  * Timeout / Thinking in place (each change persists via updateTask).
  * Shared by the task list, the sidebar, and the chat header. */
 export function TaskConfigBadge({ task, onRefresh, openUp, align }: { task: Task; onRefresh: () => void; openUp?: boolean; align?: 'left' | 'right' }) {
+  useLanguage();
   const [open, setOpen] = useState(false);
   const [opts, setOpts] = useState<ConfigOptions | null>(null);
   const [updateError, setUpdateError] = useState('');
@@ -506,10 +513,10 @@ export function TaskConfigBadge({ task, onRefresh, openUp, align }: { task: Task
       <button
         onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
         className="text-xs bg-gray-700 text-gray-300 px-1.5 rounded cursor-pointer hover:bg-gray-600 hover:text-gray-100 flex items-center gap-0.5"
-        title={`Config（model: ${task.model || 'default'}）`}
+        title={translateUI("Config（model: {0}）", [task.model || 'default'])}
       >
         <Settings size={12} />
-        <span className="hidden sm:inline">Config</span>
+        <span className="hidden sm:inline">{translateUI("Config")}</span>
       </button>
       {open && (
         <div
@@ -517,17 +524,17 @@ export function TaskConfigBadge({ task, onRefresh, openUp, align }: { task: Task
           className={`absolute ${openUp ? 'bottom-full mb-1' : 'top-full mt-1'} ${align === 'right' ? 'right-0' : 'left-0'} bg-gray-800 border border-gray-600 rounded shadow-lg z-20 p-3 min-w-[250px] max-w-[calc(100vw-1rem)] max-h-[80vh] overflow-y-auto`}
           onClick={(e) => e.stopPropagation()}
         >
-          {isShared && <p className="text-xs text-orange-400 mb-2">Shared task — read only</p>}
+          {isShared && <p className="text-xs text-orange-400 mb-2">{translateUI("Shared task — read only")}</p>}
           {updateError && (
             <p
               role="alert"
               className="text-xs text-red-300 bg-red-950/50 border border-red-800/60 rounded px-2 py-1.5 mb-2"
             >
-              配置保存失败：{updateError}
+              {translateUI("配置保存失败：")}{updateError}
             </p>
           )}
           <div className={`grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 items-center text-xs ${isShared ? 'pointer-events-none opacity-60' : ''}`}>
-            <span className="text-gray-400">Model</span>
+            <span className="text-gray-400">{translateUI("Model")}</span>
             <select
               className="bg-gray-700 text-foreground rounded px-2 py-1 text-xs"
               value={task.model || ''}
@@ -548,68 +555,68 @@ export function TaskConfigBadge({ task, onRefresh, openUp, align }: { task: Task
               {models.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
 
-            <span className="text-gray-400">Effort</span>
+            <span className="text-gray-400">{translateUI("Effort")}</span>
             <select
               className="bg-gray-700 text-foreground rounded px-2 py-1 text-xs"
               value={task.effort_level || ''}
               onChange={(e) => update({ effort_level: e.target.value })}
             >
-              {!task.effort_level && <option value="">default</option>}
+              {!task.effort_level && <option value="">{translateUI("default")}</option>}
               {efforts.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
 
             {isCodex && (
               <>
-                <span className="text-gray-400">Speed</span>
+                <span className="text-gray-400">{translateUI("Speed")}</span>
                 <select
-                  aria-label="Codex speed"
+                  aria-label={translateUI("Codex speed")}
                   className="bg-gray-700 text-foreground rounded px-2 py-1 text-xs"
                   value={task.codex_service_tier || 'default'}
                   onChange={(e) => update({ codex_service_tier: e.target.value as CodexServiceTier })}
                 >
-                  <option value="default">Standard</option>
-                  <option value="priority" disabled={!codexModelSupportsFast}>Fast</option>
+                  <option value="default">{translateUI("Standard")}</option>
+                  <option value="priority" disabled={!codexModelSupportsFast}>{translateUI("Fast")}</option>
                 </select>
               </>
             )}
 
-            <span className="text-gray-400">Timeout</span>
+            <span className="text-gray-400">{translateUI("Timeout")}</span>
             <select
               className="bg-gray-700 text-foreground rounded px-2 py-1 text-xs"
               value={task.timeout_hours == null ? '' : String(task.timeout_hours)}
               onChange={(e) => update({ timeout_hours: e.target.value === '' ? null : Number(e.target.value) })}
             >
-              {TIMEOUT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              {TIMEOUT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{translateUI(o.label)}</option>)}
             </select>
 
-            <span className="text-gray-400">Thinking</span>
+            <span className="text-gray-400">{translateUI("Thinking")}</span>
             <select
               className="bg-gray-700 text-foreground rounded px-2 py-1 text-xs"
               value={task.thinking_budget == null ? '' : String(task.thinking_budget)}
               onChange={(e) => update({ thinking_budget: e.target.value === '' ? null : Number(e.target.value) })}
             >
-              {THINKING_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              {THINKING_OPTIONS.map((o) => <option key={o.value} value={o.value}>{translateUI(o.label)}</option>)}
             </select>
 
-            <span className="text-gray-400">System Prompt</span>
+            <span className="text-gray-400">{translateUI("System Prompt")}</span>
             <select
               className="bg-gray-700 text-foreground rounded px-2 py-1 text-xs"
               value={task.system_prompt_mode || ''}
               onChange={(e) => update({ system_prompt_mode: e.target.value === '' ? 'off' : e.target.value })}
             >
-              <option value="">Off</option>
-              <option value="append">Fable 5 (Append)</option>
-              <option value="replace">Fable 5 (Replace)</option>
+              <option value="">{translateUI("Off")}</option>
+              <option value="append">{translateUI("Fable 5 (Append)")}</option>
+              <option value="replace">{translateUI("Fable 5 (Replace)")}</option>
             </select>
           </div>
           {isCodex && (
             <div className={`mt-2 text-[10px] ${codexModelSupportsFast ? 'text-amber-400/80' : 'text-gray-500'}`}>
               {codexModelSupportsFast
-                ? 'Fast 约 1.5×，会消耗更多额度；实际计价取决于账号来源'
-                : `${resolvedCodexModel || '当前模型'} 不支持 Fast`}
+                ? translateUI("Fast 约 1.5×，会消耗更多额度；实际计价取决于账号来源")
+                : translateUI("{0} 不支持 Fast", [resolvedCodexModel || '当前模型'])}
             </div>
           )}
-          <div className="mt-2 text-[10px] text-gray-500">修改在下一轮对话生效</div>
+          <div className="mt-2 text-[10px] text-gray-500">{translateUI("修改在下一轮对话生效")}</div>
         </div>
       )}
     </div>

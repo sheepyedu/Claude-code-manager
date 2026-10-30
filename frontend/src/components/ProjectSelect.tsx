@@ -1,9 +1,11 @@
+import { t as translateUI, useLanguage } from "../config/language";
 import { useState, useRef, useEffect } from 'react';
 import type { Project } from '../api/client';
 import { ChevronDown, FolderOpen } from './icons';
 import { resolveTagColor } from './TagColors';
 
 function TagBadge({ tag, colorKey }: { tag: string; colorKey?: string }) {
+  useLanguage();
   const c = resolveTagColor(tag, colorKey);
   return (
     <span className={`inline-block px-1.5 py-0 rounded text-[10px] font-medium leading-4 ${c.bg} ${c.text}`}>
@@ -33,6 +35,7 @@ export function ProjectSelect({
   showStatus = false,
   tagColorMap = {},
 }: ProjectSelectProps) {
+  useLanguage();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -68,7 +71,7 @@ export function ProjectSelect({
             </span>
           )}
           {showStatus && selected && selected.status !== 'ready' && (
-            <span className="text-yellow-400 text-[10px]">({selected.status})</span>
+            <span className="text-yellow-400 text-[10px]">({translateUI(selected.status)})</span>
           )}
         </span>
         <ChevronDown size={12} className={`shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -100,7 +103,7 @@ export function ProjectSelect({
                 </span>
               )}
               {showStatus && p.status !== 'ready' && (
-                <span className="text-yellow-400 text-[10px] shrink-0">({p.status})</span>
+                <span className="text-yellow-400 text-[10px] shrink-0">({translateUI(p.status)})</span>
               )}
             </div>
           ))}
@@ -113,7 +116,7 @@ export function ProjectSelect({
                 String(value) === opt.value ? 'text-white bg-gray-700/50' : 'text-indigo-400'
               }`}
             >
-              {opt.label}
+              {translateUI(opt.label)}
             </div>
           ))}
         </div>

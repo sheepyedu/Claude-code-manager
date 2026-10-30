@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../config/language";
 import { useState, useRef, useEffect } from 'react';
 
 interface ExpandableTextProps {
@@ -13,6 +14,7 @@ export function ExpandableText({
   className = '',
   expandedClassName,
 }: ExpandableTextProps) {
+  useLanguage();
   const [expanded, setExpanded] = useState(false);
   const [clamped, setClamped] = useState(false);
   const ref = useRef<HTMLParagraphElement>(null);
@@ -56,7 +58,7 @@ export function ExpandableText({
           onClick={() => setExpanded(!expanded)}
           data-testid="expand-toggle"
         >
-          {expanded ? 'Show less' : 'Show more'}
+          {expanded ? translateUI("Show less") : translateUI("Show more")}
         </button>
       )}
     </div>

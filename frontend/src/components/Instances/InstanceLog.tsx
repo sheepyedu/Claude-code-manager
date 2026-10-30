@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../../api/client';
 import type { LogEntry } from '../../api/client';
@@ -242,6 +243,7 @@ function displayValue(value: unknown): string | null {
 }
 
 export function InstanceLog({ instanceId, onClose }: InstanceLogProps) {
+  useLanguage();
   const [logs, setLogs] = useState<InstanceLogItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -524,9 +526,9 @@ export function InstanceLog({ instanceId, onClose }: InstanceLogProps) {
       <div className="bg-gray-900 rounded-lg w-full max-w-3xl max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
           <div className="flex items-center gap-2">
-            <h3 className="text-foreground font-medium text-sm">Instance #{instanceId} Logs</h3>
+            <h3 className="text-foreground font-medium text-sm">{translateUI("Instance #")}{instanceId} {translateUI("Logs")}</h3>
             <span className={`text-[10px] ${isConnected ? 'text-green-400' : 'text-yellow-400'}`}>
-              {isConnected ? 'Live' : 'Reconnecting…'}
+              {isConnected ? translateUI("Live") : translateUI("Reconnecting…")}
             </span>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-foreground">
@@ -538,8 +540,8 @@ export function InstanceLog({ instanceId, onClose }: InstanceLogProps) {
           onScroll={handleScroll}
           className="flex-1 overflow-y-auto p-4 font-mono text-xs space-y-1"
         >
-          {loadError && <p role="alert" className="text-red-400 mb-2">Could not load history: {loadError}</p>}
-          {logs.length === 0 && <p className="text-gray-500">No logs yet</p>}
+          {loadError && <p role="alert" className="text-red-400 mb-2">{translateUI("Could not load history: ")}{loadError}</p>}
+          {logs.length === 0 && <p className="text-gray-500">{translateUI("No logs yet")}</p>}
           {logs.map((log) => (
             <div
               key={log.clientKey}
@@ -553,10 +555,10 @@ export function InstanceLog({ instanceId, onClose }: InstanceLogProps) {
                 <span>{log.content || ''}</span>
               </div>
               {log.tool_input && (
-                <div className="pl-4 text-gray-400"><span className="text-gray-600">input: </span>{log.tool_input}</div>
+                <div className="pl-4 text-gray-400"><span className="text-gray-600">{translateUI("input: ")}</span>{log.tool_input}</div>
               )}
               {log.tool_output && (
-                <div className="pl-4 text-gray-400"><span className="text-gray-600">output: </span>{log.tool_output}</div>
+                <div className="pl-4 text-gray-400"><span className="text-gray-600">{translateUI("output: ")}</span>{log.tool_output}</div>
               )}
             </div>
           ))}

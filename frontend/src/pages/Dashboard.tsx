@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../config/language";
 import { useState, useCallback } from 'react';
 import { api } from '../api/client';
 import type { Instance } from '../api/client';
@@ -8,6 +9,7 @@ import { useVisibilityAwareInterval } from '../hooks/useVisibilityAwareInterval'
 import { useWebSocket } from '../hooks/useWebSocket';
 
 export function Dashboard() {
+  useLanguage();
   const [instances, setInstances] = useState<Instance[]>([]);
   const [stats, setStats] = useState<{ tasks: Record<string, number>; running_instances: number } | null>(null);
   const [logInstanceId, setLogInstanceId] = useState<number | null>(null);
@@ -31,7 +33,7 @@ export function Dashboard() {
     <div className="space-y-6">
       {error && (
         <div className="bg-red-500/20 text-red-400 px-4 py-2 rounded text-sm">
-          Error: {error}
+          {translateUI("Error: ")}{error}
         </div>
       )}
       {/* Stats bar */}
@@ -40,12 +42,12 @@ export function Dashboard() {
           {Object.entries(stats.tasks).map(([status, count]) => (
             <div key={status} className="bg-gray-800 border border-gray-700/60 rounded-xl p-4 text-center shadow-sm">
               <p className="text-2xl font-semibold tracking-tight text-foreground tabular-nums">{count}</p>
-              <p className="text-xs text-gray-500 capitalize mt-0.5">{status.replace('_', ' ')}</p>
+              <p className="text-xs text-gray-500 capitalize mt-0.5">{translateUI(status)}</p>
             </div>
           ))}
           <div className="bg-gray-800 border border-gray-700/60 rounded-xl p-4 text-center shadow-sm">
             <p className="text-2xl font-semibold tracking-tight text-green-400 tabular-nums">{stats.running_instances}</p>
-            <p className="text-xs text-gray-500 mt-0.5">Running</p>
+            <p className="text-xs text-gray-500 mt-0.5">{translateUI("Running")}</p>
           </div>
         </div>
       )}
@@ -54,7 +56,7 @@ export function Dashboard() {
 
       {/* Instances */}
       <div>
-        <h2 className="text-foreground font-semibold mb-3">Instances</h2>
+        <h2 className="text-foreground font-semibold mb-3">{translateUI("Instances")}</h2>
         <InstanceGrid
           instances={instances}
           onRefresh={refresh}

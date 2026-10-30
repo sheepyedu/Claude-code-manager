@@ -1,3 +1,5 @@
+import { LanguageSelect } from '../components/Layout/LanguageSelect';
+import { t as translateUI, useLanguage } from "../config/language";
 import { useEffect, useState } from 'react';
 
 import { api } from '../api/client';
@@ -8,6 +10,7 @@ import { FALLBACK_PLAN_PIPELINE_CONFIG } from '../components/PlanReview/planPipe
 
 
 export function SettingsPage() {
+  useLanguage();
   const [systemConfig, setSystemConfig] = useState<SystemConfig | null>(null);
   const [pipeline, setPipeline] = useState<PlanPipelineConfig>(
     FALLBACK_PLAN_PIPELINE_CONFIG,
@@ -67,7 +70,7 @@ export function SettingsPage() {
       && capacity
       && parsed < capacity.active_instances
       && !window.confirm(
-        `There are ${capacity.active_instances} active tasks. They will keep running, and new work will wait until usage falls below ${parsed}. Continue?`,
+        translateUI("There are {0} active tasks. They will keep running, and new work will wait until usage falls below {1}. Continue?", [capacity.active_instances, parsed]),
       )
     ) return;
 
@@ -89,34 +92,31 @@ export function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
+      <div className="rounded-xl border border-gray-700 bg-gray-800 p-4"><LanguageSelect /></div>
       <div className="flex items-center gap-2">
         <Settings size={20} className="text-indigo-400" />
-        <h2 className="text-lg font-semibold text-foreground">Settings</h2>
+        <h2 className="text-lg font-semibold text-foreground">{translateUI("Settings")}</h2>
       </div>
 
       <section className="rounded-xl border border-gray-800 bg-gray-900/70 p-5 shadow-sm">
         <div className="mb-4">
-          <h3 className="text-sm font-semibold text-gray-100">Local task capacity</h3>
+          <h3 className="text-sm font-semibold text-gray-100">{translateUI("Local task capacity")}</h3>
           <p className="mt-1 text-xs leading-5 text-gray-500">
-            Limits concurrent Tasks and Plans on this Manager. Changes apply immediately
-            without interrupting work already running. Remote Workers are configured separately.
-          </p>
+            {translateUI("Limits concurrent Tasks and Plans on this Manager. Changes apply immediately without interrupting work already running. Remote Workers are configured separately. ")}</p>
         </div>
 
         {loading || !capacity ? (
           <div className="flex items-center gap-2 py-6 text-sm text-gray-500">
             <Loader2 size={15} className="animate-spin" />
-            Loading capacity…
-          </div>
+            {translateUI("Loading capacity… ")}</div>
         ) : (
           <>
             <div className="grid gap-3 sm:grid-cols-3">
               <label className="sm:col-span-1">
                 <span className="mb-1 block text-xs font-medium text-gray-300">
-                  Maximum concurrent tasks
-                </span>
+                  {translateUI("Maximum concurrent tasks ")}</span>
                 <input
-                  aria-label="Maximum concurrent tasks"
+                  aria-label={translateUI("Maximum concurrent tasks")}
                   type="number"
                   min={1}
                   max={64}
@@ -127,17 +127,17 @@ export function SettingsPage() {
                 />
               </label>
               <div className="rounded-lg border border-gray-800 bg-gray-950/60 px-3 py-2">
-                <p className="text-[11px] uppercase tracking-wide text-gray-500">Active now</p>
+                <p className="text-[11px] uppercase tracking-wide text-gray-500">{translateUI("Active now")}</p>
                 <p className="mt-1 text-lg font-semibold text-gray-100">{capacity.active_instances}</p>
               </div>
               <div className="rounded-lg border border-gray-800 bg-gray-950/60 px-3 py-2">
-                <p className="text-[11px] uppercase tracking-wide text-gray-500">Waiting</p>
+                <p className="text-[11px] uppercase tracking-wide text-gray-500">{translateUI("Waiting")}</p>
                 <p className="mt-1 text-lg font-semibold text-gray-100">{capacity.pending_tasks}</p>
               </div>
             </div>
             <p className="mt-2 text-xs text-gray-500">
-              Environment default: {capacity.env_default} · Minimum idle slots: {capacity.min_idle_instances}
-              {capacity.configured_override !== null ? ' · Runtime override active' : ' · Following environment default'}
+              {translateUI("Environment default: ")}{capacity.env_default} {translateUI("· Minimum idle slots: ")}{capacity.min_idle_instances}
+              {capacity.configured_override !== null ? translateUI(" · Runtime override active") : translateUI(" · Following environment default")}
             </p>
           </>
         )}
@@ -155,8 +155,7 @@ export function SettingsPage() {
             disabled={loading || capacitySaving || !capacity || capacity.configured_override === null}
             className="rounded-lg border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:border-gray-600 hover:text-white disabled:opacity-40"
           >
-            Restore environment default
-          </button>
+            {translateUI("Restore environment default ")}</button>
           <button
             type="button"
             onClick={() => void saveCapacity(false)}
@@ -166,25 +165,22 @@ export function SettingsPage() {
             {capacitySaving
               ? <Loader2 size={14} className="animate-spin" />
               : capacitySaved ? <Check size={14} /> : null}
-            {capacitySaving ? 'Saving…' : capacitySaved ? 'Saved' : 'Save capacity'}
+            {capacitySaving ? translateUI("Saving…") : capacitySaved ? translateUI("Saved") : translateUI("Save capacity")}
           </button>
         </div>
       </section>
 
       <section className="rounded-xl border border-gray-800 bg-gray-900/70 p-5 shadow-sm">
         <div className="mb-4">
-          <h3 className="text-sm font-semibold text-gray-100">Plan Pipeline</h3>
+          <h3 className="text-sm font-semibold text-gray-100">{translateUI("Plan Pipeline")}</h3>
           <p className="mt-1 text-xs leading-5 text-gray-500">
-            These routes are snapshotted when a new Plan is created. Existing
-            Plans keep the configuration they started with.
-          </p>
+            {translateUI("These routes are snapshotted when a new Plan is created. Existing Plans keep the configuration they started with. ")}</p>
         </div>
 
         {loading ? (
           <div className="flex items-center gap-2 py-8 text-sm text-gray-500">
             <Loader2 size={15} className="animate-spin" />
-            Loading settings…
-          </div>
+            {translateUI("Loading settings… ")}</div>
         ) : (
           <PlanPipelineFields
             value={pipeline}
@@ -209,7 +205,7 @@ export function SettingsPage() {
             {saving
               ? <Loader2 size={14} className="animate-spin" />
               : saved ? <Check size={14} /> : null}
-            {saving ? 'Saving…' : saved ? 'Saved' : 'Save settings'}
+            {saving ? translateUI("Saving…") : saved ? translateUI("Saved") : translateUI("Save settings")}
           </button>
         </div>
       </section>

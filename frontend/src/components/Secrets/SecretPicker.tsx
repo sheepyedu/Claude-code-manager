@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../../config/language";
 import { useState, useEffect } from 'react';
 import { api } from '../../api/client';
 import type { Secret } from '../../api/client';
@@ -10,6 +11,7 @@ interface SecretPickerProps {
 }
 
 export function SecretPicker({ selectedIds, onChange, disabled }: SecretPickerProps) {
+  useLanguage();
   const [secrets, setSecrets] = useState<Secret[]>([]);
   const [open, setOpen] = useState(false);
 
@@ -36,7 +38,7 @@ export function SecretPicker({ selectedIds, onChange, disabled }: SecretPickerPr
         className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-200 px-2 py-1 rounded border border-gray-600 hover:border-gray-400 disabled:opacity-40"
       >
         <KeyRound size={13} />
-        {selectedIds.length > 0 ? `${selectedIds.length} secret${selectedIds.length > 1 ? 's' : ''}` : 'Secrets'}
+        {selectedIds.length > 0 ? translateUI("{0} secret{1}", [selectedIds.length, selectedIds.length > 1 ? 's' : '']) : translateUI("Secrets")}
       </button>
       {open && (
         <div className="absolute bottom-full mb-1 left-0 z-50 bg-gray-800 border border-gray-600 rounded-lg shadow-xl py-1 min-w-[200px] max-h-48 overflow-y-auto">

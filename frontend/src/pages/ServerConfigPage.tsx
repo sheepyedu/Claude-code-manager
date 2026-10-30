@@ -1,3 +1,4 @@
+import { t as translateUI, useLanguage } from "../config/language";
 import { useState } from 'react';
 import { getServerUrl, setServerUrl } from '../config/server';
 
@@ -6,6 +7,7 @@ interface ServerConfigPageProps {
 }
 
 export function ServerConfigPage({ onConfigured }: ServerConfigPageProps) {
+  useLanguage();
   const [url, setUrl] = useState(getServerUrl());
   const [error, setError] = useState('');
   const [testing, setTesting] = useState(false);
@@ -13,7 +15,7 @@ export function ServerConfigPage({ onConfigured }: ServerConfigPageProps) {
 
   const handleTest = async () => {
     if (!url.trim()) {
-      setError('Please enter a server URL');
+      setError(translateUI("Please enter a server URL"));
       return;
     }
     setTesting(true);
@@ -25,10 +27,10 @@ export function ServerConfigPage({ onConfigured }: ServerConfigPageProps) {
       if (res.ok) {
         setSuccess(true);
       } else {
-        setError(`Server responded with status ${res.status}`);
+        setError(translateUI("Server responded with status {0}", [res.status]));
       }
     } catch {
-      setError('Cannot connect to server. Check the URL and try again.');
+      setError(translateUI("Cannot connect to server. Check the URL and try again."));
     } finally {
       setTesting(false);
     }
@@ -36,7 +38,7 @@ export function ServerConfigPage({ onConfigured }: ServerConfigPageProps) {
 
   const handleSave = () => {
     if (!url.trim()) {
-      setError('Please enter a server URL');
+      setError(translateUI("Please enter a server URL"));
       return;
     }
     setServerUrl(url.trim());
@@ -46,18 +48,18 @@ export function ServerConfigPage({ onConfigured }: ServerConfigPageProps) {
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
       <div className="bg-gray-800 rounded-lg p-6 w-full max-w-sm space-y-4">
-        <h1 className="text-foreground text-lg font-bold text-center">Claude Code Manager</h1>
-        <p className="text-gray-400 text-sm text-center">Enter your server address</p>
+        <h1 className="text-foreground text-lg font-bold text-center">{translateUI("Claude Code Manager")}</h1>
+        <p className="text-gray-400 text-sm text-center">{translateUI("Enter your server address")}</p>
         <input
           type="url"
           className="w-full bg-gray-700 text-foreground rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          placeholder="https://ccm.example.com"
+          placeholder={translateUI("https://ccm.example.com")}
           value={url}
           onChange={(e) => { setUrl(e.target.value); setSuccess(false); setError(''); }}
           autoFocus
         />
         {error && <p className="text-red-400 text-xs">{error}</p>}
-        {success && <p className="text-green-400 text-xs">Connection successful!</p>}
+        {success && <p className="text-green-400 text-xs">{translateUI("Connection successful!")}</p>}
         <div className="flex gap-2">
           <button
             type="button"
@@ -65,7 +67,7 @@ export function ServerConfigPage({ onConfigured }: ServerConfigPageProps) {
             disabled={testing}
             className="flex-1 bg-gray-600 hover:bg-gray-500 text-foreground py-2 rounded text-sm font-medium disabled:opacity-50"
           >
-            {testing ? 'Testing...' : 'Test Connection'}
+            {testing ? translateUI("Testing...") : translateUI("Test Connection")}
           </button>
           <button
             type="button"
@@ -73,8 +75,7 @@ export function ServerConfigPage({ onConfigured }: ServerConfigPageProps) {
             disabled={!success}
             className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded text-sm font-medium disabled:opacity-50"
           >
-            Connect
-          </button>
+            {translateUI("Connect ")}</button>
         </div>
       </div>
     </div>

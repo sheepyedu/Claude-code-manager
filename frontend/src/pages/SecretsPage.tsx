@@ -1,9 +1,11 @@
+import { t as translateUI, useLanguage } from "../config/language";
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../api/client';
 import type { Secret } from '../api/client';
 import { Plus, Trash2, Pencil, X, Eye, EyeOff, KeyRound } from '../components/icons';
 
 function SecretModal({ secret, onClose, onSaved }: { secret?: Secret; onClose: () => void; onSaved: () => void }) {
+  useLanguage();
   const [name, setName] = useState(secret?.name ?? '');
   const [content, setContent] = useState(secret?.content ?? '');
   const [error, setError] = useState<string | null>(null);
@@ -33,35 +35,35 @@ function SecretModal({ secret, onClose, onSaved }: { secret?: Secret; onClose: (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700">
-          <h3 className="text-foreground font-semibold">{secret ? 'Edit Secret' : 'New Secret'}</h3>
+          <h3 className="text-foreground font-semibold">{secret ? translateUI("Edit Secret") : translateUI("New Secret")}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-200"><X size={18} /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {error && <p className="text-red-400 text-sm">{error}</p>}
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Name</label>
+            <label className="block text-xs text-gray-400 mb-1">{translateUI("Name")}</label>
             <input
               className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500"
               value={name} onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. GitHub Token" required
+              placeholder={translateUI("e.g. GitHub Token")} required
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Content</label>
+            <label className="block text-xs text-gray-400 mb-1">{translateUI("Content")}</label>
             <textarea
               className="w-full bg-gray-700 text-foreground text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500 h-28 resize-none"
               value={content} onChange={(e) => setContent(e.target.value)}
-              placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" required
+              placeholder={translateUI("ghp_xxxxxxxxxxxxxxxxxxxx")} required
             />
           </div>
           <div className="flex justify-end gap-2 pt-1">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-300 hover:text-foreground">Cancel</button>
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-300 hover:text-foreground">{translateUI("Cancel")}</button>
             <button
               type="submit"
               disabled={submitting || !name.trim() || !content.trim()}
               className="px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-500 disabled:opacity-50"
             >
-              {submitting ? 'Saving...' : 'Save'}
+              {submitting ? translateUI("Saving...") : translateUI("Save")}
             </button>
           </div>
         </form>
@@ -71,6 +73,7 @@ function SecretModal({ secret, onClose, onSaved }: { secret?: Secret; onClose: (
 }
 
 export function SecretsPage() {
+  useLanguage();
   const [secrets, setSecrets] = useState<Secret[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -89,7 +92,7 @@ export function SecretsPage() {
   useEffect(() => { refresh(); }, [refresh]);
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Delete this secret?')) return;
+    if (!confirm(translateUI("Delete this secret?"))) return;
     try {
       await api.deleteSecret(id);
       await refresh();
@@ -110,25 +113,23 @@ export function SecretsPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-foreground font-semibold text-lg">Secrets</h2>
+        <h2 className="text-foreground font-semibold text-lg">{translateUI("Secrets")}</h2>
         <button
           onClick={() => { setEditing(undefined); setShowModal(true); }}
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-500"
         >
-          <Plus size={14} /> New Secret
-        </button>
+          <Plus size={14} /> {translateUI("New Secret ")}</button>
       </div>
 
       <p className="text-xs text-gray-500">
-        Store sensitive information (accounts, tokens, etc.) that can be injected into task prompts. Secrets are never stored in the git repo.
-      </p>
+        {translateUI("Store sensitive information (accounts, tokens, etc.) that can be injected into task prompts. Secrets are never stored in the git repo. ")}</p>
 
       {error && (
-        <div className="bg-red-500/20 text-red-400 px-4 py-2 rounded text-sm">Error: {error}</div>
+        <div className="bg-red-500/20 text-red-400 px-4 py-2 rounded text-sm">{translateUI("Error: ")}{error}</div>
       )}
 
       {secrets.length === 0 ? (
-        <p className="text-gray-400 text-sm">No secrets yet.</p>
+        <p className="text-gray-400 text-sm">{translateUI("No secrets yet.")}</p>
       ) : (
         <div className="space-y-2">
           {secrets.map((s) => (
@@ -144,21 +145,21 @@ export function SecretsPage() {
                 <button
                   onClick={() => toggleReveal(s.id)}
                   className="p-2 text-gray-400 hover:text-gray-200 hover:bg-gray-700 rounded"
-                  title={revealed[s.id] ? 'Hide' : 'Show'}
+                  title={revealed[s.id] ? translateUI("Hide") : translateUI("Show")}
                 >
                   {revealed[s.id] ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
                 <button
                   onClick={() => { setEditing(s); setShowModal(true); }}
                   className="p-2 text-gray-400 hover:text-indigo-400 hover:bg-gray-700 rounded"
-                  title="Edit"
+                  title={translateUI("Edit")}
                 >
                   <Pencil size={16} />
                 </button>
                 <button
                   onClick={() => handleDelete(s.id)}
                   className="p-2 text-gray-400 hover:text-red-400 hover:bg-gray-700 rounded"
-                  title="Delete"
+                  title={translateUI("Delete")}
                 >
                   <Trash2 size={16} />
                 </button>
