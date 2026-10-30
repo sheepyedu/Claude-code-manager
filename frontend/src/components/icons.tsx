@@ -24,6 +24,8 @@ import {
   ArrowLeft as L_ArrowLeft,
   ArrowUpCircle as L_ArrowUpCircle,
   Bot as L_Bot,
+  Brain as L_Brain,
+  Gauge as L_Gauge,
   Check as L_Check,
   CheckCircle2 as L_CheckCircle2,
   ChevronDown as L_ChevronDown,
@@ -325,6 +327,8 @@ export const ArchiveRestore = L_ArchiveRestore; // 无合适映射，保持 Luci
 export const ArrowDown = themed(L_ArrowDown, P_ArrowDown, IoArrowDown);
 export const ArrowLeft = themed(L_ArrowLeft, P_ArrowLeft, IoArrowBack);
 export const ArrowUpCircle = themed(L_ArrowUpCircle, P_ArrowCircleUp, IoArrowUpCircle);
+export const Brain = L_Brain;
+export const Gauge = L_Gauge;
 export const Bot = L_Bot; // 无合适映射，保持 Lucide
 export const Check = themed(L_Check, P_Check, IoCheckmark);
 export const CheckCircle2 = themed(L_CheckCircle2, P_CheckOne, IoCheckmarkCircle);

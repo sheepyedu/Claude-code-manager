@@ -4,13 +4,14 @@ import { RuntimeControls } from '../RuntimeControls';
 import { t, useLanguage } from '../../config/language';
 
 interface Props {
+  compact?: boolean;
   task: Task;
   onUpdated: (task?: Task) => void;
   disabled?: boolean;
 }
 
 /** Persist the next turn's routing, with the same backend guards as Task Config. */
-export function TaskRuntimeControls({ task, onUpdated, disabled }: Props) {
+export function TaskRuntimeControls({ compact = false, task, onUpdated, disabled }: Props) {
   useLanguage();
   const [config, setConfig] = useState<SystemConfig | null>(null);
   const [saving, setSaving] = useState(false);
@@ -45,12 +46,12 @@ export function TaskRuntimeControls({ task, onUpdated, disabled }: Props) {
       onUpdated();
     } finally { setSaving(false); }
   };
-  return <div className="space-y-1" onClick={(event) => event.stopPropagation()}>
-    <RuntimeControls provider={task.provider} effort={task.effort_level}
+  return <div className={compact ? "relative shrink-0" : "space-y-1"} onClick={(event) => event.stopPropagation()}>
+    <RuntimeControls compact={compact} provider={task.provider} effort={task.effort_level}
       serviceTier={task.codex_service_tier || 'default'} defaultEffort={config?.default_effort}
       effortOptions={efforts} supportsFast={(config?.codex_model_service_tiers?.[model] || []).includes('priority')}
       disabled={!!blocked} onEffortChange={(effort) => void update({ effort_level: effort })}
       onSpeedChange={(tier) => void update({ codex_service_tier: tier })} />
-    {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
+    {error && <p role="alert" className={compact ? "absolute bottom-full left-0 z-30 mb-1 w-56 rounded border border-red-800 bg-gray-900 p-2 text-xs text-red-400" : "text-xs text-red-400"}>{error}</p>}
   </div>;
 }

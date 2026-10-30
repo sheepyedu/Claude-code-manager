@@ -3831,10 +3831,8 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
             </div>
           )}
           <div className="space-y-1.5">
-          <TaskRuntimeControls task={task} onUpdated={(updated) => onTaskUpdated?.(updated)}
-            disabled={isProcessing || injecting || frontendReviewComposerMode || workspaceReviewComposerMode} />
           {/* Row 1: action buttons */}
-          <div className="flex gap-1 items-center">
+          <div className="flex flex-wrap gap-1 items-center">
             <input
               ref={fileInputRef}
               type="file"
@@ -3858,6 +3856,8 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
             </button>
             <SecretPicker selectedIds={selectedSecretIds} onChange={setSelectedSecretIds} disabled={injecting || (!task.session_id && !task.shared_from_id) || (injectMode && canInjectNow)} />
             <QuickPhraseDropdown onSelect={(text) => handleSend(text)} disabled={injecting || frontendReviewComposerMode || workspaceReviewComposerMode || (!task.session_id && !task.shared_from_id)} />
+            <TaskRuntimeControls compact task={task} onUpdated={(updated) => onTaskUpdated?.(updated)}
+              disabled={isProcessing || injecting || frontendReviewComposerMode || workspaceReviewComposerMode} />
             {task.worker_id == null && task.shared_from_id == null && (
               <button
                 type="button"
