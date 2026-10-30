@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     max_concurrent_instances: int = 8   # hard cap on live local instances (idle + running)
     min_idle_instances: int = 2         # auto top-up idle instances (capped by max_concurrent)
     claude_binary: str = "claude"
+    claude_config_dir: str = ""  # Empty preserves the native ~/.claude default.
     codex_binary: str = "codex"
     # Keep one Codex app-server process and run task turns over JSON-RPC.
     # Startup/protocol failures automatically fall back to `codex exec`.

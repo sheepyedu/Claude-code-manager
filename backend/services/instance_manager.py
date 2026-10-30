@@ -2627,6 +2627,10 @@ class InstanceManager:
         that loop-task chat history can be grouped by iteration in the frontend.
         """
         provider = (provider or "claude").lower()
+        if provider == "claude" and not config_dir:
+            from backend.services.claude_runtime import configured_claude_home
+
+            config_dir = configured_claude_home()
         launch_boundary_attempted = False
         launch_boundary_completed = False
 

@@ -4,6 +4,8 @@
 
 ## 快速命令
 
+Claude 专用目录回归：`python -m pytest backend/tests/test_claude_private_runtime.py backend/tests/test_service_instance_manager.py -k 'warmup_prepares_selected_home or pool_disabled_resume or onboarding_preserves or launch_delegates_to_pty_backend_for_claude'`。覆盖专用目录/号池优先级、PTY JSONL 路径、无模型调用的启动准备、原配置保护及非法状态文件保留。
+
 ```bash
 # 安装依赖（首次，包含测试依赖）
 uv sync --group dev

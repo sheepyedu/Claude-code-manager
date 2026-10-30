@@ -16774,7 +16774,20 @@ def test_pty_backend_disabled_by_default():
 
 
 @pytest.mark.asyncio
-async def test_launch_delegates_to_pty_backend_for_claude():
+@pytest.mark.parametrize(
+    ("configured_home", "pool_home", "expected_home"),
+    [(None, None, None), ("private", None, "private"),
+     ("private", "pool", "pool")],
+)
+async def test_launch_delegates_to_pty_backend_for_claude(
+    monkeypatch, tmp_path, configured_home, pool_home, expected_home,
+):
+    configured_home = str(tmp_path / configured_home) if configured_home else ""
+    pool_home = str(tmp_path / pool_home) if pool_home else None
+    expected_home = str(tmp_path / expected_home) if expected_home else None
+    monkeypatch.setattr(
+        "backend.config.settings.claude_config_dir", configured_home, raising=False,
+    )
     im = InstanceManager(_FakeDBFactory(), MagicMock())
     calls = {}
 
@@ -16798,13 +16811,20 @@ async def test_launch_delegates_to_pty_backend_for_claude():
     im._pty_enabled = True
     pid = await im.launch(
         instance_id=7, prompt="do it", task_id=3, cwd="/w",
-        model="default", provider="claude",
+        model="default", provider="claude", config_dir=pool_home,
     )
     assert pid == 4242
     assert calls["instance_id"] == 7
     assert calls["prompt"] == "do it"
     assert calls["model"] is None  # "default" normalized away
     assert calls["cwd"] == "/w"
+    assert calls["config_dir"] == expected_home
+    from claude_pty.adapters.ccm import CCMBackend
+    from claude_pty.pty_process import PTYProcess
+    cfg = CCMBackend.build_config(None, config_dir=calls["config_dir"])
+    process = PTYProcess(cwd="/w", config=cfg)
+    if expected_home:
+        assert Path(process.jsonl_path).is_relative_to(expected_home)
 
 
 @pytest.mark.asyncio

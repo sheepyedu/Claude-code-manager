@@ -42,6 +42,7 @@ os.environ.update({
     "WORKSPACE_DIR": str(_GLOBAL_TEST_DB_DIR / "workspace"),
     "WORKER_ENABLED": "false",
     "POOL_ENABLED": "false",
+    "CLAUDE_CONFIG_DIR": "",
     "CODEX_POOL_ENABLED": "false",
     # Rollout-enabled paths are exercised explicitly.  Keep unrelated tests
     # isolated from task-scoped MCP subprocess construction.

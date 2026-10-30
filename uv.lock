@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11"
 
 [[package]]
@@ -517,7 +517,7 @@ dev = [
 [[package]]
 name = "claude-pty"
 version = "0.1.0"
-source = { git = "https://github.com/zjw49246/Claude-Code-PTY#d5ff119ed5527dd1922170c7ea7e7da8c31c3a48" }
+source = { git = "https://github.com/zjw49246/Claude-Code-PTY#972d566267d7b65eb3ed48c6e27944745c888ae3" }
 
 [[package]]
 name = "click"

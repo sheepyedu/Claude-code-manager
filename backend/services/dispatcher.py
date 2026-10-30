@@ -7110,7 +7110,9 @@ class GlobalDispatcher:
                 codex_service_tier=codex_service_tier,
             )
         if not (self.pool and self.pool.enabled):
-            return None
+            from backend.services.claude_runtime import configured_claude_home
+
+            return configured_claude_home()
 
         bound_id = await self._claude_task_binding(task_id)
         bound_account = self.pool.account(bound_id) if bound_id else None

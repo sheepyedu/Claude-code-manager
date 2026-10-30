@@ -612,6 +612,7 @@ Worker 系统支持将任务分发到远程 EC2 实例执行，适合需要更�
 | 环境变量 | 默认值 | 说明 |
 |----------|--------|------|
 | `AUTH_TOKEN` | (必填) | API 认证 Token |
+| `CLAUDE_CONFIG_DIR` | （空，使用 `~/.claude`） | Claude 默认会话/配置目录，统一用于 direct、PTY、续聊和启动准备；账号池显式目录优先。启动准备只写本地 onboarding 状态，不调用模型 |
 | `PORT` | `8000` | 主服务监听端口 |
 | `PUBLIC_BASE_URL` | （空） | 部署的公网地址（如 `https://ccm.example.com`） |
 | `OPENAI_API_KEY` | (可选) | Whisper 语音及独立 Browser Review CLI 的 Responses 模式所需；Web Browser Review 复用 CCM 账号池，不读取该 Key |
