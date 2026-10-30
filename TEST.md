@@ -34,7 +34,9 @@ cd frontend && npx tsc --noEmit
 
 ### macOS Plan 运行与清理
 
-`uv run python -m pytest backend/tests/test_plan_runtime_macos.py backend/tests/test_plan_runtime_receipt.py backend/tests/test_plan_runtime_receipt_deletion.py backend/tests/test_plan_agent_runner.py backend/tests/test_process_identity.py backend/tests/test_api_projects.py backend/tests/test_git_credentials.py -q`
+`uv run python -m pytest backend/tests/test_plan_runtime_macos.py backend/tests/test_codex_plan_scratch_alias.py backend/tests/test_plan_runtime_receipt.py backend/tests/test_plan_runtime_receipt_deletion.py backend/tests/test_plan_agent_runner.py backend/tests/test_process_identity.py backend/tests/test_api_projects.py backend/tests/test_git_credentials.py -q`
+
+`test_codex_plan_scratch_alias.py` 验证 scratch 别名只允许同一 canonical leaf，拒绝旁路目录、多写根、网络或 profile 漂移；Claude 启动回归验证未启用隔离时不会传入 `--settings None`。
 
 覆盖无 procfs 的 Plan 准备、Darwin 微秒时钟与原生进程身份、按 UID 枚举、token 精确匹配、旧进程/其他用户过滤、权限拒绝/PID 复用/枚举截断保持 fail closed、Linux 时钟兼容。macOS 额外创建真实无模型子进程，验证 token 发现、进程组清理和 zombie 回收后的再次确认。项目凭据回归覆盖 SSH clone/fetch 注入；手动验证私有 GitHub 项目由 error 恢复 ready 后，重试失败 Plan 应产生正常 Step 和 runtime receipt。
 

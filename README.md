@@ -11,7 +11,7 @@ Web 端调度和管理多个 Claude Code 实例并行工作。灵感来自胡渊
 本仓库是 [sheepyedu/Claude-code-manager](https://github.com/sheepyedu/Claude-code-manager) 维护分支，保留 [jiaruixuan/CC-Manager](https://github.com/jiaruixuan/CC-Manager) 的历史与原有功能。
 
 - **macOS 资源监控**：CPU、内存和交换空间使用 psutil 原生接口，无需管理员权限；保留 Linux 支持、每小时缓存和“刷新”按钮。升级后运行 `uv sync --locked`，构建前端并重启服务。
-- **macOS 计划执行**：Planner / Reviewer 的启动和恢复使用原生进程身份，不再读取 Linux 专有的 `/proc` 文件；仍保留进程归属与安全清理校验。
+- **macOS 计划执行**：Planner / Reviewer 的启动和恢复使用原生进程身份，不再读取 Linux 专有的 `/proc` 文件；仍保留进程归属与安全清理校验，并兼容 Codex 回包中的 `/private/tmp` 规范路径及 Claude 未启用隔离的启动参数。
 - **界面语言**：右上角齿轮或 Settings 页面选择 **Language → 简体中文**，立即切换导航、仪表盘、任务、项目、文件、账号池等主要界面的文案。选择保存在当前浏览器，刷新后保留；用户内容、模型回复、文件内容和 API 参数保持原值。英文选项沿用上游已有的中英文文案。
 - 本地 `.env`、数据库、账号登录文件、SSH 私钥均不属于仓库配置；部署时沿用各自的本机配置。
 

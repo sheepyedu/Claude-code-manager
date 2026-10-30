@@ -2444,7 +2444,9 @@ class PlanAgentRunner:
                 model=model,
                 effort=effort,
                 schema=schema,
-                isolation_settings_path=str(isolation_path),
+                isolation_settings_path=(
+                    str(isolation_path) if isolation_path is not None else None
+                ),
             )
             process = None
             token = None

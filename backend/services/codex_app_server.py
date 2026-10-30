@@ -1587,9 +1587,11 @@ def _audit_task_ssh_thread_response(
         # profile. Every Task profile grants its inode-fenced private TMPDIR one
         # exact write rule, so a read-only workspace is reported as
         # workspaceWrite. Accept that representation only when the response
-        # proves the scratch leaf is the sole writable root.
+        # proves the scratch leaf is the sole writable root. Compare canonical
+        # paths: macOS reports /private/tmp for the same inode-fenced /tmp leaf.
+        # The caller revalidates that leaf around thread admission.
         writable_roots = sandbox.get("writableRoots")
-        scratch = os.path.abspath(os.path.expanduser(private_tmpdir))
+        scratch = _canonical_path(private_tmpdir)
         if (
             sandbox_mode != "read-only"
             or resolved_type != "workspaceWrite"
@@ -1597,7 +1599,7 @@ def _audit_task_ssh_thread_response(
             or len(writable_roots) != 1
             or not isinstance(writable_roots[0], str)
             or not os.path.isabs(writable_roots[0])
-            or os.path.abspath(writable_roots[0]) != scratch
+            or _canonical_path(writable_roots[0]) != scratch
         ):
             raise ValueError(
                 "Task isolation resolved an unexpected sandbox policy"

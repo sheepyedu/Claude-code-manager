@@ -1018,7 +1018,10 @@ async def test_claude_missing_binary_before_spawn_is_route_unavailable(
     async def runtime_admission(**_kwargs):
         yield None, None
 
-    async def missing_binary(*_args, **_kwargs):
+    monkeypatch.setattr(settings, "claude_task_isolation_enabled", False)
+
+    async def missing_binary(*args, **_kwargs):
+        assert "--settings" not in args, "disabled isolation must omit --settings, not stringify None"
         raise FileNotFoundError("No such file or directory: 'claude'")
 
     runner._runtime_admission = runtime_admission

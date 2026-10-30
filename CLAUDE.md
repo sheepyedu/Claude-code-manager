@@ -193,6 +193,7 @@ claude-manager/
 ## 关键约定
 
 - **界面语言**：`frontend/src/config/language.ts` 保存浏览器级 `ccm-language`（`en` / `zh-CN`），`useLanguage()` 订阅切换；仅通过 `t()` 翻译界面文案，译表在 `config/translations/zh-CN.ts`，不得翻译用户输入、模型回复、代码、路径或 API 枚举值。新增界面文案应同步译表。
+- **Plan provider 准入**：Claude 隔离未启用时必须省略 `--settings`，不得将 `None` 转为路径；Codex 只读策略的唯一可写 scratch 回包按 canonical path 对齐 macOS `/tmp` 与 `/private/tmp`，保留请求前后的 inode 围栏以及 profile/network/唯一写根校验。
 - **Plan 跨平台进程身份**：`plan_runtime_receipt.py` 的 macOS 路径复用 `process_identity` 的 boot session / libproc PID 身份；启动边界统一为 Unix 微秒。恢复扫描先由内核按有效 UID 枚举，再校验 token、UID、PGID、启动时间和 boot；权限失败、PID 复用及枚举截断必须保留 cleanup 围栏，不能以忽略错误绕过。Linux 保留 procfs 契约。
 - **宿主资源监控**：`system_metrics.py` 用 psutil 原生计数器兼容 macOS/Linux，CPU 采样必须在线程执行，禁止依赖 Linux `/proc`；保留小时缓存与手动刷新契约。
 
