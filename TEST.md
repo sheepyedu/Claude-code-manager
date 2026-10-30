@@ -35,7 +35,7 @@ cd frontend && npx tsc --noEmit
 
 `cd frontend && npx vitest run src/components/Tasks/TaskRuntimeControls.test.tsx src/components/Tasks/TaskForm.test.tsx src/components/Tasks/TaskBadges.test.tsx src/components/PlanReview/PlanCreateForm.test.tsx src/components/Chat/ChatView.test.tsx src/pages/TasksPage.test.tsx`
 
-覆盖新任务默认标准/保存快速/切换模型回退、聊天草稿在保存设置后保留、任务执行或共享时不可修改、保存回显保留更新的 WS 状态并拒绝过期执行代次、保存失败保持原值、Plan 创建提交独立 planner/reviewer 设置。手动验证中文桌面和窄屏入口、刷新后当前 Task 路由保持、计划详情显示冻结速度；浏览器验证应拦截更新/创建请求，不触发测试模型费用。
+覆盖新任务配置加载前禁用/默认标准/保存快速/切换模型回退、聊天草稿在保存设置后保留、任务执行或共享时不可修改、保存回显保留更新的 WS 状态并拒绝过期执行代次、保存失败保持原值、Plan 创建提交独立 planner/reviewer 设置。手动验证中文桌面和窄屏入口、刷新后当前 Task 路由保持、计划详情显示冻结速度；浏览器验证应拦截更新/创建请求，不触发测试模型费用。
 
 ### 语言切换
 

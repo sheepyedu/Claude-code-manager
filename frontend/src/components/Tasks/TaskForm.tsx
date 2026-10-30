@@ -1012,6 +1012,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
         provider={provider} effort={effort} serviceTier={codexServiceTier}
         defaultEffort={defaultEffort} effortOptions={activeEffortOptions}
         supportsFast={activeCodexModelSupportsFast}
+        disabled={loading || !providerConfigLoaded || !codexCapabilitiesLoaded}
         fastUnavailableReason={codexCapabilitiesLoaded ? translateUI("{0} 不支持 Fast", [activeCodexModel]) : undefined}
         onEffortChange={setEffort} onSpeedChange={setCodexServiceTier} />}
       {/* Bottom action row */}

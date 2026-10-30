@@ -648,6 +648,8 @@ describe('TaskForm persisted defaults', () => {
     render(<TaskForm onCreated={vi.fn()} />);
     await openConfigPanel();
     expect(screen.getByDisplayValue('Codex')).toBeInTheDocument();
+    expect(screen.getByLabelText('Codex speed')).toBeDisabled();
+    expect(screen.getByLabelText('Reasoning effort')).toBeDisabled();
 
     await act(async () => resolveConfig({
       default_provider: 'claude',
@@ -673,6 +675,8 @@ describe('TaskForm persisted defaults', () => {
       expect(screen.getByDisplayValue('gpt-5.6-sol')).toBeInTheDocument();
       expect(screen.getByDisplayValue('ultra')).toBeInTheDocument();
       expect(screen.getByLabelText('Codex speed')).toHaveValue('priority');
+      expect(screen.getByLabelText('Codex speed')).toBeEnabled();
+      expect(screen.getByLabelText('Reasoning effort')).toBeEnabled();
     });
   });
 
