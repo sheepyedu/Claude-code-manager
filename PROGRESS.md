@@ -2,6 +2,14 @@
 
 > **重要：Claude 必须自主维护本文件。** 每次完成重要改动或遇到问题后，在对应章节记录。每条记录必须附上 git commit ID。
 
+## 2026-10-30 — Claude 专用目录与无推理启动准备
+
+- **问题**：配置专用 Claude CLI 入口后，PTY/无号池续聊仍可能以默认 `~/.claude` 定位 JSONL；首次预热也绕过 `CLAUDE_BINARY` 调用真实模型并改写原目录。
+- **解决**：新增 `CLAUDE_CONFIG_DIR`，在共同 launch 边界与续聊解析中固定默认目录，账号池显式目录优先；启动只原子准备选定目录的 onboarding 状态，保留现有字段且不发送模型请求。按依赖约定将 claude-pty pin 更新到 `972d5662`。
+- **验证**：10 项定向回归通过；相关套件 521 passed/25 failed，失败集合与原始 checkout 的 512 passed/25 failed 完全相同。完整套件修复前后均为 141 passed 后停在既有的 SQLite downgrade trigger 错误；TypeScript 检查通过。
+- **避免复发**：Claude CLI 的配置目录必须与 PTY JSONL、信任状态和续聊目录共同传递，不能只在外部 wrapper 中重定向。
+- **Git commit**：`34da43cd`。
+
 ## 2026-09-02 — Codex Fast SSE 前导兼容
 
 - **问题**：Task 70 的 priority 回合被 `CodexTierProofError` 拒绝。Apex 兼容 Responses 网关返回 HTTP 200，
