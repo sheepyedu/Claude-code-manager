@@ -32,6 +32,12 @@ cd frontend && npx tsc --noEmit
 `cd frontend && npx vitest run src/components/Layout/LanguageSelect.test.tsx src/components/System/SystemMetricsPanel.test.tsx`
 覆盖实时中英文切换、表单状态和原始 API 值保留、不重新挂载或重复请求、浏览器持久化、跨标签页同步、非法保存值回退及存储被禁止时的会话内切换。资源面板验证中文文案和缓存秒数转分钟。手动验证：在齿轮或 Settings 页面切换后刷新，导航和资源面板应使用选择的语言，聊天/代码内容不应变化。
 
+### macOS Plan 运行与清理
+
+`uv run python -m pytest backend/tests/test_plan_runtime_macos.py backend/tests/test_plan_runtime_receipt.py backend/tests/test_plan_runtime_receipt_deletion.py backend/tests/test_plan_agent_runner.py backend/tests/test_process_identity.py backend/tests/test_api_projects.py backend/tests/test_git_credentials.py -q`
+
+覆盖无 procfs 的 Plan 准备、Darwin 微秒时钟与原生进程身份、按 UID 枚举、token 精确匹配、旧进程/其他用户过滤、权限拒绝/PID 复用/枚举截断保持 fail closed、Linux 时钟兼容。macOS 额外创建真实无模型子进程，验证 token 发现、进程组清理和 zombie 回收后的再次确认。项目凭据回归覆盖 SSH clone/fetch 注入；手动验证私有 GitHub 项目由 error 恢复 ready 后，重试失败 Plan 应产生正常 Step 和 runtime receipt。
+
 ### 系统资源面板
 
 `uv run python -m pytest backend/tests/test_system_metrics.py backend/tests/test_api_system.py -q` 覆盖无 `/proc` 环境、CPU 采样不阻塞事件循环、内存/swap 统计、零 swap 和缓存隔离/刷新。

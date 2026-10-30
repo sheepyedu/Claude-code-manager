@@ -193,6 +193,7 @@ claude-manager/
 ## 关键约定
 
 - **界面语言**：`frontend/src/config/language.ts` 保存浏览器级 `ccm-language`（`en` / `zh-CN`），`useLanguage()` 订阅切换；仅通过 `t()` 翻译界面文案，译表在 `config/translations/zh-CN.ts`，不得翻译用户输入、模型回复、代码、路径或 API 枚举值。新增界面文案应同步译表。
+- **Plan 跨平台进程身份**：`plan_runtime_receipt.py` 的 macOS 路径复用 `process_identity` 的 boot session / libproc PID 身份；启动边界统一为 Unix 微秒。恢复扫描先由内核按有效 UID 枚举，再校验 token、UID、PGID、启动时间和 boot；权限失败、PID 复用及枚举截断必须保留 cleanup 围栏，不能以忽略错误绕过。Linux 保留 procfs 契约。
 - **宿主资源监控**：`system_metrics.py` 用 psutil 原生计数器兼容 macOS/Linux，CPU 采样必须在线程执行，禁止依赖 Linux `/proc`；保留小时缓存与手动刷新契约。
 
 - **Claude 默认目录**: `CLAUDE_CONFIG_DIR` 可指定 CCM 专用目录；主任务 direct/PTY、无号池续聊与启动 onboarding 必须使用同一目录，账号池显式目录优先。启动仅原子准备本地 `.claude.json`，禁止发送模型预热请求或覆盖不合法/符号链接状态文件；未配置时保持原生目录语义。

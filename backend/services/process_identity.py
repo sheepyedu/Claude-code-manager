@@ -221,6 +221,34 @@ def read_process_identity(pid: int) -> ProcessIdentity | None:
     )
 
 
+def darwin_user_process_ids(uid: int) -> list[int]:
+    """Enumerate effective-UID candidates in the kernel, before privileged probes."""
+    if type(uid) is not int or uid < 0:
+        raise ProcessIdentityError("Invalid process enumeration UID")
+    function = _darwin_libproc().proc_listpids
+    function.argtypes = [ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_int]
+    function.restype = ctypes.c_int
+    # PROC_UID_ONLY=4; reserve spare slots and retry a saturated result rather
+    # than silently declaring an incomplete process list safe for cleanup.
+    ctypes.set_errno(0)
+    size = function(4, uid, None, 0)
+    if size <= 0:
+        raise ProcessIdentityError("Could not size Darwin user process list")
+    for _ in range(4):
+        capacity = size // ctypes.sizeof(ctypes.c_int) + 128
+        if capacity > 524288:
+            raise ProcessIdentityError("Darwin process list exceeded audit limit")
+        buffer = (ctypes.c_int * capacity)()
+        ctypes.set_errno(0)
+        used = function(4, uid, buffer, ctypes.sizeof(buffer))
+        if used <= 0 or used % ctypes.sizeof(ctypes.c_int):
+            raise ProcessIdentityError("Could not read Darwin user process list")
+        if used < ctypes.sizeof(buffer):
+            return [pid for pid in buffer[:used // ctypes.sizeof(ctypes.c_int)] if pid > 1]
+        size = ctypes.sizeof(buffer) * 2
+    raise ProcessIdentityError("Darwin user process list changed during enumeration")
+
+
 def _read_darwin_process_identity(pid: int) -> ProcessIdentity | None:
     info = _DarwinProcBsdInfo()
     expected_size = ctypes.sizeof(info)

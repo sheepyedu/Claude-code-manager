@@ -5,11 +5,14 @@ from __future__ import annotations
 import asyncio
 import os
 import signal
+import sys
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+import psutil
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
@@ -19,7 +22,10 @@ from backend.models.plan_agent import (
     PlanAgentStep,
 )
 from backend.services import process_identity
-from backend.services.process_safety import require_safe_process_group_id
+from backend.services.process_safety import (
+    UnsafeProcessGroupError,
+    require_safe_process_group_id,
+)
 
 
 _RUNTIME_TOKEN_ENV = "CCM_PLAN_RUNTIME_TOKEN"
@@ -343,6 +349,11 @@ def runtime_token_environment(snapshot: RuntimeReceiptSnapshot) -> dict[str, str
 
 
 def _read_boot_id() -> str:
+    if sys.platform == "darwin":
+        try:
+            return process_identity.darwin_boot_session_uuid()
+        except process_identity.ProcessIdentityError as exc:
+            raise PlanRuntimeReceiptError(str(exc)) from exc
     try:
         value = Path("/proc/sys/kernel/random/boot_id").read_text(
             encoding="utf-8"
@@ -355,8 +366,13 @@ def _read_boot_id() -> str:
 
 
 def _read_current_start_ticks() -> int:
-    """Return a conservative /proc start-time boundary for future children."""
+    """Return a boundary in the same units as the platform PID identity."""
 
+    if sys.platform == "darwin":
+        # libproc reports Unix microseconds, unlike Linux's boot clock ticks.
+        # Include one second of overlap for clock conversion/adjustment races;
+        # the random token still proves ownership of every candidate.
+        return max(0, time.time_ns() // 1_000 - 1_000_000)
     try:
         clock_ticks = int(os.sysconf("SC_CLK_TCK"))
         uptime_text = Path("/proc/uptime").read_text(encoding="utf-8").split()[0]
@@ -373,10 +389,35 @@ def _read_current_start_ticks() -> int:
 
 
 def read_process_identity(pid: int) -> ProcessIdentity | None:
-    """Read one exact Linux PID identity without following filesystem links."""
+    """Read one exact native PID identity, retaining UID/PGID/boot evidence."""
 
     if type(pid) is not int or pid <= 1:
         raise PlanRuntimeReceiptError(f"Unsafe Plan runtime PID {pid!r}")
+    if sys.platform == "darwin":
+        try:
+            identity = process_identity.read_process_identity(pid)
+        except process_identity.ProcessIdentityError as exc:
+            raise PlanRuntimeReceiptError(str(exc)) from exc
+        if identity is None:
+            return None
+        try:
+            group = require_safe_process_group_id(
+                identity.process_group_id, context="durable Plan runtime"
+            )
+        except UnsafeProcessGroupError as exc:
+            raise PlanRuntimeReceiptError(
+                f"Invalid Plan runtime group for PID {pid}"
+            ) from exc
+        if identity.uid is None or identity.state is None:
+            raise PlanRuntimeReceiptError(f"Incomplete Plan runtime identity for PID {pid}")
+        return ProcessIdentity(
+            pid=identity.pid,
+            process_group_id=group,
+            start_ticks=identity.start_ticks,
+            uid=identity.uid,
+            boot_id=identity.boot_id,
+            state=identity.state,
+        )
     proc_dir = Path("/proc") / str(pid)
     try:
         metadata = proc_dir.stat()
@@ -734,6 +775,59 @@ def _group_alive(process_group_id: int) -> bool:
         return True
 
 
+def _darwin_token_process_identities(
+    receipt: RuntimeReceiptSnapshot,
+) -> list[ProcessIdentity]:
+    """Audit native process environments; permission/race ambiguity stays closed."""
+    try:
+        pids = process_identity.darwin_user_process_ids(receipt.prepared_uid)
+    except (OSError, psutil.Error, process_identity.ProcessIdentityError) as exc:
+        raise PlanRuntimeReceiptError("Could not enumerate Darwin processes") from exc
+    matches: list[ProcessIdentity] = []
+    for pid in pids:
+        if pid <= 1:
+            continue
+        identity = read_process_identity(pid)
+        if (
+            identity is None
+            or identity.state in {"Z", "X"}
+            or identity.uid != receipt.prepared_uid
+            or identity.boot_id != receipt.prepared_boot_id
+            or identity.start_ticks < receipt.prepared_start_ticks
+        ):
+            continue
+        try:
+            environment = psutil.Process(pid).environ()
+        except (psutil.NoSuchProcess, psutil.ZombieProcess):
+            continue
+        except (OSError, psutil.Error) as exc:
+            current = read_process_identity(pid)
+            if current is None or current.state in {"Z", "X"}:
+                continue
+            raise PlanRuntimeReceiptError(
+                f"Could not prove Plan runtime token absence for live PID {pid}"
+            ) from exc
+        size = sum(
+            len(os.fsencode(k)) + len(os.fsencode(v)) + 2
+            for k, v in environment.items()
+        )
+        if size > _PROC_ENV_LIMIT:
+            raise PlanRuntimeReceiptError(
+                f"Process environment exceeded audit limit for PID {pid}"
+            )
+        if environment.get(_RUNTIME_TOKEN_ENV) != receipt.runtime_token:
+            continue
+        current = read_process_identity(pid)
+        if current is None or current.state in {"Z", "X"}:
+            continue
+        if current != identity:
+            raise PlanRuntimeReceiptError(
+                f"PID {pid} changed while auditing Plan runtime token"
+            )
+        matches.append(current)
+    return matches
+
+
 def _token_process_identities(
     receipt: RuntimeReceiptSnapshot,
 ) -> list[ProcessIdentity]:
@@ -744,6 +838,8 @@ def _token_process_identities(
         )
     if receipt.prepared_boot_id != _read_boot_id():
         return []
+    if sys.platform == "darwin":
+        return _darwin_token_process_identities(receipt)
     identities: list[ProcessIdentity] = []
     proc = Path("/proc")
     try:
