@@ -886,6 +886,11 @@ async def create_plan(
         None,
         base_config=await effective_plan_pipeline_config(db),
     )
+    if body.runtime_options is not None:
+        try:
+            pipeline = body.runtime_options.apply(pipeline)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
     context = await _capture_context_for_plan(
         db, target=target, target_repo=target_repo, worker_id=worker_id
     )

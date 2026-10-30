@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 PlanEffort = Literal["low", "medium", "high", "xhigh", "max", "ultra"]
 
@@ -15,6 +15,16 @@ class PlanModelRoute(BaseModel):
     provider: Literal["claude", "codex"]
     model: str = Field(min_length=1, max_length=100)
     effort: PlanEffort | None = None
+    # Omitted Standard keeps historical JSON snapshots byte-compatible.
+    codex_service_tier: Literal["default", "priority"] = Field(
+        default="default", exclude_if=lambda value: value == "default"
+    )
+
+    @model_validator(mode="after")
+    def validate_speed(self):
+        from backend.services.codex_models import validate_codex_service_tier
+        validate_codex_service_tier(self.provider, self.model, self.codex_service_tier)
+        return self
 
     @field_validator("provider", mode="before")
     @classmethod

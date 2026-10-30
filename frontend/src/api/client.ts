@@ -716,10 +716,16 @@ export interface FrontendReviewConfig {
   max_iterations: number;
 }
 
+export interface PlanRuntimeOptions {
+  planner?: { effort?: string | null; codex_service_tier?: CodexServiceTier };
+  reviewer?: { effort?: string | null; codex_service_tier?: CodexServiceTier };
+}
+
 export interface PlanModelRoute {
   provider: 'claude' | 'codex';
   model: string;
   effort: string | null;
+  codex_service_tier?: CodexServiceTier;
 }
 
 export interface PlanStageRoutes {
@@ -2383,6 +2389,7 @@ export const api = {
   retryTask: (id: number, expectedRouting?: TaskRoutingExpectation) =>
     request<Task>(`/api/tasks/${id}/retry`, { method: 'POST', body: JSON.stringify({ expected_routing: expectedRouting }) }),
   createPlan: (data: {
+    runtime_options?: PlanRuntimeOptions;
     input: string;
     title?: string;
     target_task_id?: number;

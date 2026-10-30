@@ -1139,8 +1139,9 @@ async def test_cancelled_pipeline_marks_active_step_cancelled(db_factory):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("service_tier", ["default", "priority"])
 async def test_codex_plan_uses_disposable_read_only_app_server_thread(
-    db_factory,
+    db_factory, service_tier,
 ):
     calls: list[str | None] = []
     deleted: list[tuple[str, str]] = []
@@ -1186,6 +1187,7 @@ async def test_codex_plan_uses_disposable_read_only_app_server_thread(
         home="/canonical/default-codex-home",
         model="gpt-5.6-sol",
         effort="xhigh",
+        codex_service_tier=service_tier,
         cwd="/tmp",
         prompt="plan safely",
         schema=PLANNER_SCHEMA,
@@ -1204,6 +1206,7 @@ async def test_codex_plan_uses_disposable_read_only_app_server_thread(
         ("/canonical/default-codex-home", "plan-thread")
     ]
     kwargs = registry.start_turn.await_args.kwargs
+    assert kwargs["codex_service_tier"] == service_tier
     assert kwargs["sandbox_mode"] == "read-only"
     assert kwargs["disable_project_config"] is True
     assert kwargs["disable_user_mcp"] is True

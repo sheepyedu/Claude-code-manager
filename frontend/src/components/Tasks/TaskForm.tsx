@@ -1,3 +1,4 @@
+import { RuntimeControls } from '../RuntimeControls';
 import { t as translateUI, useLanguage } from "../../config/language";
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { api } from '../../api/client';
@@ -92,6 +93,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
   const [effortOptions, setEffortOptions] = useState<string[]>([]);
   const [codexEffortOptions, setCodexEffortOptions] = useState<string[]>([]);
   // GPT-5.6 系列按模型区分档位（sol/terra 到 ultra，luna 到 max），未列出的模型用 codexEffortOptions
+  const [claudeModelEfforts, setClaudeModelEfforts] = useState<Record<string, string[]>>({});
   const [codexModelEfforts, setCodexModelEfforts] = useState<Record<string, string[]>>({});
   const [codexModelServiceTiers, setCodexModelServiceTiers] = useState<Record<string, CodexServiceTier[]>>({});
   const [codexCapabilitiesLoaded, setCodexCapabilitiesLoaded] = useState(false);
@@ -197,6 +199,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
       setEffortOptions(c.effort_options);
       setCodexEffortOptions(c.codex_effort_options || ['low', 'medium', 'high', 'xhigh']);
       setCodexModelEfforts(c.codex_model_efforts || {});
+      setClaudeModelEfforts(c.claude_model_efforts || {});
       setCodexModelServiceTiers(c.codex_model_service_tiers || {});
       setCodexCapabilitiesLoaded(true);
       const deliveryEnabled = c.delivery_loop_enabled === true;
@@ -446,7 +449,8 @@ export function TaskForm({ onCreated }: TaskFormProps) {
       if (pluginsRef.current && !pluginsRef.current.contains(e.target as Node)) {
         setShowPluginsDropdown(false);
       }
-      if (configRef.current && !configRef.current.contains(e.target as Node)) {
+      if (configRef.current && !configRef.current.contains(e.target as Node)
+        && !(e.target instanceof Element && e.target.closest('[data-runtime-controls]'))) {
         setShowConfigPanel(false);
       }
       if (skillsRef.current && !skillsRef.current.contains(e.target as Node)) {
@@ -488,7 +492,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
   const activeModelOptions = provider === 'codex' ? codexModelOptions : modelOptions;
   const activeEffortOptions = provider === 'codex'
     ? (codexModelEfforts[model || defaultCodexModel] ?? codexEffortOptions)
-    : effortOptions;
+    : (claudeModelEfforts[model || defaultModel] ?? effortOptions);
   const activeCodexModel = model || defaultCodexModel;
   const codexModelSupportsFast = (candidate: string) =>
     (codexModelServiceTiers[candidate] || []).includes('priority');
@@ -1004,6 +1008,12 @@ export function TaskForm({ onCreated }: TaskFormProps) {
           />
         </div>
       )}
+      {mode !== 'plan' && mode !== 'delivery_loop' && <RuntimeControls
+        provider={provider} effort={effort} serviceTier={codexServiceTier}
+        defaultEffort={defaultEffort} effortOptions={activeEffortOptions}
+        supportsFast={activeCodexModelSupportsFast}
+        fastUnavailableReason={codexCapabilitiesLoaded ? translateUI("{0} 不支持 Fast", [activeCodexModel]) : undefined}
+        onEffortChange={setEffort} onSpeedChange={setCodexServiceTier} />}
       {/* Bottom action row */}
       <div className="flex items-center gap-2 flex-wrap">
         {/* Attach files */}
@@ -1208,42 +1218,6 @@ export function TaskForm({ onCreated }: TaskFormProps) {
                     <option key={m} value={m}>{m}</option>
                   ))}
                 </select>
-
-                <span className="text-gray-400">{translateUI("Effort")}</span>
-                <select
-                  className="bg-gray-700 text-foreground rounded px-2 py-1 text-xs"
-                  value={effort}
-                  onChange={(e) => setEffort(e.target.value)}
-                >
-                  <option value="">{defaultEffort} {translateUI("(default)")}</option>
-                  {activeEffortOptions.filter((e) => e !== defaultEffort).map((e) => (
-                    <option key={e} value={e}>{e}</option>
-                  ))}
-                </select>
-
-                {provider === 'codex' && (
-                  <>
-                    <span className="text-gray-400">{translateUI("Speed")}</span>
-                    <select
-                      aria-label={translateUI("Codex speed")}
-                      className="bg-gray-700 text-foreground rounded px-2 py-1 text-xs"
-                      value={codexServiceTier}
-                      onChange={(e) => setCodexServiceTier(e.target.value as CodexServiceTier)}
-                    >
-                      <option value="default">{translateUI("Standard")}</option>
-                      <option value="priority" disabled={!activeCodexModelSupportsFast}>{translateUI("Fast")}</option>
-                    </select>
-                    <span
-                      className={`col-span-2 text-[10px] ${
-                        activeCodexModelSupportsFast ? 'text-amber-400/80' : 'text-gray-500'
-                      }`}
-                    >
-                      {activeCodexModelSupportsFast
-                        ? translateUI("Fast 约 1.5×，会消耗更多额度；实际计价取决于账号来源")
-                        : translateUI("{0} 不支持 Fast", [activeCodexModel])}
-                    </span>
-                  </>
-                )}
 
                 {/* Thinking 预算走 MAX_THINKING_TOKENS，claude 专属
                     （codex 的推理强度就是上面的 Effort）——codex 下隐藏幽灵选项 */}

@@ -1,3 +1,4 @@
+import { TaskRuntimeControls } from '../Tasks/TaskRuntimeControls';
 import { t as translateUI, useLanguage } from "../../config/language";
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import type { Components } from 'react-markdown';
@@ -3830,6 +3831,8 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
             </div>
           )}
           <div className="space-y-1.5">
+          <TaskRuntimeControls task={task} onUpdated={(updated) => onTaskUpdated?.(updated)}
+            disabled={isProcessing || injecting || frontendReviewComposerMode || workspaceReviewComposerMode} />
           {/* Row 1: action buttons */}
           <div className="flex gap-1 items-center">
             <input

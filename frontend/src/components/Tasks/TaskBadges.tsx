@@ -9,9 +9,9 @@ const ACTIVE_PLAN_STATUSES = new Set(['in_progress', 'executing']);
 
 function routeDescription(
   label: string,
-  route: { provider: string; model: string; effort: string | null },
+  route: { provider: string; model: string; effort: string | null; codex_service_tier?: CodexServiceTier },
 ): string {
-  return `${label}: ${route.provider} / ${route.model}${route.effort ? ` / ${route.effort}` : ''}`;
+  return `${label}: ${route.provider} / ${route.model}${route.effort ? ` / ${route.effort}` : ''} / ${route.codex_service_tier === 'priority' ? 'Fast' : 'Standard'}`;
 }
 
 /** Read-only Plan routing badge. A running Plan shows the concrete current
@@ -612,7 +612,7 @@ export function TaskConfigBadge({ task, onRefresh, openUp, align }: { task: Task
           {isCodex && (
             <div className={`mt-2 text-[10px] ${codexModelSupportsFast ? 'text-amber-400/80' : 'text-gray-500'}`}>
               {codexModelSupportsFast
-                ? translateUI("Fast 约 1.5×，会消耗更多额度；实际计价取决于账号来源")
+                ? translateUI("Fast uses more quota")
                 : translateUI("{0} 不支持 Fast", [resolvedCodexModel || '当前模型'])}
             </div>
           )}

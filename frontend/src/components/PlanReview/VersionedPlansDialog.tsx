@@ -1,3 +1,5 @@
+import { PlanRuntimeFields } from './PlanRuntimeFields';
+import type { PlanRuntimeOptions } from '../../api/client';
 import { t as translateUI, useLanguage } from "../../config/language";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -22,6 +24,7 @@ export function VersionedPlansDialog({ open, taskId, refreshGeneration = 0, sele
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [requestText, setRequestText] = useState('');
+  const [runtimeOptions, setRuntimeOptions] = useState<PlanRuntimeOptions>({});
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +74,7 @@ export function VersionedPlansDialog({ open, taskId, refreshGeneration = 0, sele
     if (!requestText.trim() || busy || uploads.isUploading || uploads.hasFailed) return;
     setBusy(true); setError(null);
     try {
-      await api.createPlan({ input: requestText.trim(), target_task_id: taskId, ...uploadPayload(uploads.uploadedResults) });
+      await api.createPlan({ input: requestText.trim(), target_task_id: taskId, ...(Object.keys(runtimeOptions).length ? { runtime_options: runtimeOptions } : {}), ...uploadPayload(uploads.uploadedResults) });
       setRequestText(''); uploads.clear(); await refresh();
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
     finally { setBusy(false); }
@@ -86,6 +89,7 @@ export function VersionedPlansDialog({ open, taskId, refreshGeneration = 0, sele
         <div className="border-b border-gray-800 p-4 pr-16"><div className="flex items-center gap-2 text-sm font-semibold text-gray-100"><ListTodo size={16} className="text-indigo-300" /> {translateUI("Plans ")}<span className="text-xs font-normal text-gray-500">{translateUI("Task #")}{taskId}</span></div>
           <form ref={createForm} data-attachment-paste-target="plan-create" className="mt-3 space-y-2" onSubmit={(event) => { event.preventDefault(); void create(); }}><fieldset disabled={busy} className="space-y-2"><textarea value={requestText} onChange={(event) => setRequestText(event.target.value)} rows={4} maxLength={200000} placeholder={translateUI("Create an independent Plan…")} className="w-full resize-none rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 outline-none focus:border-indigo-500" />
             {uploads.uploads.length > 0 && <div className="flex flex-wrap gap-1.5">{uploads.uploads.map((item) => <span key={item.id} className="flex items-center gap-1 rounded border border-gray-700 px-2 py-1 text-[10px] text-gray-400">{item.preview && <img src={item.preview} alt="" className="h-7 w-7 rounded object-cover" />}<span className="max-w-32 truncate">{item.file?.name || item.result?.filename || translateUI("file")}</span>{item.status === 'uploading' && <Loader2 size={10} className="animate-spin" />}<button type="button" onClick={() => uploads.removeFile(item.id)} className="rounded p-0.5 transition-colors hover:bg-gray-800 hover:text-gray-200"><X size={10} /></button></span>)}</div>}
+            <PlanRuntimeFields value={runtimeOptions} onChange={setRuntimeOptions} disabled={busy} />
             <div className="flex items-center justify-between"><input ref={fileInput} type="file" multiple className="hidden" onChange={(event) => { addPlanFiles(Array.from(event.target.files || []), setError); event.target.value = ''; }} /><button type="button" onClick={() => fileInput.current?.click()} className="rounded-lg border border-gray-700 p-2 text-gray-400 transition-colors hover:border-gray-600 hover:bg-gray-800 hover:text-gray-200" aria-label={translateUI("Attach Plan files")}><Paperclip size={13} /></button><button type="submit" disabled={!requestText.trim() || uploads.isUploading || uploads.hasFailed} className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 disabled:pointer-events-none disabled:opacity-40">{translateUI("Create Plan")}</button></div></fieldset></form>
         </div>
         <div className="flex gap-1 overflow-x-auto border-b border-gray-800 px-3 py-2">{filters.map((item) => <button key={item.id} type="button" onClick={() => setFilter(item.id)} className={`rounded-full px-2 py-1 text-[10px] transition-colors ${filter === item.id ? 'bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30' : 'text-gray-500 hover:bg-gray-800 hover:text-gray-300'}`}>{translateUI(item.label)} {plans.filter((plan) => filterPlan(plan, item.id)).length}</button>)}</div>

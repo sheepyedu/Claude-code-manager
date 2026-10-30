@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from backend.schemas.plan import PlanPipelineConfig
+from backend.schemas.plan import PlanEffort, PlanPipelineConfig
 
 
 class PlanQuestionOption(BaseModel):
@@ -39,6 +39,33 @@ class PlanQuestion(BaseModel):
         return self
 
 
+class PlanRouteRuntimeOptions(BaseModel):
+    """Per-creation tuning only; provider/model routing stays globally controlled."""
+
+    model_config = ConfigDict(extra="forbid")
+    effort: PlanEffort | None = None
+    codex_service_tier: Literal["default", "priority"] | None = None
+
+
+class PlanRuntimeOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    planner: PlanRouteRuntimeOptions | None = None
+    reviewer: PlanRouteRuntimeOptions | None = None
+
+    def apply(self, pipeline: PlanPipelineConfig) -> PlanPipelineConfig:
+        payload = pipeline.model_dump(mode="json")
+        for stage in ("planner", "reviewer"):
+            options = getattr(self, stage)
+            if options is None:
+                continue
+            route = payload[stage]["primary"]
+            if options.effort is not None:
+                route["effort"] = options.effort
+            if options.codex_service_tier is not None:
+                route["codex_service_tier"] = options.codex_service_tier
+        return PlanPipelineConfig.model_validate(payload)
+
+
 class PlanCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -50,6 +77,7 @@ class PlanCreateRequest(BaseModel):
     target_branch: str | None = Field(default=None, max_length=200)
     worker_id: int | None = None
     priority: int = 0
+    runtime_options: PlanRuntimeOptions | None = None
     timeout_hours: float | None = Field(default=None, ge=0)
     file_paths: list[str] | None = None
     image_paths: list[str] | None = None

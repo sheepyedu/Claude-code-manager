@@ -1,7 +1,8 @@
+import { PlanRuntimeFields } from './PlanRuntimeFields';
 import { t as translateUI, useLanguage } from "../../config/language";
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { api, type PlanResource, type Project, type TagItem } from '../../api/client';
+import { api, type PlanResource, type PlanRuntimeOptions, type Project, type TagItem } from '../../api/client';
 import { useFileDrop } from '../../hooks/useFileDrop';
 import { useFileUpload } from '../../hooks/useFileUpload';
 import { ProjectSelect } from '../ProjectSelect';
@@ -19,6 +20,7 @@ export function PlanCreateForm({ onCreated, onNavigateSettings }: Props) {
   useLanguage();
   const ccUser = JSON.parse(localStorage.getItem('cc_user') || '{}');
   const isAdmin = ccUser.role === 'admin' || ccUser.role === 'super_admin' || !ccUser.id;
+  const [runtimeOptions, setRuntimeOptions] = useState<PlanRuntimeOptions>({});
   const [title, setTitle] = useState('');
   const [request, setRequest] = useState('');
   const [projectId, setProjectId] = useState<number | ''>('');
@@ -112,6 +114,7 @@ export function PlanCreateForm({ onCreated, onNavigateSettings }: Props) {
       const results = uploads.uploadedResults;
       const plan = await api.createPlan({
         input: request.trim(),
+        ...(Object.keys(runtimeOptions).length ? { runtime_options: runtimeOptions } : {}),
         ...(title.trim() ? { title: title.trim() } : {}),
         project_id: selectedProjectId as number,
         priority,
@@ -171,6 +174,7 @@ export function PlanCreateForm({ onCreated, onNavigateSettings }: Props) {
       <div className="flex justify-end gap-2"><input ref={fileInputRef} type="file" multiple className="hidden" onChange={(event) => { addFiles(Array.from(event.target.files || []), setDropError); event.target.value = ''; }} /><button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg border border-gray-600 p-2 text-gray-400 hover:text-gray-200" aria-label={translateUI("Attach Plan files")}><Paperclip size={14} /></button><button type="submit" disabled={!canSubmit} className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-40">{busy ? translateUI("Creating…") : translateUI("Create Plan")}</button></div>
     </div>
     {isNewProject && <div className="grid gap-2 sm:grid-cols-2"><input value={newProjectName} onChange={(event) => setNewProjectName(event.target.value)} required placeholder={translateUI("Project name")} className="rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100" /><input value={newProjectUrl} onChange={(event) => setNewProjectUrl(event.target.value)} placeholder={translateUI("Git URL (optional)")} className="rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100" /></div>}
-    <p className="text-[11px] text-gray-500">{translateUI("Planner and Reviewer routes come from global Settings and are frozen when the Plan is created. Attachments and Plan text are stored durably; use Secrets by reference rather than pasting credentials.")}</p>
+    <PlanRuntimeFields value={runtimeOptions} onChange={setRuntimeOptions} disabled={busy} />
+    <p className="text-[11px] text-gray-500">{translateUI("Planner and Reviewer models come from global Settings. Speed and reasoning choices are frozen with this Plan. Attachments and Plan text are stored durably; use Secrets by reference.")}</p>
   </form>;
 }

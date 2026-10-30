@@ -1,3 +1,4 @@
+import { RuntimeControls } from '../RuntimeControls';
 import { t as translateUI, useLanguage } from "../../config/language";
 import { useState } from 'react';
 
@@ -77,8 +78,8 @@ export function PlanPipelineFields({
     return (
       <div className={`grid gap-2 ${
         compact
-          ? 'grid-cols-1 sm:grid-cols-3'
-          : 'grid-cols-1 sm:grid-cols-[8rem_1fr_7rem]'
+          ? 'grid-cols-1 sm:grid-cols-2'
+          : 'grid-cols-1 sm:grid-cols-2'
       }`}>
         <select
           aria-label={translateUI("{0} provider", [label])}
@@ -105,26 +106,21 @@ export function PlanPipelineFields({
           onChange={(event) => updateRoute(stage, slot, {
             ...route,
             model: event.target.value,
+            codex_service_tier: (systemConfig?.codex_model_service_tiers?.[event.target.value] || []).includes('priority')
+              ? route.codex_service_tier || 'default' : 'default',
           })}
         >
           {uniqueModels.map((model) => (
             <option key={model} value={model}>{model}</option>
           ))}
         </select>
-        <select
-          aria-label={translateUI("{0} effort", [label])}
-          className="rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs text-gray-100"
-          value={route.effort || ''}
-          onChange={(event) => updateRoute(stage, slot, {
-            ...route,
-            effort: event.target.value || null,
-          })}
-        >
-          <option value="">{translateUI("default")}</option>
-          {uniqueEfforts.map((effort) => (
-            <option key={effort} value={effort}>{effort}</option>
-          ))}
-        </select>
+        <div className="sm:col-span-2"><RuntimeControls provider={route.provider} effort={route.effort}
+          defaultEffort={systemConfig?.default_effort} effortOptions={uniqueEfforts}
+          serviceTier={route.codex_service_tier || 'default'}
+          supportsFast={(systemConfig?.codex_model_service_tiers?.[route.model] || []).includes('priority')}
+          effortLabel={`${label} effort`} speedLabel={`${label} speed`}
+          onEffortChange={(effort) => updateRoute(stage, slot, { ...route, effort: effort || null })}
+          onSpeedChange={(tier) => updateRoute(stage, slot, { ...route, codex_service_tier: tier })} /></div>
       </div>
     );
   };

@@ -1306,6 +1306,7 @@ class PlanAgentRunner:
         *,
         provider: str,
         model: str,
+        codex_service_tier: str = "default",
         exclude: set[str] | None = None,
     ) -> tuple[str | None, str | None]:
         excluded = exclude or set()
@@ -1320,7 +1321,7 @@ class PlanAgentRunner:
             home = self.codex_pool.select(
                 exclude=excluded,
                 model=model,
-                service_tier="default",
+                service_tier=codex_service_tier,
             )
             if not home:
                 raise PlanRouteUnavailable(
@@ -1395,6 +1396,7 @@ class PlanAgentRunner:
         provider: str,
         home: str | None,
         model: str,
+        codex_service_tier: str = "default",
     ):
         cloudrouter_api = _is_cloudrouter_projection(
             self.cloudrouter_store,
@@ -1406,6 +1408,10 @@ class PlanAgentRunner:
                 provider,
                 home,
                 model,
+                **(
+                    {"service_tier": codex_service_tier}
+                    if codex_service_tier != "default" else {}
+                ),
             )
             if cloudrouter_api
             else _null_async_context()
@@ -1869,6 +1875,7 @@ class PlanAgentRunner:
         home: str,
         model: str,
         effort: str | None,
+        codex_service_tier: str = "default",
         cwd: str,
         prompt: str,
         schema: dict,
@@ -1932,7 +1939,7 @@ class PlanAgentRunner:
                     disable_project_config=True,
                     disable_user_mcp=True,
                     skill_context="",
-                    codex_service_tier="default",
+                    codex_service_tier=codex_service_tier,
                     sandbox_mode="read-only",
                     task_ssh_protected_paths=protected_paths,
                     task_git_read_paths=task_git_read_paths,
@@ -2202,6 +2209,7 @@ class PlanAgentRunner:
         provider: str,
         model: str,
         effort: str | None,
+        codex_service_tier: str = "default",
         cwd: str,
         prompt: str,
         schema: dict,
@@ -2229,6 +2237,7 @@ class PlanAgentRunner:
                 provider=provider,
                 model=model,
                 effort=effort,
+                codex_service_tier=codex_service_tier,
                 cwd=cwd,
                 prompt=prompt,
                 schema=schema,
@@ -2268,6 +2277,7 @@ class PlanAgentRunner:
         provider: str,
         model: str,
         effort: str | None,
+        codex_service_tier: str = "default",
         cwd: str,
         prompt: str,
         schema: dict,
@@ -2286,6 +2296,7 @@ class PlanAgentRunner:
             provider=provider,
             home=home,
             model=model,
+            codex_service_tier=codex_service_tier,
         ) as (admitted_home, cloudrouter_api):
             if admitted_home:
                 env[
@@ -2340,6 +2351,7 @@ class PlanAgentRunner:
                         home=admitted_home,
                         model=model,
                         effort=effort,
+                        codex_service_tier=codex_service_tier,
                         cwd=cwd,
                         prompt=prompt,
                         schema=schema,
@@ -2678,6 +2690,7 @@ class PlanAgentRunner:
                 home, account_id = self._select_home(
                     provider=route.provider,
                     model=route.model,
+                    codex_service_tier=route.codex_service_tier,
                     exclude=excluded,
                 )
             except PlanRouteUnavailable as exc:
@@ -2693,6 +2706,7 @@ class PlanAgentRunner:
                     provider=route.provider,
                     model=route.model,
                     effort=route.effort,
+                    codex_service_tier=route.codex_service_tier,
                     cwd=cwd,
                     prompt=prompt,
                     schema=schema,

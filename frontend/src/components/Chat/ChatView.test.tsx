@@ -387,6 +387,34 @@ describe('ChatView', () => {
     });
   });
 
+  it('persists visible composer speed and effort without losing an unsent draft', async () => {
+    const originalConfig = vi.mocked(api.config).getMockImplementation();
+    const originalUpdate = vi.mocked(api.updateTask).getMockImplementation();
+    const task = makeTask({ provider: 'codex', model: 'gpt-6.1-sol', status: 'completed', effort_level: 'medium' });
+    vi.mocked(api.config).mockResolvedValue({ model_options: [], codex_model_options: ['gpt-6.1-sol'],
+      default_effort: 'medium', codex_effort_options: ['low', 'medium', 'high'],
+      codex_model_efforts: { 'gpt-6.1-sol': ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'] },
+      codex_model_service_tiers: { 'gpt-6.1-sol': ['default', 'priority'] },
+    } as never);
+    const updated = { ...task, codex_service_tier: 'priority' as const };
+    vi.mocked(api.updateTask).mockResolvedValue(updated);
+    try {
+      const { container } = render(<ChatView task={task} projects={projects} onBack={onBack} onTaskUpdated={onTaskUpdated} />);
+      const speed = await screen.findByRole('combobox', { name: 'Codex speed' });
+      await waitFor(() => expect(speed).toBeEnabled());
+      const composer = container.querySelector('textarea')!;
+      fireEvent.change(composer, { target: { value: 'unsent research question' } });
+      await userEvent.selectOptions(speed, 'priority');
+      await waitFor(() => expect(api.updateTask).toHaveBeenCalledWith(task.id, { codex_service_tier: 'priority' }));
+      expect(onTaskUpdated).toHaveBeenCalledWith(updated);
+      expect(composer).toHaveValue('unsent research question');
+      expect(screen.getByRole('combobox', { name: 'Reasoning effort' })).toHaveValue('medium');
+    } finally {
+      vi.mocked(api.config).mockImplementation(originalConfig!);
+      vi.mocked(api.updateTask).mockImplementation(originalUpdate!);
+    }
+  });
+
   it('refreshes the Task projection when a native sub-agent changes state', async () => {
     render(
       <ChatView
