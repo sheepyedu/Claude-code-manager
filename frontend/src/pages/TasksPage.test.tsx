@@ -2,7 +2,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TasksPage } from './TasksPage';
-import { api } from '../api/client';
+import { api, type Task } from '../api/client';
 
 let capturedGlobalWs:
   | ((message: Record<string, unknown>) => void)
@@ -66,24 +66,8 @@ vi.mock('../components/Tasks/TaskList', () => ({
     tasks,
     onTaskUpdated,
   }: {
-    tasks: Array<{
-      id: number;
-      status: string;
-      background_active?: boolean;
-      active_sub_agents?: number;
-      plan_stage?: string | null;
-      plan_stage_round?: number | null;
-      plan_stage_provider?: string | null;
-      plan_stage_model?: string | null;
-      plan_stage_route_slot?: string | null;
-      attention_tag?: string | null;
-    }>;
-    onTaskUpdated?: (task: {
-      id: number;
-      status: string;
-      background_active?: boolean;
-      attention_tag?: string | null;
-    }) => void;
+    tasks: Task[];
+    onTaskUpdated?: (task: Task) => void;
   }) => (
     <div data-testid="task-snapshots">
       {tasks.map((task) => (
@@ -97,6 +81,7 @@ vi.mock('../components/Tasks/TaskList', () => ({
           <span data-testid={`plan-route-${task.id}`}>
             {task.plan_stage_provider || 'none'}:{task.plan_stage_model || 'none'}:{task.plan_stage_route_slot || 'none'}
           </span>
+          <span data-testid={`runtime-${task.id}`}>{task.effort_level}:{task.codex_service_tier}</span>
           <span data-testid={`attention-tag-${task.id}`}>
             {task.attention_tag ?? ''}
           </span>
@@ -107,6 +92,8 @@ vi.mock('../components/Tasks/TaskList', () => ({
       ))}
       {tasks[0] && onTaskUpdated && (
         <>
+          <button onClick={() => onTaskUpdated({ ...tasks[0], effort_level: 'max', codex_service_tier: 'priority', status: 'pending', background_active: false })}>Simulate runtime update</button>
+          <button onClick={() => onTaskUpdated({ ...tasks[0], effort_level: 'ultra', codex_service_tier: 'priority', turn_generation: -1 })}>Simulate stale runtime update</button>
           <button onClick={() => onTaskUpdated({ ...tasks[0], attention_tag: '新增标签' })}>
             Simulate add attention tag
           </button>
@@ -424,6 +411,25 @@ describe('TasksPage realtime reconciliation', () => {
     await userEvent.click(screen.getByRole('button', { name: /Filter/ }));
     expect(screen.queryByText('Standalone Plans')).not.toBeInTheDocument();
     expect(screen.queryByText('Related Plans')).not.toBeInTheDocument();
+  });
+
+  it('reconciles saved runtime controls without overwriting newer WS lifecycle fields', async () => {
+    vi.mocked(api.listTasks).mockResolvedValue([{ ...task, provider: 'codex', model: 'gpt-6.1-sol', retry_count: 0, turn_generation: 2, effort_level: 'medium', codex_service_tier: 'default' }] as never);
+    render(<TasksPage chatTaskId={null} onChatTaskChange={vi.fn()} />);
+    const runtime = await screen.findByTestId('runtime-7');
+    expect(runtime).toHaveTextContent('medium:default');
+    act(() => capturedGlobalWs?.({ channel: 'tasks', data: { event: 'background_activity', task_id: 7, background_active: true } }));
+    await userEvent.click(screen.getByText('Simulate runtime update'));
+    expect(runtime).toHaveTextContent('max:priority');
+    expect(screen.getByText('7:pending:true')).toBeInTheDocument();
+  });
+
+  it('does not apply a runtime response from an older turn generation', async () => {
+    vi.mocked(api.listTasks).mockResolvedValue([{ ...task, provider: 'codex', model: 'gpt-6.1-sol', retry_count: 0, turn_generation: 2, effort_level: 'medium', codex_service_tier: 'default' }] as never);
+    render(<TasksPage chatTaskId={null} onChatTaskChange={vi.fn()} />);
+    const runtime = await screen.findByTestId('runtime-7');
+    await userEvent.click(screen.getByText('Simulate stale runtime update'));
+    expect(runtime).toHaveTextContent('medium:default');
   });
 
   it('places search directly after Filter and before Projects', async () => {

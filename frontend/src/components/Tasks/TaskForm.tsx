@@ -1008,7 +1008,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
           />
         </div>
       )}
-      {mode !== 'plan' && mode !== 'delivery_loop' && <RuntimeControls
+      {mode !== 'plan' && <RuntimeControls
         provider={provider} effort={effort} serviceTier={codexServiceTier}
         defaultEffort={defaultEffort} effortOptions={activeEffortOptions}
         supportsFast={activeCodexModelSupportsFast}

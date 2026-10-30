@@ -192,7 +192,7 @@ claude-manager/
 
 ## 关键约定
 
-- **速度与推理强度**：聊天输入区与新任务表单使用 `RuntimeControls`，空闲 Task 通过原有 updateTask API 保存下一轮路由。速度持久值为 `default` / `priority`，默认标准；Fast 仅显示在模型 capability 允许的 Codex 路由。Plan 的每条 `PlanModelRoute.codex_service_tier` 随 pipeline JSON 冻结，账号选择、API admission 和 app-server 必须使用同一值；独立/关联 Plan 创建仅允许 `runtime_options.planner/reviewer` 覆盖主要路由的 effort/tier，不能借此修改全局 provider/model 或备用策略。
+- **速度与推理强度**：聊天输入区与新任务表单使用 `RuntimeControls`，空闲 Task 通过原有 updateTask API 保存下一轮路由；保存回显仅合并相同执行代次的 effort/tier，禁止用 PUT 回包覆盖更新的 WebSocket 生命周期状态。速度持久值为 `default` / `priority`，默认标准；Fast 仅显示在模型 capability 允许的 Codex 路由。Plan 的每条 `PlanModelRoute.codex_service_tier` 随 pipeline JSON 冻结，账号选择、API admission 和 app-server 必须使用同一值；独立/关联 Plan 创建仅允许 `runtime_options.planner/reviewer` 覆盖主要路由的 effort/tier，不能借此修改全局 provider/model 或备用策略。
 - **界面语言**：`frontend/src/config/language.ts` 保存浏览器级 `ccm-language`（`en` / `zh-CN`），`useLanguage()` 订阅切换；仅通过 `t()` 翻译界面文案，译表在 `config/translations/zh-CN.ts`，不得翻译用户输入、模型回复、代码、路径或 API 枚举值。新增界面文案应同步译表。
 - **Plan provider 准入**：Claude 隔离未启用时必须省略 `--settings`，不得将 `None` 转为路径；Codex 只读策略的唯一可写 scratch 回包按 canonical path 对齐 macOS `/tmp` 与 `/private/tmp`，保留请求前后的 inode 围栏以及 profile/network/唯一写根校验。
 - **Plan 跨平台进程身份**：`plan_runtime_receipt.py` 的 macOS 路径复用 `process_identity` 的 boot session / libproc PID 身份；启动边界统一为 Unix 微秒。恢复扫描先由内核按有效 UID 枚举，再校验 token、UID、PGID、启动时间和 boot；权限失败、PID 复用及枚举截断必须保留 cleanup 围栏，不能以忽略错误绕过。Linux 保留 procfs 契约。

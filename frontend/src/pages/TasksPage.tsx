@@ -72,11 +72,24 @@ export function TasksPage({ chatTaskId, onChatTaskChange }: TasksPageProps) {
   }, [onChatTaskChange]);
 
   const applyReturnedTaskUpdate = useCallback((updated: Task) => {
-    // This callback currently handles the attention-tag editor. Patch only the
-    // returned field so a PUT response cannot overwrite a newer WS status.
-    const patchTask = (task: Task): Task => task.id === updated.id
-      ? { ...task, attention_tag: updated.attention_tag }
-      : task;
+    // Merge only saved fields. A delayed PUT must never overwrite newer WS
+    // lifecycle state or apply runtime options to another execution generation.
+    const patchTask = (task: Task): Task => {
+      if (task.id !== updated.id) return task;
+      const sameGeneration = Number.isInteger(updated.turn_generation)
+        && updated.turn_generation === task.turn_generation
+        && updated.retry_count === task.retry_count
+        && updated.provider === task.provider
+        && updated.model === task.model;
+      return {
+        ...task,
+        attention_tag: updated.attention_tag,
+        ...(sameGeneration ? {
+          effort_level: updated.effort_level,
+          codex_service_tier: updated.codex_service_tier,
+        } : {}),
+      };
+    };
     const patchList = (list: Task[]): Task[] => list.map(patchTask);
 
     setTasks(patchList);

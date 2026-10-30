@@ -33,9 +33,9 @@ cd frontend && npx tsc --noEmit
 
 覆盖 GPT-6 系列能力表、默认 Standard、拒绝 Claude/不支持模型的 Fast、Plan runtime override 不可改模型、路由冻结、账号选择和 app-server 接收相同 speed/effort，以及旧 Plan 快照兼容。
 
-`cd frontend && npx vitest run src/components/Tasks/TaskRuntimeControls.test.tsx src/components/Tasks/TaskForm.test.tsx src/components/Tasks/TaskBadges.test.tsx src/components/PlanReview/PlanCreateForm.test.tsx src/components/Chat/ChatView.test.tsx`
+`cd frontend && npx vitest run src/components/Tasks/TaskRuntimeControls.test.tsx src/components/Tasks/TaskForm.test.tsx src/components/Tasks/TaskBadges.test.tsx src/components/PlanReview/PlanCreateForm.test.tsx src/components/Chat/ChatView.test.tsx src/pages/TasksPage.test.tsx`
 
-覆盖新任务默认标准/保存快速/切换模型回退、聊天草稿在保存设置后保留、任务执行或共享时不可修改、保存失败保持原值、Plan 创建提交独立 planner/reviewer 设置。手动验证中文桌面和窄屏入口、刷新后当前 Task 路由保持、计划详情显示冻结速度；浏览器验证应拦截更新/创建请求，不触发测试模型费用。
+覆盖新任务默认标准/保存快速/切换模型回退、聊天草稿在保存设置后保留、任务执行或共享时不可修改、保存回显保留更新的 WS 状态并拒绝过期执行代次、保存失败保持原值、Plan 创建提交独立 planner/reviewer 设置。手动验证中文桌面和窄屏入口、刷新后当前 Task 路由保持、计划详情显示冻结速度；浏览器验证应拦截更新/创建请求，不触发测试模型费用。
 
 ### 语言切换
 
