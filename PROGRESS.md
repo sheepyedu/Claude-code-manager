@@ -2,6 +2,14 @@
 
 > **重要：Claude 必须自主维护本文件。** 每次完成重要改动或遇到问题后，在对应章节记录。每条记录必须附上 git commit ID。
 
+## 2026-10-30 — macOS 独立计划启动与 GitHub 拉取恢复
+
+- **问题**：独立计划准备阶段直接读取 Linux boot/uptime/proc 身份；修复后真实启动又暴露 Codex 将 `/tmp` scratch 规范化成 `/private/tmp` 导致字符串比对误拒绝，以及 Claude 隔离关闭时传入 `--settings None`。项目私有仓库使用无凭据 HTTPS，后台 clone 无法输入用户名。
+- **修复**：Darwin 使用共享 boot-session/libproc 身份、Unix 微秒边界和内核有效 UID 枚举，psutil 原生读取候选环境并复验 token/PID/PGID/UID/start/boot，拒绝权限不明、身份漂移及不完整枚举；Linux 保留原路径。只读 Codex 回包按 canonical scratch leaf 校验，保留唯一写根、网络和 inode 围栏；Claude 无隔离配置时省略 settings 参数。本机项目经 API 改为 SSH 地址并复用已授权的专用 GitHub 密钥，重新拉取恢复 ready；私钥与部署配置不入库。
+- **验证**：核心 Plan/进程身份/项目/Git 凭据 181 passed；Codex 隔离相关 22 passed/2 failed，两项失败在修复前版本同样复现（ambient skills inventory 断言）；包含 recovery 的套件由基线 88 passed/40 failed 改善为 137 passed/1 failed，剩余调度时序失败同样存在于基线。全量后端仍停在既有 Alembic downgrade trigger 失败（141 passed/1 failed）；前端 TypeScript 通过。12 项平台回归含真实 macOS 子进程 token 发现和清理；真实 Codex app-server 通过启动前隔离 proof（探针阻止模型请求）。部署后原失败 Plan 重试 Run #4 的 gpt-6-astra planner 已成功完成，进入 waiting_user 等待需求确认，runtime receipt 已 cleaned。
+- **避免复发**：平台标识、启动时间和恢复扫描必须使用同一平台契约；不能只修 boot UUID 而留下 `/proc` 枚举。原生临时路径应比较 canonical identity，同时保留目录 inode 与策略证明；可选参数不得无条件 `str(None)`。
+- **Git commits**：`b33a3f76`、`dc7c2323`。
+
 ## 2026-10-30 — macOS 资源监控与中文界面
 
 - **问题**：系统资源接口直接读取 Linux `/proc/stat` 和 `/proc/meminfo`，macOS 仪表盘返回 500；界面缺少统一语言选项。
