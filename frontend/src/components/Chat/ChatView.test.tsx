@@ -564,6 +564,26 @@ describe('ChatView', () => {
     expect(screen.getByText('Plans').className).toContain('sm:inline');
   }, 15_000);
 
+  it('uses Shift+Enter for a newline and Enter to send, without submitting IME confirmation', async () => {
+    const task = makeTask({ status: 'completed' });
+    render(<ChatView task={task} projects={projects} onBack={onBack} />);
+
+    const composer = screen.getByPlaceholderText('Type a follow-up message...');
+    await userEvent.type(composer, '第一行');
+    fireEvent.keyDown(composer, { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(composer, { key: 'Enter', keyCode: 229 });
+    await userEvent.keyboard('{Shift>}{Enter}{/Shift}第二行');
+
+    expect(composer).toHaveValue('第一行\n第二行');
+    expect(api.sendTaskChat).not.toHaveBeenCalled();
+
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(api.sendTaskChat).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.sendTaskChat).mock.calls[0].slice(0, 2)).toEqual([
+      task.id, '第一行\n第二行',
+    ]);
+  });
+
   describe('chat conflict state', () => {
     it('does not show Interrupt for a non-busy 409 rejection', async () => {
       const rejection = Object.assign(
@@ -580,7 +600,7 @@ describe('ChatView', () => {
       );
 
       await userEvent.type(screen.getByRole('textbox'), 'follow up');
-      await userEvent.click(screen.getByTitle('Send (Ctrl+Enter)'));
+      await userEvent.click(screen.getByTitle('Send (Enter)'));
 
       await screen.findByText(/PR review workflow is not terminal/);
       expect(screen.queryByTitle('Interrupt session')).not.toBeInTheDocument();
@@ -601,7 +621,7 @@ describe('ChatView', () => {
       );
 
       await userEvent.type(screen.getByRole('textbox'), 'follow up');
-      await userEvent.click(screen.getByTitle('Send (Ctrl+Enter)'));
+      await userEvent.click(screen.getByTitle('Send (Enter)'));
 
       expect(await screen.findByTitle('Interrupt session')).toBeInTheDocument();
     });
@@ -653,7 +673,7 @@ describe('ChatView', () => {
       );
 
       await userEvent.type(screen.getByRole('textbox'), 'pending legacy echo');
-      await userEvent.click(screen.getByTitle('Send (Ctrl+Enter)'));
+      await userEvent.click(screen.getByTitle('Send (Enter)'));
       await waitFor(() => expect(api.sendTaskChat).toHaveBeenCalled());
       expect(screen.getByText('pending legacy echo')).toBeInTheDocument();
 
@@ -1223,7 +1243,7 @@ describe('ChatView', () => {
         />,
       );
       expect(screen.queryByTitle('Interrupt session')).not.toBeInTheDocument();
-      expect(screen.getByTitle(/Send \(Ctrl\+Enter\)/)).toBeInTheDocument();
+      expect(screen.getByTitle(/Send \(Enter\)/)).toBeInTheDocument();
     });
 
     it('clears thinking immediately after an authoritative Interrupt response', async () => {
@@ -1278,7 +1298,7 @@ describe('ChatView', () => {
       render(<ChatView task={task} projects={projects} onBack={onBack} />);
 
       await userEvent.type(screen.getByRole('textbox'), 'follow up');
-      await userEvent.click(screen.getByTitle(/Send \(Ctrl\+Enter\)/));
+      await userEvent.click(screen.getByTitle(/Send \(Enter\)/));
       await userEvent.click(await screen.findByTitle('Interrupt session'));
 
       expect(await screen.findByText(
@@ -1307,7 +1327,7 @@ describe('ChatView', () => {
 
       const textarea = screen.getByPlaceholderText(/Type next message to queue/i);
       fireEvent.change(textarea, { target: { value: 'queued follow-up' } });
-      await userEvent.click(screen.getByTitle(/Add to queue/));
+      fireEvent.keyDown(textarea, { key: 'Enter' });
       expect(screen.getByText('Queued messages (1)')).toBeInTheDocument();
 
       act(() => {
@@ -1412,7 +1432,7 @@ describe('ChatView', () => {
 
       const input = screen.getByPlaceholderText(/follow-up message/i);
       await userEvent.type(input, '审查一下pr99分支的前端内容是否实现');
-      await userEvent.click(screen.getByTitle('Send (Ctrl+Enter)'));
+      await userEvent.click(screen.getByTitle('Send (Enter)'));
 
       await waitFor(() => expect(api.sendTaskChat).toHaveBeenCalled());
       expect(await screen.findByText('正在创建新的前端测试')).toBeInTheDocument();
@@ -1511,7 +1531,7 @@ describe('ChatView', () => {
       await userEvent.click(modeButton);
       const input = screen.getByPlaceholderText(/无需提供 URL/);
       await userEvent.type(input, '验证设置页保存和窄屏布局');
-      await userEvent.click(screen.getByTitle('启动单次审查 (Ctrl+Enter)'));
+      await userEvent.click(screen.getByTitle('启动单次审查 (Enter)'));
 
       await waitFor(() => expect(api.startTestRun).toHaveBeenCalledWith(
         408,
@@ -1560,7 +1580,7 @@ describe('ChatView', () => {
 
       const input = screen.getByPlaceholderText(/描述这次要循环审查/);
       await userEvent.type(input, '审查设置页桌面和窄屏，修复后重新验证');
-      await userEvent.click(screen.getByTitle('启动循环审查 (Ctrl+Enter)'));
+      await userEvent.click(screen.getByTitle('启动循环审查 (Enter)'));
 
       expect(await screen.findByText('Goal 循环审查正在启动')).toBeInTheDocument();
       expect(screen.getAllByText('审查设置页桌面和窄屏，修复后重新验证').length).toBeGreaterThan(0);
@@ -1649,7 +1669,7 @@ describe('ChatView', () => {
       expect(screen.queryByText(/Goal Agent 第/)).not.toBeInTheDocument();
       const input = screen.getByPlaceholderText(/follow-up message/i);
       await userEvent.type(input, 'Goal 已结束后的普通问题');
-      await userEvent.click(screen.getByTitle('Send (Ctrl+Enter)'));
+      await userEvent.click(screen.getByTitle('Send (Enter)'));
       await waitFor(() => expect(api.sendTaskChat).toHaveBeenCalled());
       expect(api.startFrontendReviewGoal).not.toHaveBeenCalled();
     });
@@ -1866,7 +1886,7 @@ describe('ChatView', () => {
           onBack={onBack}
         />,
       );
-      await userEvent.click(await screen.findByTitle(/Send \(Ctrl\+Enter\)/));
+      await userEvent.click(await screen.findByTitle(/Send \(Enter\)/));
 
       await waitFor(() => {
         expect(api.sendTaskChat).toHaveBeenCalledWith(
@@ -2014,7 +2034,7 @@ describe('ChatView', () => {
           onBack={onBack}
         />,
       );
-      await userEvent.click(await screen.findByTitle(/Send \(Ctrl\+Enter\)/));
+      await userEvent.click(await screen.findByTitle(/Send \(Enter\)/));
 
       expect(await screen.findByText(/send failed/)).toBeInTheDocument();
       expect(screen.getByRole('textbox')).toHaveValue('retry this');
@@ -2052,7 +2072,7 @@ describe('ChatView', () => {
       const toggle = await screen.findByTitle(/Codex turn\/steer.*插入运行中的 turn/);
       await userEvent.click(toggle);
       await userEvent.type(screen.getByRole('textbox'), 'change direction');
-      await userEvent.click(screen.getByTitle('注入到运行中的 turn (Ctrl+Enter)'));
+      await userEvent.click(screen.getByTitle('注入到运行中的 turn (Enter)'));
 
       await waitFor(() => {
         expect(api.injectTaskMessage).toHaveBeenCalledWith(
@@ -2100,7 +2120,7 @@ describe('ChatView', () => {
       ]);
       await waitFor(() => expect(api.uploadImages).toHaveBeenCalledTimes(2));
       await screen.findByText('notes.txt');
-      await userEvent.click(screen.getByTitle('注入到运行中的 turn (Ctrl+Enter)'));
+      await userEvent.click(screen.getByTitle('注入到运行中的 turn (Enter)'));
 
       await waitFor(() => {
         expect(api.getInjectCapabilities).toHaveBeenCalledWith(task.id);
@@ -2166,7 +2186,7 @@ describe('ChatView', () => {
         new File(['evidence'], 'evidence.txt', { type: 'text/plain' }),
       );
       await screen.findByText('evidence.txt');
-      await userEvent.click(screen.getByTitle('注入到运行中的 turn (Ctrl+Enter)'));
+      await userEvent.click(screen.getByTitle('注入到运行中的 turn (Enter)'));
 
       expect(await screen.findByText(/HTTP 404/)).toHaveTextContent(
         '消息和附件已保留',
@@ -2203,7 +2223,7 @@ describe('ChatView', () => {
         new File(['evidence'], 'evidence.txt', { type: 'text/plain' }),
       );
       await screen.findByText('evidence.txt');
-      await userEvent.click(screen.getByTitle('注入到运行中的 turn (Ctrl+Enter)'));
+      await userEvent.click(screen.getByTitle('注入到运行中的 turn (Enter)'));
 
       expect(await screen.findByText(/没有确认全部附件均已注入/)).toHaveTextContent(
         '消息和附件已保留',
@@ -2234,7 +2254,7 @@ describe('ChatView', () => {
       await userEvent.click(await screen.findByTitle(/Codex turn\/steer.*插入运行中的 turn/));
       const textbox = screen.getByRole('textbox');
       await userEvent.type(textbox, 'snapshot');
-      await userEvent.click(screen.getByTitle('注入到运行中的 turn (Ctrl+Enter)'));
+      await userEvent.click(screen.getByTitle('注入到运行中的 turn (Enter)'));
       await waitFor(() => expect(api.injectTaskMessage).toHaveBeenCalled());
 
       expect(textbox).toBeDisabled();
@@ -2277,7 +2297,7 @@ describe('ChatView', () => {
       );
       await screen.findByText('evidence.txt');
       await userEvent.type(screen.getByRole('textbox'), '请结合附件继续');
-      await userEvent.click(screen.getByTitle('注入到运行中的 turn (Ctrl+Enter)'));
+      await userEvent.click(screen.getByTitle('注入到运行中的 turn (Enter)'));
 
       expect(await screen.findByText(/服务器没有确认消息已注入/)).toHaveTextContent(
         '消息和附件已保留',
@@ -2527,7 +2547,7 @@ describe('ChatView', () => {
       render(<ChatView task={task} projects={projects} onBack={onBack} />);
 
       expect(screen.getByText('evidence.txt')).toBeInTheDocument();
-      await userEvent.click(screen.getByTitle('Send (Ctrl+Enter)'));
+      await userEvent.click(screen.getByTitle('Send (Enter)'));
 
       await waitFor(() => expect(api.sendTaskChat).toHaveBeenCalledWith(
         task.id,
@@ -2562,7 +2582,7 @@ describe('ChatView', () => {
       render(<ChatView task={task} projects={projects} onBack={onBack} />);
 
       await userEvent.click(screen.getByRole('button', { name: 'Remove remove.txt' }));
-      await userEvent.click(screen.getByTitle('Send (Ctrl+Enter)'));
+      await userEvent.click(screen.getByTitle('Send (Enter)'));
 
       await waitFor(() => expect(api.sendTaskChat).toHaveBeenCalledWith(
         task.id,
@@ -4312,7 +4332,7 @@ describe('independent Plan attachments', () => {
       screen.getByPlaceholderText('Type a follow-up message...'),
       'Ship the Worker rollout',
     );
-    await userEvent.click(screen.getByTitle('Send (Ctrl+Enter)'));
+    await userEvent.click(screen.getByTitle('Send (Enter)'));
 
     await waitFor(() => expect(api.sendTaskChat).toHaveBeenCalled());
     await waitFor(() => {
@@ -4540,7 +4560,7 @@ describe('independent Plan attachments', () => {
       screen.getByPlaceholderText('Type a follow-up message...'),
       'Implement the approved Version',
     );
-    await userEvent.click(screen.getByTitle('Send (Ctrl+Enter)'));
+    await userEvent.click(screen.getByTitle('Send (Enter)'));
     await waitFor(() => expect(api.sendTaskChat).toHaveBeenCalledWith(
       1,
       'Implement the approved Version',

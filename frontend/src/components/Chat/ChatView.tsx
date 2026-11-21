@@ -2846,11 +2846,13 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
     planVersionIds?: number[],
   ) => handleSend(text, true, uploadResults, planTaskIds, planVersionIds);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) {
-      e.preventDefault();
-      handleSend();
-    }
+  const handleComposerKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== 'Enter' || event.shiftKey || event.altKey) return;
+    // Some browsers report the IME confirmation key as 229.
+    if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+
+    event.preventDefault();
+    if (!event.repeat) void handleSend();
   };
 
   return (
@@ -4027,7 +4029,8 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
               ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
+              onKeyDown={handleComposerKeyDown}
+              enterKeyHint="send"
               placeholder={
                 !task.session_id && !task.shared_from_id
                   ? translateUI("Run the task first to start a session...")
@@ -4052,10 +4055,10 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
               title={fileUpload.hasFailed
                 ? translateUI("Retry or remove failed attachments before sending")
                 : injectMode && canInjectNow
-                ? (isProcessing ? '注入到运行中的 turn (Ctrl+Enter)' : '注入模式：仅在 turn 运行中可用，空闲时请关闭注入模式')
-                : frontendReviewComposerMode ? translateUI("启动循环审查 (Ctrl+Enter)")
-                : workspaceReviewComposerMode ? translateUI("启动单次审查 (Ctrl+Enter)")
-                : isProcessing ? translateUI("Add to queue (Ctrl+Enter)") : translateUI("Send (Ctrl+Enter)")}
+                ? (isProcessing ? translateUI("注入到运行中的 turn (Enter)") : translateUI("注入模式：仅在 turn 运行中可用，空闲时请关闭注入模式"))
+                : frontendReviewComposerMode ? translateUI("启动循环审查 (Enter)")
+                : workspaceReviewComposerMode ? translateUI("启动单次审查 (Enter)")
+                : isProcessing ? translateUI("Add to queue (Enter)") : translateUI("Send (Enter)")}
               className={`p-2.5 text-white rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-md ${
                 injectMode && canInjectNow ? 'bg-teal-600 hover:bg-teal-700 shadow-teal-600/20'
                 : frontendReviewComposerMode ? 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/25'

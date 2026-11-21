@@ -46,7 +46,7 @@ Web 端调度和管理多个 Claude Code 实例并行工作。灵感来自胡渊
 - **原生子 Agent 镜像（PTY 模式）** — 模型用内置 Agent/Task/Monitor 工具开的子 agent 会被 PTY 层观测并自动注册进子 agent 体系（类别 native-agent / native-monitor），统一展示和管理
 
 ### 交互与对话
-- **多轮对话** — 任务完成后可通过 Chat 界面继续追问，自动 `--resume` 同一 session
+- **多轮对话** — 任务完成后可通过 Chat 界面继续追问，自动 `--resume` 同一 session。聊天输入框 Enter 发送，Shift+Enter 换行。任务运行时 Enter 将消息加入队列。
 - **历史聊天查询** — Chat 顶栏可搜索当前 Task 的历史用户消息、模型回复和工具调用，结果显示上下文摘要；点击结果会加载所需历史页并定位消息
 - **快速项目筛选** — Tasks 页切换 Project/状态时会同步回到第一页，只请求当前分页与计数；Project/Tag 目录独立低频刷新，快速连续切换时过期响应不会覆盖当前项目
 - **前端资源节流** — 页面隐藏时暂停 HTTP 轮询，恢复可见时立即刷新；同一 `wsUrl + token` 的消费者共享 WebSocket，连接正常时使用低频兜底轮询，避免切页和后台标签页持续占用资源

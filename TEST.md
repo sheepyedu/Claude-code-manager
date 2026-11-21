@@ -2,6 +2,10 @@
 
 > **重要：Claude Code 必须自主维护本文件。** 新增功能时同步更新测试，修改代码前先跑测试，修改后再跑一遍确认无回归。
 
+## 任务聊天快捷键
+
+`cd frontend && npx vitest run src/components/Chat/ChatView.test.tsx` 覆盖 Enter 发送和运行中排队，Shift+Enter 保留换行，输入法确认不提交。
+
 ## 项目初始化与计划就绪
 
 - `uv run python -m pytest backend/tests/test_api_projects.py backend/tests/test_plan_resources.py -q` 覆盖无 Git 身份与分支名不一致的空远端、本地已存在的文档与暂存文件、远端有 refs 时拒绝建立独立历史，以及项目未就绪时拒绝创建或重试独立 Plan。
