@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { api, type PlanResource } from '../../api/client';
+import { api, type PlanResource, type Project } from '../../api/client';
 import { PlanCreateForm } from './PlanCreateForm';
 
 vi.mock('../../api/client', () => ({
@@ -17,6 +17,7 @@ vi.mock('../../api/client', () => ({
       },
     }),
     listProjects: vi.fn(),
+    getProject: vi.fn(),
     listTags: vi.fn(),
     listWorkers: vi.fn(),
     createPlan: vi.fn(),
@@ -52,6 +53,7 @@ vi.mock('../ProjectSelect', () => ({
   }) => <select aria-label="Plan project" value={value || ''} onChange={(event) => onChange(event.target.value)}>
     <option value="">Select project</option>
     <option value="3">Repository</option>
+    <option value="__new__">New project</option>
   </select>,
 }));
 
@@ -96,6 +98,28 @@ describe('PlanCreateForm', () => {
     expect(payload).not.toHaveProperty('pipeline_config');
     expect(onCreated).toHaveBeenCalledWith(createdPlan);
   });
+  it('waits for the inline project to finish initialization before creating the Plan', async () => {
+    const project = { id: 4, status: 'pending' } as Project;
+    vi.mocked(api.createProject).mockResolvedValue(project);
+    let finishSetup!: (ready: Project) => void;
+    vi.mocked(api.getProject).mockReturnValue(new Promise((resolve) => {
+      finishSetup = resolve;
+    }));
+    const user = userEvent.setup();
+    render(<PlanCreateForm onCreated={vi.fn()} />);
+    await user.selectOptions(screen.getByLabelText('Plan project'), '__new__');
+    await user.type(screen.getByPlaceholderText('Project name'), 'Empty repository');
+    await user.type(screen.getByPlaceholderText('What should this Plan investigate and decide?'), 'Plan the project');
+    await user.click(screen.getByRole('button', { name: 'Create Plan' }));
+
+    await waitFor(() => expect(api.getProject).toHaveBeenCalledWith(4));
+    expect(api.createPlan).not.toHaveBeenCalled();
+    finishSetup({ ...project, status: 'ready' });
+    await waitFor(() => expect(api.createPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ project_id: 4, input: 'Plan the project' }),
+    ));
+  });
+
 });
 
  it('freezes speed and effort selections in the Plan creation request', async () => {

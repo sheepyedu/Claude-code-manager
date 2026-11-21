@@ -293,3 +293,119 @@ async def test_init_local_repo_preserves_both_existing_docs(db_factory, tmp_path
     async with db_factory() as db:
         p2 = await db.get(Project, pid)
         assert p2.status == "ready"
+
+
+@pytest.fixture
+def isolated_git(tmp_path, monkeypatch):
+    """Make Git exercise missing identity without consulting the host's settings."""
+    import os
+    import subprocess
+
+    for key in os.environ:
+        if key.startswith(("GIT_AUTHOR_", "GIT_COMMITTER_", "GIT_CONFIG_")) or key == "EMAIL":
+            monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    config = tmp_path / "gitconfig"
+    config.write_text("[user]\n\tuseConfigOnly = true\n[init]\n\tdefaultBranch = other\n")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(config))
+
+    def git(cwd, *args):
+        return subprocess.check_output(
+            ["git", "-C", str(cwd), *args], text=True, stderr=subprocess.PIPE,
+        ).strip()
+
+    return git
+
+
+async def _insert_project(db_factory, checkout):
+    async with db_factory() as db:
+        project = Project(name=checkout.name, local_path=str(checkout), status="pending")
+        db.add(project)
+        await db.commit()
+        await db.refresh(project)
+        return project.id
+
+
+@pytest.mark.asyncio
+async def test_empty_remote_clone_seeds_configured_branch_without_push(
+    db_factory, tmp_path, monkeypatch, isolated_git,
+):
+    from backend.api import projects
+
+    monkeypatch.setattr(projects, "async_session", db_factory)
+    git = isolated_git
+    remote = tmp_path / "remote.git"
+    checkout = tmp_path / "checkout"
+    git(tmp_path, "init", "--bare", "-b", "other", str(remote))
+    project_id = await _insert_project(db_factory, checkout)
+
+    await projects._clone_repo(project_id, str(remote), str(checkout), "example", "main")
+    async with db_factory() as db:
+        project = await db.get(Project, project_id)
+        assert project.status == "ready", project.error_message
+
+    assert git(checkout, "symbolic-ref", "--short", "HEAD") == "main"
+    head = git(checkout, "rev-parse", "--verify", "HEAD")
+    assert git(checkout, "ls-tree", "--name-only", "HEAD").splitlines() == ["AGENTS.md", "CLAUDE.md"]
+    assert git(remote, "for-each-ref") == ""
+
+    await projects._clone_repo(project_id, str(remote), str(checkout), "example", "main")
+    assert git(checkout, "rev-parse", "--verify", "HEAD") == head
+
+
+@pytest.mark.asyncio
+async def test_existing_unborn_checkout_preserves_docs_and_staged_user_files(
+    db_factory, tmp_path, monkeypatch, isolated_git,
+):
+    from backend.api import projects
+
+    monkeypatch.setattr(projects, "async_session", db_factory)
+    git = isolated_git
+    remote = tmp_path / "remote.git"
+    checkout = tmp_path / "checkout"
+    git(tmp_path, "init", "--bare", "-b", "other", str(remote))
+    git(tmp_path, "clone", str(remote), str(checkout))
+    (checkout / "CLAUDE.md").write_text("User's original guide\n")
+    (checkout / "AGENTS.md").write_text("User's original instructions\n")
+    (checkout / "private.txt").write_text("Previously staged user file\n")
+    git(checkout, "add", "private.txt")
+    project_id = await _insert_project(db_factory, checkout)
+
+    await projects._clone_repo(project_id, str(remote), str(checkout), "example", "main")
+
+    async with db_factory() as db:
+        project = await db.get(Project, project_id)
+        assert project.status == "ready", project.error_message
+    assert git(checkout, "symbolic-ref", "--short", "HEAD") == "main"
+    assert git(checkout, "ls-tree", "--name-only", "HEAD") == ""
+    assert git(checkout, "diff", "--cached", "--name-only") == "private.txt"
+    assert (checkout / "CLAUDE.md").read_text() == "User's original guide\n"
+    assert (checkout / "AGENTS.md").read_text() == "User's original instructions\n"
+
+
+@pytest.mark.asyncio
+async def test_nonempty_remote_with_missing_default_does_not_get_unrelated_root(
+    db_factory, tmp_path, monkeypatch, isolated_git,
+):
+    from backend.api import projects
+
+    monkeypatch.setattr(projects, "async_session", db_factory)
+    git = isolated_git
+    remote = tmp_path / "remote.git"
+    checkout = tmp_path / "checkout"
+    git(tmp_path, "init", "--bare", "-b", "missing", str(remote))
+    source = tmp_path / "source"
+    git(tmp_path, "init", "-b", "other", str(source))
+    git(source, "-c", "user.name=Fixture", "-c", "user.email=fixture@localhost",
+        "commit", "--allow-empty", "-m", "Existing upstream commit")
+    git(source, "push", str(remote), "other")
+    project_id = await _insert_project(db_factory, checkout)
+
+    await projects._clone_repo(project_id, str(remote), str(checkout), "example", "main")
+
+    async with db_factory() as db:
+        project = await db.get(Project, project_id)
+        assert project.status == "error"
+        assert "already contains refs" in project.error_message
+    assert not (checkout / "CLAUDE.md").exists()
+    assert git(checkout, "for-each-ref", "refs/heads") == ""

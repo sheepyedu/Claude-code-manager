@@ -192,6 +192,8 @@ claude-manager/
 
 ## 关键约定
 
+- **空仓库初始化**：Project clone/init 共用本地首提交逻辑。只有远端 refs 查询成功且为空，才能为远端仓库创建本地历史。按配置的默认分支初始化，保留已有文件与无关暂存项，初始提交失败时 Project 标记为 error，验证 HEAD 后才置 ready。初始化不推送。独立 Plan 创建和重试校验本地 Project 就绪，计划表单内联创建项目后轮询就绪状态。
+
 - **速度与推理强度**：聊天工具栏以仪表盘/大脑图标承载 `RuntimeControls` 的紧凑原生选择器（保留键盘与读屏语义），新任务与计划表单保留文字选择器；空闲 Task 通过原有 updateTask API 保存下一轮路由；保存回显仅合并相同执行代次的 effort/tier，禁止用 PUT 回包覆盖更新的 WebSocket 生命周期状态。新任务控件须在初始模型配置加载后开放，避免异步默认值覆盖选择。速度持久值为 `default` / `priority`，默认标准；Fast 仅显示在模型 capability 允许的 Codex 路由。Plan 的每条 `PlanModelRoute.codex_service_tier` 随 pipeline JSON 冻结，账号选择、API admission 和 app-server 必须使用同一值；独立/关联 Plan 创建仅允许 `runtime_options.planner/reviewer` 覆盖主要路由的 effort/tier，不能借此修改全局 provider/model 或备用策略。
 - **界面语言**：`frontend/src/config/language.ts` 保存浏览器级 `ccm-language`（`en` / `zh-CN`），`useLanguage()` 订阅切换；仅通过 `t()` 翻译界面文案，译表在 `config/translations/zh-CN.ts`，不得翻译用户输入、模型回复、代码、路径或 API 枚举值。新增界面文案应同步译表。
 - **Plan provider 准入**：Claude 隔离未启用时必须省略 `--settings`，不得将 `None` 转为路径；Codex 只读策略的唯一可写 scratch 回包按 canonical path 对齐 macOS `/tmp` 与 `/private/tmp`，保留请求前后的 inode 围栏以及 profile/network/唯一写根校验。

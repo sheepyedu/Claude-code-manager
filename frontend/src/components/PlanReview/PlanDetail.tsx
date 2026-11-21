@@ -173,7 +173,7 @@ export function PlanDetail({ plan, onRefresh, onClose, selectedVersionIds = [], 
   ) => {
     setBusy(true); setBusyLabel(label); setError(null);
     try { await operation(); await refreshDetail(); onSuccess?.(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+    catch (reason) { setError(translateUI(reason instanceof Error ? reason.message : String(reason))); }
     finally { setBusy(false); setBusyLabel(null); }
   };
 

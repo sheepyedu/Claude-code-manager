@@ -1,5 +1,7 @@
 /** Authored UI labels only; runtime messages and source code are never translated. */
 export const zhCN: Readonly<Record<string, string>> = {
+  "Project setup failed. Check the project in Projects and retry setup.": "项目初始化失败。请前往「项目」查看原因并重试初始化。",
+  "Project setup is still in progress. Try again when the project is ready.": "项目正在初始化。请在项目就绪后重试。",
   "Language": "语言",
   "Interface language": "界面语言",
   "Dashboard": "仪表盘",

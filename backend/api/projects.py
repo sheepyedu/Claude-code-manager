@@ -2,6 +2,7 @@ import asyncio
 import fnmatch
 import os
 import pathlib
+from weakref import WeakValueDictionary
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -27,6 +28,7 @@ from backend.services.git_config import merge_git_config, settings_to_dict
 from backend.services.dispatcher import _build_git_env
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
+_project_setup_locks: WeakValueDictionary[str, asyncio.Lock] = WeakValueDictionary()
 
 
 _DELIVERY_PROJECT_IDENTITY_FIELDS = frozenset(
@@ -487,17 +489,17 @@ def _generate_claude_md(project_name: str, git_url: str | None, default_branch: 
 1. **领取任务** — 你已被分配任务，阅读本文件和项目代码理解上下文
 2. **创建工作区**:
    - `git fetch origin`（如有 remote）
-   - `git worktree add -b task-<简短描述> .claude-manager/worktrees/task-<简短描述> origin/{default_branch}`
+   - 远端已有 `origin/{default_branch}` 时从它创建 worktree；首次发布前从本地 `{default_branch}` 创建
    - 进入 worktree 目录工作（后续所有操作在 worktree 中）
    - 如果 worktree 创建失败，直接在当前分支工作
 3. **实现功能** — 编写代码，确保可运行
 4. **提交代码** — `git add` + `git commit`，commit message 简洁描述改动
 5. **Merge + 测试**:
-   - `git fetch origin && git merge origin/{default_branch}`（集成最新代码，如有 remote）
+   - `git fetch origin` 后仅在远端分支存在时合并 `origin/{default_branch}`
    - 运行测试（如有测试命令）
 6. **自动合并到 {default_branch}**（如有 remote）:
-   - `git fetch origin {default_branch}`
-   - `git rebase origin/{default_branch}`，如果冲突则自行 resolve
+   - `git fetch origin` 后若远端分支存在，则 `git rebase origin/{default_branch}` 并处理冲突
+   - 若 `git ls-remote --refs origin` 成功且没有任何 refs，则以本地初始提交为基线，普通 push 创建远端分支
    - 如果成功：`git checkout {default_branch} && git merge <task-branch> && git push origin {default_branch}`
    - 如果这一步有任何失败，退回到步骤 5 重试
    - （纯本地项目跳过本步）
@@ -562,169 +564,196 @@ rebase 发生冲突时：
 _inject_agents_md = inject_agents_md
 
 
-async def _commit_files(local_path: str, files: list[str], message: str):
-    """git add + commit the given files; best-effort (repo may lack user config)."""
+async def _project_git(
+    local_path: str, *args: str, env: dict[str, str] | None = None,
+    check: bool = True,
+) -> tuple[int, str]:
     proc = await asyncio.create_subprocess_exec(
-        "git", "add", *files,
+        "git", *args,
         cwd=local_path,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        env=env,
     )
-    await proc.communicate()
-    proc = await asyncio.create_subprocess_exec(
-        "git", "commit", "-m", message,
-        cwd=local_path,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    return await proc.communicate(), proc.returncode
+    stdout, stderr = await proc.communicate()
+    if check and proc.returncode:
+        raise RuntimeError(
+            f"git {args[0]} failed: {stderr.decode(errors='replace').strip()}"
+        )
+    return proc.returncode, stdout.decode(errors="replace").strip()
 
 
-async def _clone_repo(project_id: int, git_url: str, local_path: str, project_name: str, default_branch: str, git_config: dict | None = None):
-    """Clone a git repo in the background."""
+async def _check_project_git_root(local_path: str) -> None:
+    _, root = await _project_git(local_path, "rev-parse", "--show-toplevel")
+    if pathlib.Path(root).resolve() != pathlib.Path(local_path).resolve():
+        raise RuntimeError("Git checkout root does not match the Project workspace")
+
+
+async def _prepare_project_head(
+    local_path: str, default_branch: str, *, remote: bool,
+    env: dict[str, str],
+) -> bool:
+    """Return whether a first local commit is required."""
+    status, _ = await _project_git(
+        local_path, "rev-parse", "--verify", "--quiet", "HEAD^{commit}", check=False,
+    )
+    if status == 0:
+        return False
+    # An unresolved or detached HEAD is not proof of an empty repository.
+    await _project_git(local_path, "symbolic-ref", "--quiet", "HEAD")
+    if remote:
+        _, remote_refs = await _project_git(
+            local_path, "ls-remote", "--refs", "origin", env=env,
+        )
+        if remote_refs:
+            raise RuntimeError(
+                "Remote repository already contains refs but has no checked-out "
+                "commit. Set its default branch to an existing branch and retry."
+            )
+    _, local_refs = await _project_git(local_path, "for-each-ref")
+    if local_refs:
+        raise RuntimeError("Project already has local refs but no checked-out commit")
+
+    first_ref = f"refs/heads/{default_branch}"
+    await _project_git(local_path, "check-ref-format", first_ref)
+    await _project_git(local_path, "symbolic-ref", "HEAD", first_ref)
+    return True
+
+
+def _create_project_docs(
+    local_path: str, project_name: str, git_url: str | None, default_branch: str,
+) -> list[str]:
+    files = []
+    claude_md = pathlib.Path(local_path) / "CLAUDE.md"
+    try:
+        with claude_md.open("x", encoding="utf-8") as file:
+            file.write(_generate_claude_md(project_name, git_url, default_branch))
+        files.append("CLAUDE.md")
+    except FileExistsError:
+        pass
+    if _inject_agents_md(local_path):
+        files.append("AGENTS.md")
+    return files
+
+
+async def _commit_project_docs(
+    local_path: str, files: list[str], *, first_commit: bool,
+) -> None:
+    if not files and not first_commit:
+        return
+
+    git_options = []
+    if first_commit:
+        # Use the configured identity when Git can resolve it. Keep the
+        # service identity scoped to the initial commit otherwise.
+        for ident in ("GIT_AUTHOR_IDENT", "GIT_COMMITTER_IDENT"):
+            status, _ = await _project_git(local_path, "var", ident, check=False)
+            if status:
+                git_options = [
+                    "-c", "user.name=Claude Code Manager",
+                    "-c", "user.email=ccm@localhost",
+                ]
+                break
+
+    try:
+        if files:
+            await _project_git(local_path, "add", "--", *files)
+        message = (
+            f"Add {' + '.join(files)} for Claude Code Manager"
+            if files else "Initialize Claude Code Manager project"
+        )
+        # --only excludes any unrelated files already staged by the user.
+        commit_args = ["commit", "--only", "-m", message]
+        if files:
+            commit_args.extend(["--", *files])
+        else:
+            commit_args.append("--allow-empty")
+        await _project_git(local_path, *git_options, *commit_args)
+    except RuntimeError:
+        if first_commit:
+            raise
+        # Projects with an existing HEAD can still be used when a
+        # best-effort documentation commit fails.
+
+
+async def _setup_project_repo(
+    project_id: int, git_url: str | None, local_path: str,
+    project_name: str, default_branch: str, git_config: dict | None,
+) -> None:
+    lock = _project_setup_locks.setdefault(os.path.realpath(local_path), asyncio.Lock())
+    async with lock:
+        await _prepare_and_record_project_repo(
+            project_id, git_url, local_path, project_name, default_branch, git_config,
+        )
+
+
+async def _prepare_and_record_project_repo(
+    project_id: int, git_url: str | None, local_path: str,
+    project_name: str, default_branch: str, git_config: dict | None,
+) -> None:
+    remote = git_url is not None
     async with async_session() as db:
         await db.execute(
-            update(Project).where(Project.id == project_id).values(status="cloning")
+            update(Project).where(Project.id == project_id).values(
+                status="cloning" if remote else "initializing", error_message=None,
+            )
         )
         await db.commit()
 
     try:
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
-
-        # Build env with git credentials so clone/fetch can authenticate
-        git_env = _build_git_env(git_config or {})
-        env = {**os.environ, **git_env} if git_env else None
-
-        if os.path.isdir(local_path):
-            # Already exists, just fetch
-            proc = await asyncio.create_subprocess_exec(
-                "git", "fetch", "--all",
-                cwd=local_path,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env,
+        if os.path.islink(local_path):
+            raise RuntimeError("Project workspace cannot be a symbolic link")
+        existing_checkout = os.path.lexists(os.path.join(local_path, ".git"))
+        env = {**os.environ, **_build_git_env(git_config or {}), "GIT_TERMINAL_PROMPT": "0"}
+        if existing_checkout:
+            await _check_project_git_root(local_path)
+            if remote:
+                await _project_git(local_path, "fetch", "--all", env=env)
+        elif remote:
+            await _project_git(
+                os.path.dirname(local_path), "clone", "--", git_url, local_path, env=env,
             )
-            _, stderr = await proc.communicate()
-            if proc.returncode != 0:
-                raise RuntimeError(f"git fetch failed: {stderr.decode()}")
         else:
-            proc = await asyncio.create_subprocess_exec(
-                "git", "clone", git_url, local_path,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env,
-            )
-            _, stderr = await proc.communicate()
-            if proc.returncode != 0:
-                raise RuntimeError(f"git clone failed: {stderr.decode()}")
+            os.makedirs(local_path, exist_ok=True)
+            await _project_git(local_path, "init", "-b", default_branch)
 
-        # Apply per-repo git config (author identity + credentials)
-        if git_config:
-            await _apply_git_config(local_path, git_config)
-
-        # Generate agent docs if not exists: CLAUDE.md (claude) + AGENTS.md (codex)
-        created_files = []
-        claude_md_path = os.path.join(local_path, "CLAUDE.md")
-        if not os.path.exists(claude_md_path):
-            with open(claude_md_path, "w") as f:
-                f.write(_generate_claude_md(project_name, git_url, default_branch))
-            created_files.append("CLAUDE.md")
-        if _inject_agents_md(local_path):
-            created_files.append("AGENTS.md")
-
-        if created_files:
-            # Stage and commit so they're not left untracked
-            # (don't fail on commit error — repo may have no user config yet)
-            await _commit_files(
-                local_path, created_files,
-                f"Add {' + '.join(created_files)} for Claude Code Manager",
-            )
-
-        # Auto-scan for .env files after clone
-        env_files = _scan_env_files(local_path)
-        async with async_session() as db:
-            await db.execute(
-                update(Project).where(Project.id == project_id).values(
-                    status="ready", env_files=env_files
-                )
-            )
-            await db.commit()
-
-    except Exception as e:
-        async with async_session() as db:
-            await db.execute(
-                update(Project)
-                .where(Project.id == project_id)
-                .values(status="error", error_message=str(e)[:1000])
-            )
-            await db.commit()
-
-
-async def _init_local_repo(project_id: int, local_path: str, project_name: str, default_branch: str, git_config: dict | None = None):
-    """Initialize a local git repo (no remote)."""
-    async with async_session() as db:
-        await db.execute(
-            update(Project).where(Project.id == project_id).values(status="initializing")
+        first_commit = await _prepare_project_head(
+            local_path, default_branch, remote=remote, env=env,
         )
-        await db.commit()
-
-    try:
-        os.makedirs(local_path, exist_ok=True)
-
-        if not os.path.isdir(os.path.join(local_path, ".git")):
-            # git init
-            proc = await asyncio.create_subprocess_exec(
-                "git", "init", "-b", default_branch,
-                cwd=local_path,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            _, stderr = await proc.communicate()
-            if proc.returncode != 0:
-                raise RuntimeError(f"git init failed: {stderr.decode()}")
-
-            # Apply per-repo git config before first commit so author is correct
+        if remote or not existing_checkout or first_commit:
             if git_config:
                 await _apply_git_config(local_path, git_config)
+            files = _create_project_docs(local_path, project_name, git_url, default_branch)
+            await _commit_project_docs(local_path, files, first_commit=first_commit)
+        await _project_git(local_path, "rev-parse", "--verify", "HEAD^{commit}")
+        values = {"status": "ready", "env_files": _scan_env_files(local_path)}
+    except Exception as exc:
+        values = {"status": "error", "error_message": str(exc)[:1000]}
 
-            # Generate agent docs: CLAUDE.md (claude) + AGENTS.md (codex)。
-            # 目录可能是「已有文件但尚未 git init」的存量目录——已有的
-            # CLAUDE.md/AGENTS.md 一律不覆盖（AGENTS.md 由 inject 内部守卫）
-            files = []
-            claude_md_path = os.path.join(local_path, "CLAUDE.md")
-            if not os.path.exists(claude_md_path):
-                with open(claude_md_path, "w") as f:
-                    f.write(_generate_claude_md(project_name, None, default_branch))
-                files.append("CLAUDE.md")
-            if _inject_agents_md(local_path):
-                files.append("AGENTS.md")
+    async with async_session() as db:
+        await db.execute(update(Project).where(Project.id == project_id).values(**values))
+        await db.commit()
 
-            # Initial commit（只提交本次创建的文件；两者都已存在时无事可提）
-            if files:
-                (_, stderr), returncode = await _commit_files(
-                    local_path, files, f"Initial commit with {' + '.join(files)}",
-                )
-                if returncode != 0:
-                    raise RuntimeError(f"git commit failed: {stderr.decode()}")
 
-        # Auto-scan for .env files after init
-        env_files = _scan_env_files(local_path)
-        async with async_session() as db:
-            await db.execute(
-                update(Project).where(Project.id == project_id).values(
-                    status="ready", env_files=env_files
-                )
-            )
-            await db.commit()
+async def _clone_repo(
+    project_id: int, git_url: str, local_path: str, project_name: str,
+    default_branch: str, git_config: dict | None = None,
+) -> None:
+    """Clone a remote repository and prepare a usable local baseline."""
+    await _setup_project_repo(
+        project_id, git_url, local_path, project_name, default_branch, git_config,
+    )
 
-    except Exception as e:
-        async with async_session() as db:
-            await db.execute(
-                update(Project)
-                .where(Project.id == project_id)
-                .values(status="error", error_message=str(e)[:1000])
-            )
-            await db.commit()
+
+async def _init_local_repo(
+    project_id: int, local_path: str, project_name: str,
+    default_branch: str, git_config: dict | None = None,
+) -> None:
+    """Initialize a local repository with a usable baseline."""
+    await _setup_project_repo(
+        project_id, None, local_path, project_name, default_branch, git_config,
+    )
 
 
 # ── Env files helpers ─────────────────────────────────────────────────────────

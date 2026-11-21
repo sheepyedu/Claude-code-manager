@@ -647,6 +647,61 @@ async def test_plan_catalog_search_and_archived_only_match_list_and_count(client
     assert running_count.json() == {"total": 1}
 
 
+@pytest.mark.parametrize("status", ["pending", "cloning", "initializing", "error"])
+@pytest.mark.asyncio
+async def test_standalone_plan_requires_ready_project(client, session_factory, status):
+    async with session_factory() as db:
+        project = Project(name="setting-up", local_path="/tmp/setting-up", status=status)
+        db.add(project)
+        await db.commit()
+        project_id = project.id
+
+    response = await client.post(
+        "/api/plans", json={"input": "Prepare a plan", "project_id": project_id},
+    )
+
+    assert response.status_code == 409
+    assert "Project" in response.json()["detail"]
+    async with session_factory() as db:
+        assert await db.scalar(select(func.count(PlanAgentRun.id))) == 0
+
+
+@pytest.mark.asyncio
+async def test_standalone_plan_retry_waits_for_project_recovery(client, session_factory):
+    async with session_factory() as db:
+        project = Project(name="recovery", local_path="/tmp/recovery", status="ready")
+        db.add(project)
+        await db.commit()
+        project_id = project.id
+    created = await client.post(
+        "/api/plans", json={"input": "Prepare a plan", "project_id": project_id},
+    )
+    assert created.status_code == 201
+    plan_id = created.json()["id"]
+    run_id = created.json()["active_run"]["id"]
+    async with session_factory() as db:
+        project = await db.get(Project, project_id)
+        plan = await db.get(Plan, plan_id)
+        run = await db.get(PlanAgentRun, run_id)
+        project.status = "error"
+        plan.active_run_id = None
+        run.status = "failed"
+        run.finished_at = datetime.utcnow()
+        await db.commit()
+
+    retry = {"run_type": "retry", "request": "Retry", "source_run_id": run_id}
+    response = await client.post(f"/api/plans/{plan_id}/runs", json=retry)
+    assert response.status_code == 409
+    async with session_factory() as db:
+        assert await db.scalar(select(func.count(PlanAgentRun.id))) == 1
+        project = await db.get(Project, project_id)
+        project.status = "ready"
+        await db.commit()
+
+    response = await client.post(f"/api/plans/{plan_id}/runs", json=retry)
+    assert response.status_code == 201
+
+
 @pytest.mark.asyncio
 async def test_retry_requires_exact_terminal_failed_source(client, session_factory):
     created = await client.post(

@@ -2148,6 +2148,7 @@ export const api = {
 
   // Projects
   listProjects: () => request<Project[]>('/api/projects'),
+  getProject: (id: number) => request<Project>(`/api/projects/${id}`),
   listProjectTags: () => request<string[]>('/api/projects/tags'),
   createProject: (data: {
     name: string;

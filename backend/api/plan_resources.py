@@ -665,6 +665,17 @@ async def _require_version(
     return plan, version
 
 
+def _require_ready_plan_project(project: Project) -> None:
+    if project.worker_id is not None or project.status == "ready":
+        return
+    detail = (
+        "Project setup failed. Check the project in Projects and retry setup."
+        if project.status == "error"
+        else "Project setup is still in progress. Try again when the project is ready."
+    )
+    raise HTTPException(409, detail)
+
+
 async def _capture_context_for_plan(
     db: AsyncSession,
     *,
@@ -861,8 +872,6 @@ async def create_plan(
         priority = body.priority
         timeout_hours = body.timeout_hours
         if project_id is not None:
-            from backend.models.project import Project
-
             project = await db.get(Project, project_id)
             if project is None:
                 raise HTTPException(404, "Project not found")
@@ -880,6 +889,8 @@ async def create_plan(
                 await require_project_access(request, project_id, db)
             else:
                 await require_worker_target_access(request, worker_id, db)
+        if project_id is not None:
+            _require_ready_plan_project(project)
 
     uploads = _validated_uploads(body)
     pipeline = resolve_plan_pipeline_config(
@@ -983,6 +994,7 @@ async def create_plan(
             )
             if settings.auth_token:
                 await require_project_access(request, project_id, locked_db)
+            _require_ready_plan_project(locked_project)
             if (
                 locked_project.worker_id != worker_id
                 or locked_project.local_path != target_repo
@@ -1719,6 +1731,10 @@ async def create_run(
             run_project_id = plan.project_id
             run_target_repo = plan.target_repo
             run_target_branch = plan.target_branch
+            if run_project_id is not None:
+                project = await db.get(Project, run_project_id)
+                if project is not None:
+                    _require_ready_plan_project(project)
         source_run = None
         if body.run_type == "retry":
             if not is_admin(request):
@@ -1791,6 +1807,10 @@ async def create_run(
                 control=True,
             ):
                 raise HTTPException(403, "No permission to control this Plan")
+            if locked_plan.target_task_id is None and locked_plan.project_id is not None:
+                project = await locked_db.get(Project, locked_plan.project_id)
+                if project is not None:
+                    _require_ready_plan_project(project)
 
         run = await create_plan_run(
             db,

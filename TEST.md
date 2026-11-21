@@ -2,6 +2,11 @@
 
 > **重要：Claude Code 必须自主维护本文件。** 新增功能时同步更新测试，修改代码前先跑测试，修改后再跑一遍确认无回归。
 
+## 项目初始化与计划就绪
+
+- `uv run python -m pytest backend/tests/test_api_projects.py backend/tests/test_plan_resources.py -q` 覆盖无 Git 身份与分支名不一致的空远端、本地已存在的文档与暂存文件、远端有 refs 时拒绝建立独立历史，以及项目未就绪时拒绝创建或重试独立 Plan。
+- `cd frontend && npx vitest run src/components/PlanReview/PlanCreateForm.test.tsx` 覆盖计划表单内联创建项目后等待初始化，确认就绪才发起 Plan 创建。
+
 ## 快速命令
 
 Claude 专用目录回归：`python -m pytest backend/tests/test_claude_private_runtime.py backend/tests/test_service_instance_manager.py -k 'warmup_prepares_selected_home or pool_disabled_resume or onboarding_preserves or launch_delegates_to_pty_backend_for_claude'`。覆盖专用目录/号池优先级、PTY JSONL 路径、无模型调用的启动准备、原配置保护及非法状态文件保留。

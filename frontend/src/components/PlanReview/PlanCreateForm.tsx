@@ -10,6 +10,22 @@ import { AlertCircle, Loader2, Paperclip, Settings, X } from '../icons';
 import { VoiceButton } from '../Voice/VoiceButton';
 
 const NEW_PROJECT_VALUE = '__new__';
+const PROJECT_SETUP_TIMEOUT_MS = 20_000;
+
+async function waitForProjectSetup(project: Project): Promise<void> {
+  const deadline = Date.now() + PROJECT_SETUP_TIMEOUT_MS;
+  let current = await api.getProject(project.id);
+  while (current.status !== 'ready' && current.status !== 'error' && Date.now() < deadline) {
+    await new Promise((resolve) => window.setTimeout(resolve, 500));
+    current = await api.getProject(project.id);
+  }
+  if (current.status === 'error') {
+    throw new Error('Project setup failed. Check the project in Projects and retry setup.');
+  }
+  if (current.status !== 'ready') {
+    throw new Error('Project setup is still in progress. Try again when the project is ready.');
+  }
+}
 
 interface Props {
   onCreated: (plan: PlanResource) => void;
@@ -98,17 +114,21 @@ export function PlanCreateForm({ onCreated, onNavigateSettings }: Props) {
     setBusy(true);
     setError('');
     try {
-      let selectedProjectId = projectId || undefined;
+      let selectedProject = projects.find((project) => project.id === projectId);
       if (isNewProject) {
         const project = await api.createProject({
           name: newProjectName.trim(),
           git_url: newProjectUrl.trim() || undefined,
         });
-        selectedProjectId = project.id;
+        selectedProject = project;
         setProjectId(project.id);
         setIsNewProject(false);
         setNewProjectName('');
         setNewProjectUrl('');
+        loadProjects();
+      }
+      if (selectedProject?.status && selectedProject.status !== 'ready') {
+        await waitForProjectSetup(selectedProject);
         loadProjects();
       }
       const results = uploads.uploadedResults;
@@ -116,7 +136,7 @@ export function PlanCreateForm({ onCreated, onNavigateSettings }: Props) {
         input: request.trim(),
         ...(Object.keys(runtimeOptions).length ? { runtime_options: runtimeOptions } : {}),
         ...(title.trim() ? { title: title.trim() } : {}),
-        project_id: selectedProjectId as number,
+        project_id: (selectedProject?.id || projectId) as number,
         priority,
         ...(timeoutHours !== '' ? { timeout_hours: Number(timeoutHours) } : {}),
         ...(results.length ? {
@@ -134,7 +154,7 @@ export function PlanCreateForm({ onCreated, onNavigateSettings }: Props) {
       uploads.clear();
       onCreated(plan);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Failed to create Plan');
+      setError(translateUI(reason instanceof Error ? reason.message : 'Failed to create Plan'));
     } finally {
       setBusy(false);
     }
