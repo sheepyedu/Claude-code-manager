@@ -681,7 +681,9 @@ export function ChatView({ task, projects, onBack, onTaskUpdated, onTaskForked, 
         const opts = (task.provider === 'codex' ? c.codex_model_options : c.model_options).filter((m) => m !== 'default');
         setModelOptions(opts);
         setModelContextWindows(
-          task.provider === 'codex' ? {} : (c.claude_model_context_windows || {}),
+          task.provider === 'codex'
+            ? (c.codex_model_context_windows || {})
+            : (c.claude_model_context_windows || {}),
         );
         setCodexModelServiceTiers(
           task.provider === 'codex' ? (c.codex_model_service_tiers || {}) : {},

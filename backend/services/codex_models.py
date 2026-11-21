@@ -1,6 +1,7 @@
 """Codex model catalog: per-model reasoning effort support.
 
-Source: native Codex CLI model catalogs; GPT-6 entries verified with CLI 0.166 on 2026-10-30.
+Source: native Codex CLI model catalogs. GPT-6.2 matches the 2026-11-21
+subscription catalogs and documented default Codex context windows.
 Older GPT-5.6 entries retain the 2026-07-19 catalog contract.
 GPT-5.6 是一个家族、三个模型（无裸 "gpt-5.6" ID）：
   - gpt-5.6-sol   (GPT-5.6 Sol,   frontier)  efforts: low..max + ultra
@@ -30,6 +31,8 @@ CODEX_SERVICE_TIERS = (
 # request/UI safety gate for native accounts. API gateway accounts additionally
 # require their own catalog capability before CCM sends a priority request.
 CODEX_MODEL_SERVICE_TIERS: dict[str, list[str]] = {
+    "gpt-6.2-sol": ["default", "priority"],
+    "gpt-6.2-astra": ["default", "priority"],
     # Native Codex CLI 0.166 catalog, 2026-10-30; live admission rechecks account support.
     "gpt-6.1-sol": ["default", "priority"],
     "gpt-6-astra": ["default", "priority"],
@@ -47,6 +50,8 @@ CODEX_MODEL_SERVICE_TIERS: dict[str, list[str]] = {
 
 # 基线档位：codex_effort_options（gpt-5.5 及更早的模型）
 CODEX_MODEL_EFFORTS: dict[str, list[str]] = {
+    "gpt-6.2-sol": EFFORT_ORDER.copy(),
+    "gpt-6.2-astra": EFFORT_ORDER.copy(),
     "gpt-6.1-sol": ["low", "medium", "high", "xhigh", "max", "ultra"],
     "gpt-6-astra": ["low", "medium", "high", "xhigh", "max", "ultra"],
     "gpt-6.1-terra": ["low", "medium", "high", "xhigh", "max", "ultra"],
@@ -61,6 +66,8 @@ CODEX_MODEL_EFFORTS: dict[str, list[str]] = {
 # context_window per model（~/.codex/models_cache.json 实测，2026-07-19：
 # gpt-5.6-* / gpt-5.5 / gpt-5.4 / gpt-5.4-mini 均 272000，gpt-5.3-codex-spark 128000）
 CODEX_CONTEXT_WINDOWS: dict[str, int] = {
+    "gpt-6.2-sol": 500_000,
+    "gpt-6.2-astra": 272_000,
     "gpt-5.6-sol": 272_000,
     "gpt-5.6-terra": 272_000,
     "gpt-5.6-luna": 272_000,

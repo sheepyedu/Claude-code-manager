@@ -22,9 +22,9 @@ class Settings(BaseSettings):
     provider_options: str = "claude,codex"
     default_model: str = "claude-opus-4-6"
     model_options: str = "default,claude-opus-5,claude-sonnet-5,claude-sonnet-5[1m],claude-fable-5,claude-fable-5[1m],claude-opus-4-6,claude-opus-4-6[1m],claude-opus-4-7,claude-opus-4-7[1m],claude-opus-4-8,claude-opus-4-8[1m],claude-sonnet-4-6,claude-sonnet-4-6[1m],claude-haiku-4-5"  # comma-separated
-    default_codex_model: str = "gpt-5.6-sol"
+    default_codex_model: str = "gpt-6.2-sol"
     # GPT-5.6 是三个模型（sol/terra/luna），无裸 "gpt-5.6" ID（Codex 服务端模型列表实证）
-    codex_model_options: str = "default,gpt-6.1-sol,gpt-6-astra,gpt-6.1-terra,gpt-6-sol,gpt-6-luna,gpt-5.6-sol,gpt-5.6-terra,gpt-5.6-luna,gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.3-codex-spark"  # comma-separated
+    codex_model_options: str = "default,gpt-6.2-sol,gpt-6.2-astra,gpt-6.1-sol,gpt-6-astra,gpt-6.1-terra,gpt-6-sol,gpt-6-luna,gpt-5.6-sol,gpt-5.6-terra,gpt-5.6-luna,gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.3-codex-spark"  # comma-separated
     # 基线档位（gpt-5.5 及更早）；gpt-5.6 系列的 max/ultra 见 services/codex_models.py
     codex_effort_options: str = "low,medium,high,xhigh"
     default_codex_goal_evaluator_model: str = "gpt-5.4-mini"
@@ -57,15 +57,15 @@ class Settings(BaseSettings):
     # --- Independent Plan Agent pipeline ---
     # Both stages have an explicit primary/fallback route. A Plan Task stores
     # the resolved snapshot so queued work cannot drift with later defaults.
-    plan_planner_provider: str = "claude"
-    plan_planner_model: str = "claude-fable-5"
+    plan_planner_provider: str = "codex"
+    plan_planner_model: str = "gpt-6.2-astra"
     plan_planner_effort: str = "high"
     plan_planner_fallback_provider: str = "codex"
     plan_planner_fallback_model: str = "gpt-5.6-terra"
     plan_planner_fallback_effort: str = "xhigh"
     plan_reviewer_enabled: bool = True
     plan_reviewer_provider: str = "codex"
-    plan_reviewer_model: str = "gpt-5.6-sol"
+    plan_reviewer_model: str = "gpt-6.2-sol"
     plan_reviewer_effort: str = "xhigh"
     plan_reviewer_fallback_provider: str = "claude"
     plan_reviewer_fallback_model: str = "claude-sonnet-5"

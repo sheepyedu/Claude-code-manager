@@ -90,7 +90,7 @@ export function PlanPipelineFields({
             updateRoute(stage, slot, {
               provider,
               model: provider === 'codex'
-                ? systemConfig?.default_codex_model || 'gpt-5.6-sol'
+                ? systemConfig?.default_codex_model || 'gpt-6.2-sol'
                 : systemConfig?.default_model || 'claude-fable-5',
               effort: systemConfig?.default_effort || 'medium',
             });

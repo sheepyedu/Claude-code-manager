@@ -758,6 +758,7 @@ export interface SystemConfig {
   claude_model_context_windows: Record<string, number>;
   codex_effort_options: string[];
   codex_model_efforts: Record<string, string[]>;
+  codex_model_context_windows?: Record<string, number>;
   default_codex_service_tier?: CodexServiceTier;
   codex_service_tier_options?: CodexServiceTier[];
   codex_model_service_tiers: Record<string, CodexServiceTier[]>;

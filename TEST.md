@@ -31,6 +31,8 @@ cd frontend && npx tsc --noEmit
 
 `uv run python -m pytest backend/tests/test_codex_models.py backend/tests/test_plan_speed.py backend/tests/test_plan_agent_runner.py backend/tests/test_plan_resources.py -q`
 
+用 `backend/tests/test_api_system.py -k "ships_codex_sol or two_stage_plan"` 校验 GPT-6.2 默认模型、计划路由及前端共用模型能力。安装或更新 CLI 后，先通过 app-server 的实际模型目录与只读 Plan 准入验证，再启用新版本。
+
 覆盖 GPT-6 系列能力表、默认 Standard、拒绝 Claude/不支持模型的 Fast、Plan runtime override 不可改模型、路由冻结、账号选择和 app-server 接收相同 speed/effort，以及旧 Plan 快照兼容。
 
 `cd frontend && npx vitest run src/components/Tasks/TaskRuntimeControls.test.tsx src/components/Tasks/TaskForm.test.tsx src/components/Tasks/TaskBadges.test.tsx src/components/PlanReview/PlanCreateForm.test.tsx src/components/Chat/ChatView.test.tsx src/pages/TasksPage.test.tsx`

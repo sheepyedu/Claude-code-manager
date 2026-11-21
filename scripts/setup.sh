@@ -65,7 +65,7 @@ if [ "$CLAUDE_TASK_ISOLATION_ENABLED" = "true" ]; then
         exit 1
     fi
 fi
-CODEX_CLI_VERSION="0.147.0"
+CODEX_CLI_VERSION="0.171.0"
 if [ "$(codex --version 2>/dev/null | head -1)" != "codex-cli ${CODEX_CLI_VERSION}" ]; then
     sudo npm install -g "@openai/codex@${CODEX_CLI_VERSION}"
 fi

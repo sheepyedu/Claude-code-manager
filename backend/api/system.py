@@ -12,6 +12,7 @@ from backend.models.task import Task
 from backend.models.instance import Instance
 
 from backend.services.codex_models import (
+    CODEX_CONTEXT_WINDOWS,
     CODEX_MODEL_EFFORTS,
     CODEX_MODEL_SERVICE_TIERS,
     CODEX_SERVICE_TIERS,
@@ -93,8 +94,8 @@ async def get_config(db: AsyncSession = Depends(get_db)):
         "claude_model_efforts": CLAUDE_MODEL_EFFORTS,
         "claude_model_context_windows": CLAUDE_CONTEXT_WINDOWS,
         "codex_effort_options": [e.strip() for e in settings.codex_effort_options.split(",") if e.strip()],
-        # GPT-5.6 系列按模型区分档位（sol/terra 到 ultra，luna 到 max）；未列出的模型用 codex_effort_options
         "codex_model_efforts": CODEX_MODEL_EFFORTS,
+        "codex_model_context_windows": CODEX_CONTEXT_WINDOWS,
         "default_codex_service_tier": DEFAULT_CODEX_SERVICE_TIER,
         "codex_service_tier_options": list(CODEX_SERVICE_TIERS),
         "codex_model_service_tiers": CODEX_MODEL_SERVICE_TIERS,

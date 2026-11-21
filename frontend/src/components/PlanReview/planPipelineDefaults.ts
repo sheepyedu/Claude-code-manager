@@ -4,8 +4,8 @@ export const FALLBACK_PLAN_PIPELINE_CONFIG: PlanPipelineConfig = {
   version: 1,
   planner: {
     primary: {
-      provider: 'claude',
-      model: 'claude-fable-5',
+      provider: 'codex',
+      model: 'gpt-6.2-astra',
       effort: 'high',
     },
     fallback: {
@@ -18,7 +18,7 @@ export const FALLBACK_PLAN_PIPELINE_CONFIG: PlanPipelineConfig = {
     enabled: true,
     primary: {
       provider: 'codex',
-      model: 'gpt-5.6-sol',
+      model: 'gpt-6.2-sol',
       effort: 'xhigh',
     },
     fallback: {

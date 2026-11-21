@@ -88,7 +88,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
   const [defaultProvider, setDefaultProvider] = useState('codex');
   const [defaultModel, setDefaultModel] = useState('claude-opus-4-6');
   const [modelOptions, setModelOptions] = useState<string[]>([]);
-  const [defaultCodexModel, setDefaultCodexModel] = useState('gpt-5.6-sol');
+  const [defaultCodexModel, setDefaultCodexModel] = useState('gpt-6.2-sol');
   const [codexModelOptions, setCodexModelOptions] = useState<string[]>([]);
   const [effortOptions, setEffortOptions] = useState<string[]>([]);
   const [codexEffortOptions, setCodexEffortOptions] = useState<string[]>([]);

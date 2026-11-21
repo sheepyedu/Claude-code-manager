@@ -232,13 +232,22 @@ async def test_config_returns_default_model(client):
 
 
 @pytest.mark.asyncio
-async def test_config_ships_codex_sol_as_default(client):
+async def test_config_ships_codex_sol_as_default(client, monkeypatch):
+    from backend.config import Settings, settings
+
+    monkeypatch.setattr(
+        settings, "default_codex_model", Settings.model_fields["default_codex_model"].default
+    )
     resp = await client.get("/api/system/config")
     assert resp.status_code == 200
     data = resp.json()
     assert data["default_provider"] == "codex"
-    assert data["default_codex_model"] == "gpt-5.6-sol"
-    assert "gpt-5.6-sol" in data["codex_model_options"]
+    assert data["default_codex_model"] == "gpt-6.2-sol"
+    for model, context in (("gpt-6.2-astra", 272_000), ("gpt-6.2-sol", 500_000)):
+        assert model in data["codex_model_options"]
+        assert data["codex_model_context_windows"][model] == context
+        assert data["codex_model_service_tiers"][model] == ["default", "priority"]
+        assert data["codex_model_efforts"][model][-2:] == ["max", "ultra"]
 
 
 @pytest.mark.asyncio
@@ -251,8 +260,8 @@ async def test_config_returns_two_stage_plan_pipeline_defaults(client):
         "version": 1,
         "planner": {
             "primary": {
-                "provider": "claude",
-                "model": "claude-fable-5",
+                "provider": "codex",
+                "model": "gpt-6.2-astra",
                 "effort": "high",
             },
             "fallback": {
@@ -265,7 +274,7 @@ async def test_config_returns_two_stage_plan_pipeline_defaults(client):
             "enabled": True,
             "primary": {
                 "provider": "codex",
-                "model": "gpt-5.6-sol",
+                "model": "gpt-6.2-sol",
                 "effort": "xhigh",
             },
             "fallback": {

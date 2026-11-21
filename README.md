@@ -12,7 +12,7 @@ Web 端调度和管理多个 Claude Code 实例并行工作。灵感来自胡渊
 
 - **macOS 资源监控**：CPU、内存和交换空间使用 psutil 原生接口，无需管理员权限；保留 Linux 支持、每小时缓存和“刷新”按钮。升级后运行 `uv sync --locked`，构建前端并重启服务。
 - **macOS 计划执行**：Planner / Reviewer 的启动和恢复使用原生进程身份，不再读取 Linux 专有的 `/proc` 文件；仍保留进程归属与安全清理校验，并兼容 Codex 回包中的 `/private/tmp` 规范路径及 Claude 未启用隔离的启动参数。
-- **速度与推理强度**：聊天工具栏通过速度仪表盘、推理大脑图标选择档位（悬停显示当前值），新建任务直接选择速度（默认“标准”）与模型支持的推理强度；已有任务也可在配置菜单调整，空闲时保存后用于下一轮。快速仅在支持的 Codex 模型开放，会消耗更多额度。独立计划和聊天内计划可分别选择主要规划/审核模型的速度与强度，并随计划固定保存；模型与备用路由仍来自全局设置。
+- **速度与推理强度**：聊天工具栏通过速度仪表盘、推理大脑图标选择档位（悬停显示当前值），新建任务直接选择速度（默认“标准”）与模型支持的推理强度；已有任务也可在配置菜单调整，空闲时保存后用于下一轮。快速仅在支持的 Codex 模型开放，会消耗更多额度。默认规划模型为 GPT-6.2 Astra，默认审核模型为 GPT-6.2 Sol，可在设置中调整。独立计划和聊天内计划可分别选择主要规划/审核模型的速度与强度，并随计划固定保存；模型与备用路由仍来自全局设置。
 - **界面语言**：右上角齿轮或 Settings 页面选择 **Language → 简体中文**，立即切换导航、仪表盘、任务、项目、文件、账号池等主要界面的文案。选择保存在当前浏览器，刷新后保留；用户内容、模型回复、文件内容和 API 参数保持原值。英文选项沿用上游已有的中英文文案。
 - 本地 `.env`、数据库、账号登录文件、SSH 私钥均不属于仓库配置；部署时沿用各自的本机配置。
 
@@ -30,7 +30,7 @@ Web 端调度和管理多个 Claude Code 实例并行工作。灵感来自胡渊
 - **系统资源面板** — 管理员 Dashboard 展示 CPU、内存、swap、根磁盘与 `/tmp` 使用率；数据按小时缓存，也可手动刷新
 
 ### 执行模式
-- **多 Provider（Claude / Codex）** — Task 级选择执行引擎：OpenAI Codex CLI（默认，`gpt-5.6-sol`）或 Claude Code。Codex 任务支持完整生命周期、多轮对话、Goal 模式评估、Plan 审批、上下文自动压缩、瞬时错误退避重试、账号池与跨 Worker rollout 迁移；指令文件读 `AGENTS.md`（自动注入）。PTY 热会话、ask_user 和 Claude 原生子 Agent 仍为 Claude 专属（Codex 下显式隐藏/拒绝，不静默降级）
+- **多 Provider（Claude / Codex）** — Task 级选择执行引擎：OpenAI Codex CLI（默认，`gpt-6.2-sol`）或 Claude Code。Codex 任务支持完整生命周期、多轮对话、Goal 模式评估、Plan 审批、上下文自动压缩、瞬时错误退避重试、账号池与跨 Worker rollout 迁移；指令文件读 `AGENTS.md`（自动注入）。PTY 热会话、ask_user 和 Claude 原生子 Agent 仍为 Claude 专属（Codex 下显式隐藏/拒绝，不静默降级）
 - **PTY 持久会话模式** — 默认模式，Claude Code 以常驻交互会话运行，多轮免冷启动（热 session 复用），首次启动有 Cold Start 指示器
 - **Goal 模式** — `mode="goal"` 使用自然语言完成条件（`goal_condition`），每 turn 后由轻量评估器（默认 Haiku）自动判断是否达成目标
 - **交互式版本化 Plan** — Plan 是独立于 Task 的一等制品；Planner/Reviewer 可暂停同一个 Run 请求任意数量的必要输入，回答后继续并保留不可变 Version 历史。审批不自动执行，关联 Version 由用户显式附到下一条真实消息，standalone Version 可一键创建执行 Task
